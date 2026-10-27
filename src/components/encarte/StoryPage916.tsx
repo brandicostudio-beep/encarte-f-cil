@@ -133,7 +133,12 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
                 key={prod.id || `${pageNumber}-${idx}`}
                 className="w-full h-full flex items-center justify-center"
               >
-                <ProductCard916 product={prod} index={idx} store={store} />
+                <ProductCard916
+                  product={prod}
+                  index={idx}
+                  store={store}
+                  perPage={perPage}
+                />
               </div>
             ))}
           </div>
@@ -146,6 +151,7 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
                 product={prod}
                 index={idx}
                 store={store}
+                perPage={perPage}
               />
             ))}
           </div>
