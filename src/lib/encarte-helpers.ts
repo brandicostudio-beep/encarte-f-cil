@@ -57,16 +57,16 @@ export function parseSpreadsheetPrices(rawText: string): { code: string; price: 
       // Tentar separar por espaço ou vírgula
       const match = trimmed.match(/^([A-Za-z0-9_-]+)[\s,]+(.+)$/);
       if (match) {
-        parts = [match[1], match[2]];
+        parts = [match[1] ?? "", match[2] ?? ""];
       } else {
         parts = [trimmed];
       }
     }
 
     if (parts.length >= 2) {
-      const code = parts[0].trim().replace(/^['"#]+/, "");
+      const code = (parts[0] ?? "").trim().replace(/^['"#]+/, "");
       // O preço pode ser a segunda parte ou conter caracteres monetários
-      const rawPrice = parts[1].trim();
+      const rawPrice = (parts[1] ?? "").trim();
       const formatted = formatPrice(rawPrice);
       if (code && formatted) {
         results.push({ code, price: formatted });
