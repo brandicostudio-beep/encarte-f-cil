@@ -37,7 +37,7 @@ export function renderErrorPage(error?: unknown): string {
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
-    <title>Esta página não pôde ser carregada / This page didn't load</title>
+    <title>Não foi possível carregar a página</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       body { font: 15px/1.5 system-ui, -apple-system, sans-serif; background: #fafafa; color: #111; display: grid; place-items: center; min-height: 100vh; margin: 0; padding: 1.5rem; }
@@ -56,13 +56,13 @@ export function renderErrorPage(error?: unknown): string {
   </head>
   <body>
     <div class="card">
-      <h1>Esta página não pôde ser carregada</h1>
-      <p>Ocorreu uma instabilidade no servidor ou dados locais corrompidos. Você pode recarregar ou limpar os dados salvos.</p>
+      <h1>Não foi possível carregar a página</h1>
+      <p>Ocorreu um erro no processamento da página ou há dados locais corrompidos. Você pode tentar recarregar ou limpar os dados salvos.</p>
       ${errorDetails}
       <div class="actions">
         <button class="primary" onclick="location.reload()">Tentar novamente</button>
-        <button class="danger" onclick="try{localStorage.clear();sessionStorage.clear();}catch(e){}location.href='/'">Resetar Dados Salvos</button>
-        <a class="secondary" href="/">Recarregar Início</a>
+        <button class="danger" onclick="if(confirm('Isso apaga os produtos e configurações salvos neste navegador. Deseja continuar?')){try{localStorage.clear();sessionStorage.clear();}catch(e){}location.href='/';}">Resetar Dados Salvos</button>
+        <a class="secondary" href="/">Voltar ao início</a>
       </div>
     </div>
   </body>

@@ -139,57 +139,92 @@ function EncarteApp() {
     image: "",
   });
 
-  // Carregar dados salvos no localStorage com sanitização defensiva
+  // Carregar dados salvos no localStorage com sanitização defensiva e retrocompatibilidade
   useEffect(() => {
     try {
-      const savedStore = localStorage.getItem("encarte-store-v2");
+      const savedStore =
+        localStorage.getItem("encarte-store-v2") ||
+        localStorage.getItem("encarte-store");
       if (savedStore) {
         const parsed = JSON.parse(savedStore);
         if (parsed && typeof parsed === "object") {
-          setStore((prev) => ({ ...prev, ...parsed }));
+          setStore((prev) => ({
+            ...DEFAULT_STORE,
+            ...prev,
+            ...parsed,
+            name: parsed.name || parsed.nome || DEFAULT_STORE.name,
+            logo: parsed.logo || parsed.logotipo || DEFAULT_STORE.logo,
+            address: parsed.address || parsed.endereco || DEFAULT_STORE.address,
+            phone: parsed.phone || parsed.telefone || DEFAULT_STORE.phone,
+            legalNotice:
+              parsed.legalNotice || parsed.notaLegal || DEFAULT_STORE.legalNotice,
+            primaryColor:
+              parsed.primaryColor || parsed.corPrimaria || DEFAULT_STORE.primaryColor,
+            accentColor:
+              parsed.accentColor || parsed.corSecundaria || DEFAULT_STORE.accentColor,
+            darkColor: parsed.darkColor || DEFAULT_STORE.darkColor,
+          }));
         }
       }
 
-      const savedCampaign = localStorage.getItem("encarte-campaign-v2");
+      const savedCampaign =
+        localStorage.getItem("encarte-campaign-v2") ||
+        localStorage.getItem("encarte-campaign");
       if (savedCampaign) {
         const parsed = JSON.parse(savedCampaign);
         if (parsed && typeof parsed === "object") {
           setCampaign({
             ...DEFAULT_CAMPAIGN,
             ...parsed,
+            title: parsed.title || parsed.titulo || DEFAULT_CAMPAIGN.title,
+            subtitle:
+              parsed.subtitle || parsed.subtitulo || DEFAULT_CAMPAIGN.subtitle,
+            observation:
+              parsed.observation || parsed.observacao || DEFAULT_CAMPAIGN.observation,
             format: parsed.format === "a4" ? "a4" : "story_9_16",
             productsPerPage: [6, 8, 9, 12].includes(Number(parsed.productsPerPage))
               ? (Number(parsed.productsPerPage) as ProductsPerPageOption)
-              : 12,
+              : DEFAULT_CAMPAIGN.productsPerPage,
             template916Image:
               parsed.template916Image || DEFAULT_CAMPAIGN.template916Image,
             template916Area: {
               ...DEFAULT_TEMPLATE_9_16_AREA,
               ...(parsed.template916Area || {}),
             },
+            exportResolution916:
+              parsed.exportResolution916 === "2160x3840"
+                ? "2160x3840"
+                : "1080x1920",
           });
         }
       }
 
-      const savedProds = localStorage.getItem("encarte-products-v2");
+      const savedProds =
+        localStorage.getItem("encarte-products-v2") ||
+        localStorage.getItem("encarte-products");
       if (savedProds) {
         const parsed = JSON.parse(savedProds);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const sanitized: EncarteProduct[] = parsed.map((p, idx) => ({
             id: p?.id || `p-${Date.now()}-${idx}`,
-            code: String(p?.code ?? idx + 1),
-            name: String(p?.name ?? "PRODUTO SEM NOME"),
-            packaging: String(p?.packaging ?? ""),
+            code: String(p?.code ?? p?.codigo ?? idx + 1),
+            name: String(p?.name ?? p?.nome ?? p?.descricao ?? "PRODUTO SEM NOME"),
+            packaging: String(p?.packaging ?? p?.embalagem ?? ""),
             packagingType: p?.packagingType || "",
             packagingQuantity: p?.packagingQuantity || "",
             packagingUnit: p?.packagingUnit || "",
             packagingWeight: p?.packagingWeight || "",
-            validity: String(p?.validity ?? ""),
-            price: p?.price !== undefined && p?.price !== null ? String(p.price) : "",
-            unit: String(p?.unit || "UND"),
-            stock: String(p?.stock ?? ""),
-            badge: p?.badge || "nenhum",
-            image: String(p?.image ?? ""),
+            validity: String(p?.validity ?? p?.validade ?? ""),
+            price:
+              p?.price !== undefined && p?.price !== null
+                ? String(p.price)
+                : p?.preco !== undefined && p?.preco !== null
+                ? String(p.preco)
+                : "",
+            unit: String(p?.unit || p?.unidade || "UND"),
+            stock: String(p?.stock ?? p?.estoque ?? ""),
+            badge: p?.badge || p?.selo || "nenhum",
+            image: String(p?.image ?? p?.foto ?? p?.imageUrl ?? ""),
             included: p?.included !== undefined ? Boolean(p.included) : true,
             productUrl: p?.productUrl || "",
           }));

@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { StoreConfig, CampaignConfig, ProductsPerPageOption, EncarteFormat, TemplateProductArea } from "@/types/encarte";
-import { DEFAULT_TEMPLATE_9_16_AREA } from "@/types/encarte";
+import { DEFAULT_TEMPLATE_9_16_AREA, DEFAULT_CAMPAIGN, DEFAULT_STORE } from "@/types/encarte";
 import { TemplateAreaAdjuster } from "./TemplateAreaAdjuster";
 import { Store, Upload, Trash2, Palette, Megaphone, LayoutGrid, Image as ImageIcon, AlertTriangle, Smartphone, FileText, CheckCircle2 } from "lucide-react";
 
@@ -34,22 +34,26 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
   onSaveStore,
   onSaveCampaign,
 }) => {
-  const [storeForm, setStoreForm] = useState<StoreConfig>({ ...store });
-  const [campForm, setCampForm] = useState<CampaignConfig>({ ...campaign });
+  const [storeForm, setStoreForm] = useState<StoreConfig>({ ...DEFAULT_STORE, ...(store || {}) });
+  const [campForm, setCampForm] = useState<CampaignConfig>({ ...DEFAULT_CAMPAIGN, ...(campaign || {}) });
   const [ratioWarning, setRatioWarning] = useState<string | null>(null);
 
   useEffect(() => {
-    setStoreForm({ ...store });
+    setStoreForm({ ...DEFAULT_STORE, ...(store || {}) });
   }, [store]);
 
   useEffect(() => {
+    const safeCampaign = campaign || DEFAULT_CAMPAIGN;
     setCampForm({
       ...DEFAULT_CAMPAIGN,
-      ...campaign,
-      format: campaign.format || "story_9_16",
-      template916Area: campaign.template916Area || DEFAULT_TEMPLATE_9_16_AREA,
+      ...safeCampaign,
+      format: safeCampaign.format || DEFAULT_CAMPAIGN.format,
+      template916Area: {
+        ...DEFAULT_TEMPLATE_9_16_AREA,
+        ...(safeCampaign.template916Area || {}),
+      },
       template916Image:
-        campaign.template916Image || DEFAULT_CAMPAIGN.template916Image,
+        safeCampaign.template916Image || DEFAULT_CAMPAIGN.template916Image,
     });
     setRatioWarning(null);
   }, [campaign]);
