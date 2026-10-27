@@ -26,6 +26,10 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
   const primaryBg = store.primaryColor || "#dc2626";
   const accentColor = store.accentColor || "#facc15";
 
+  // Verificar se validade e estoque existem para exibir ou ocultar
+  const hasValidity = Boolean(product.validity && product.validity.trim() !== "");
+  const hasStock = Boolean(product.stock && product.stock.trim() !== "");
+
   return (
     <div
       className={`relative flex ${
@@ -74,9 +78,9 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
             product.image ? "hidden" : "flex"
           } flex-col h-full w-full items-center justify-center rounded-xl bg-neutral-100 p-2 text-center text-neutral-400 border border-dashed border-neutral-300`}
         >
-          <Package className="h-6 w-6 text-neutral-400 mb-1" />
+          <Package className="h-6 w-6 text-neutral-400 mb-1 shrink-0" />
           <span className="text-[10px] font-bold uppercase leading-tight line-clamp-2 text-neutral-500">
-            {product.name || "Foto"}
+            {product.name || "Produto"}
           </span>
         </div>
       </div>
@@ -87,18 +91,22 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
           isImageLeft ? "pl-2.5 pr-1" : "pr-2.5 pl-1"
         } py-0.5`}
       >
-        {/* 1. Código e embalagem em vermelho pequeno */}
-        <div className="flex items-center gap-1 font-bold text-[10px] text-red-600 uppercase tracking-tight truncate">
-          <span>{product.code || "---"}</span>
-          <span>·</span>
-          <span className="truncate">{product.packaging || "1 UN"}</span>
+        {/* 1. Código e embalagem em vermelho pequeno (nunca cortado) */}
+        <div className="flex items-center gap-1 font-bold text-[10.5px] text-red-600 uppercase tracking-tight shrink-0">
+          <span className="font-mono font-bold shrink-0">{product.code || "---"}</span>
+          {product.packaging && product.packaging.trim() && (
+            <>
+              <span className="shrink-0">·</span>
+              <span className="truncate">{product.packaging}</span>
+            </>
+          )}
         </div>
 
         {/* 2. Nome em caixa-alta, negrito, vermelho escuro, no máximo 2 linhas */}
         <h3
           className="font-black uppercase tracking-tight text-neutral-900 leading-[1.12] line-clamp-2"
           style={{
-            fontSize: product.name.length > 35 ? "11px" : "12.5px",
+            fontSize: product.name.length > 40 ? "11px" : product.name.length > 25 ? "12px" : "13px",
             color: "#8a0e0e",
           }}
         >
@@ -106,7 +114,7 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
         </h3>
 
         {/* 3. Tag de preço: pílula vermelha com "R$" e o valor em amarelo condensado */}
-        <div className="flex items-center justify-center my-0.5">
+        <div className="flex items-center justify-center my-0.5 shrink-0">
           <div
             className="w-full inline-flex items-baseline justify-center gap-1 rounded-full px-2.5 py-0.5 shadow-sm"
             style={{ backgroundColor: primaryBg }}
@@ -118,36 +126,36 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
               R$
             </span>
             <span
-              className="font-display text-[25px] font-black leading-none tracking-tight"
+              className="font-display text-[26px] font-black leading-none tracking-tight"
               style={{ color: accentColor }}
             >
               {reais}
             </span>
             <span
-              className="font-display text-[15px] font-black leading-none"
+              className="font-display text-[16px] font-black leading-none"
               style={{ color: accentColor }}
             >
               ,{centavos || "00"}
             </span>
-            <span className="text-[9px] font-bold text-white uppercase ml-0.5">
+            <span className="text-[9.5px] font-bold text-white uppercase ml-0.5">
               {product.unit || "UND"}
             </span>
           </div>
         </div>
 
-        {/* 4. Faixa preta com "VALIDADE: dd/mm/aaaa" em branco */}
-        <div className="rounded bg-black px-1.5 py-0.5 text-center text-[9.5px] font-black tracking-wider text-white uppercase truncate">
-          VALIDADE: {product.validity || "--/--/----"}
-        </div>
+        {/* 4. Faixa preta com "VALIDADE: dd/mm/aaaa" em branco, SOMENTE se a validade existir */}
+        {hasValidity ? (
+          <div className="rounded bg-black px-1.5 py-0.5 text-center text-[9.5px] font-black tracking-wider text-white uppercase truncate shrink-0">
+            VALIDADE: {product.validity}
+          </div>
+        ) : null}
 
-        {/* 5. "ESTOQUE: X UND" em vermelho, somente se o campo estiver preenchido */}
-        {product.stock && product.stock.trim() !== "" ? (
-          <div className="text-center text-[9px] font-black uppercase text-red-600 truncate leading-none pt-0.5">
+        {/* 5. "ESTOQUE: X UND" em vermelho, SOMENTE se o campo de estoque estiver preenchido */}
+        {hasStock ? (
+          <div className="text-center text-[9px] font-black uppercase text-red-600 truncate leading-none pt-0.5 shrink-0">
             ESTOQUE: {product.stock}
           </div>
-        ) : (
-          <div className="h-1" />
-        )}
+        ) : null}
       </div>
     </div>
   );
