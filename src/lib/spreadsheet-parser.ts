@@ -1,4 +1,3 @@
-import * as XLSX from "xlsx";
 import type { EncarteProduct } from "@/types/encarte";
 import { formatPrice } from "./parse-product";
 
@@ -24,13 +23,13 @@ function normalizeHeader(key: string): string {
 /**
  * Converte data de planilha (número serial do Excel ou texto) para dd/mm/aaaa.
  */
-function formatSpreadsheetDate(raw: any): string {
+function formatSpreadsheetDate(raw: any, SSF?: any): string {
   if (raw === undefined || raw === null || raw === "") return "";
 
   // Se for número serial de data do Excel
-  if (typeof raw === "number") {
+  if (typeof raw === "number" && SSF) {
     try {
-      const parsed = XLSX.SSF.parse_date_code(raw);
+      const parsed = SSF.parse_date_code(raw);
       if (parsed) {
         const d = String(parsed.d).padStart(2, "0");
         const m = String(parsed.m).padStart(2, "0");
@@ -70,6 +69,7 @@ function formatSpreadsheetDate(raw: any): string {
  * Trata código como texto (preservando zeros à esquerda e removendo espaços nas bordas).
  */
 export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValidationResult> {
+  const XLSX = await import("xlsx");
   const buffer = await file.arrayBuffer();
   // read com { raw: false } para manter formato de texto quando possível
   const workbook = XLSX.read(buffer, {
@@ -113,8 +113,8 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
   }
 
   // Identificar mapeamento de colunas
-  const sampleRow = rows[0];
-  const colKeys = Object.keys(sampleRow);
+  const sampleRow = rows[0] || {};
+  const headerKeys = Object.keys(sampleRow);
 
   let codeKey: string | undefined;
   let nameKey: string | undefined;
@@ -123,29 +123,27 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
   let validityKey: string | undefined;
   let priceKey: string | undefined;
 
-  for (const k of colKeys) {
-    const norm = normalizeHeader(k);
-    if (!codeKey && (norm.includes("cod") || norm.includes("sku") || norm.includes("ref") || norm === "id")) {
-      codeKey = k;
-    } else if (!nameKey && (norm.includes("desc") || norm.includes("nome") || norm.includes("prod") || norm === "item")) {
-      nameKey = k;
-    } else if (!packagingKey && (norm.includes("emb") || norm.includes("embalagem") || norm.includes("pack") || norm.includes("unidade"))) {
-      packagingKey = k;
-    } else if (!stockKey && (norm.includes("estoque") || norm.includes("saldo") || norm.includes("qtd") || norm.includes("quant"))) {
-      stockKey = k;
-    } else if (!validityKey && (norm.includes("val") || norm.includes("venc") || norm.includes("data"))) {
-      validityKey = k;
-    } else if (!priceKey && (norm.includes("preco") || norm.includes("valor") || norm.includes("price"))) {
-      priceKey = k;
+  headerKeys.forEach((key) => {
+    const norm = normalizeHeader(key);
+    if (!codeKey && (norm.includes("codigo") || norm.includes("cod") || norm === "id" || norm === "sku")) {
+      codeKey = key;
+    } else if (!nameKey && (norm.includes("descricao") || norm.includes("nome") || norm.includes("produto") || norm.includes("item"))) {
+      nameKey = key;
+    } else if (!packagingKey && (norm.includes("embalagem") || norm.includes("emb") || norm.includes("unidade") || norm.includes("apresentacao") || norm.includes("pacote"))) {
+      packagingKey = key;
+    } else if (!stockKey && (norm.includes("estoque") || norm.includes("qtd") || norm.includes("quantidade") || norm.includes("saldo"))) {
+      stockKey = key;
+    } else if (!validityKey && (norm.includes("validade") || norm.includes("vencimento") || norm.includes("val") || norm.includes("data"))) {
+      validityKey = key;
+    } else if (!priceKey && (norm.includes("preco") || norm.includes("valor") || norm.includes("unitario"))) {
+      priceKey = key;
     }
-  }
+  });
 
-  // Fallbacks posicionais caso os cabeçalhos não tenham sido identificados pelos nomes
-  if (!codeKey && colKeys.length > 0) codeKey = colKeys[0];
-  if (!nameKey && colKeys.length > 1) nameKey = colKeys[1];
-  if (!packagingKey && colKeys.length > 2) packagingKey = colKeys[2];
-  if (!stockKey && colKeys.length > 3) stockKey = colKeys[3];
-  if (!validityKey && colKeys.length > 4) validityKey = colKeys[4];
+  // Se não encontrou código por aproximação semântica, usa a 1ª coluna como código
+  if (!codeKey && headerKeys.length > 0) codeKey = headerKeys[0];
+  // Se não encontrou nome, usa a 2ª coluna
+  if (!nameKey && headerKeys.length > 1) nameKey = headerKeys[1];
 
   const validProducts: EncarteProduct[] = [];
   const errors: { line: number; message: string; raw?: any }[] = [];
@@ -204,7 +202,7 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
 
     // Validade (opcional, dd/mm/aaaa)
     const rawVal = validityKey ? row[validityKey] : "";
-    const validity = formatSpreadsheetDate(rawVal);
+    const validity = formatSpreadsheetDate(rawVal, XLSX.SSF);
 
     // Preço (inicia em branco conforme regra de negócio)
     const rawPrice = priceKey ? formatPrice(row[priceKey]) : "";

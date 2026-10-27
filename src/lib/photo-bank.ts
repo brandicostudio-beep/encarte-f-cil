@@ -1,4 +1,3 @@
-import JSZip from "jszip";
 import type { EncarteProduct } from "@/types/encarte";
 
 export interface LoadedPhoto {
@@ -82,6 +81,7 @@ export async function processPhotoBankUpload(
     // 1. Se for arquivo .zip
     if (file.name.toLowerCase().endsWith(".zip")) {
       try {
+        const JSZip = (await import("jszip")).default;
         const zip = await JSZip.loadAsync(file);
         const entries = Object.keys(zip.files).filter(
           (path) => !path.startsWith("__MACOSX") && IMAGE_EXTENSIONS.test(path)

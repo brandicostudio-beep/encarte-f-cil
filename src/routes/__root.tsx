@@ -44,9 +44,8 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
 
   const handleClearAndReset = () => {
     try {
-      localStorage.removeItem("encarte-products-v2");
-      localStorage.removeItem("encarte-campaign-v2");
-      localStorage.removeItem("encarte-store-v2");
+      localStorage.clear();
+      sessionStorage.clear();
     } catch {
       /* ignore */
     }

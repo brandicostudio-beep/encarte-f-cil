@@ -34,13 +34,13 @@ export const SpreadsheetModal: React.FC<SpreadsheetModalProps> = ({
 
   const handlePreview = () => {
     const parsed = parseSpreadsheetPrices(text);
-    const codeMap = new Map(products.map((p) => [p.code.toLowerCase().trim(), p.name]));
+    const codeMap = new Map((products || []).map((p) => [String(p?.code || "").toLowerCase().trim(), p?.name || ""]));
 
     const matches: { code: string; price: string; productName: string }[] = [];
     const notFound: string[] = [];
 
     for (const item of parsed) {
-      const matchName = codeMap.get(item.code.toLowerCase().trim());
+      const matchName = codeMap.get(String(item?.code || "").toLowerCase().trim());
       if (matchName) {
         matches.push({ code: item.code, price: item.price, productName: matchName });
       } else {

@@ -29,18 +29,19 @@ interface PendingSidebarProps {
 }
 
 export const PendingSidebar: React.FC<PendingSidebarProps> = ({
-  products,
-  unmatchedPhotos,
+  products = [],
+  unmatchedPhotos = [],
   activeFilter,
   onFilterChange,
   onOpenSpreadsheetModal,
 }) => {
-  const total = products.length;
-  const unpriced = products.filter((p) => !p.price || p.price.trim() === "");
-  const missingPhoto = products.filter((p) => !p.image || p.image.trim() === "");
-  const missingPackaging = products.filter((p) => !p.packaging || p.packaging.trim() === "");
-  const expired = products.filter((p) => isDateExpired(p.validity));
-  const excluded = products.filter((p) => !p.included);
+  const safeProducts = products || [];
+  const total = safeProducts.length;
+  const unpriced = safeProducts.filter((p) => !p?.price || String(p.price).trim() === "");
+  const missingPhoto = safeProducts.filter((p) => !p?.image || String(p.image).trim() === "");
+  const missingPackaging = safeProducts.filter((p) => !p?.packaging || String(p.packaging).trim() === "");
+  const expired = safeProducts.filter((p) => isDateExpired(p?.validity || ""));
+  const excluded = safeProducts.filter((p) => !p?.included);
 
   const isReadyToExport =
     total > 0 && unpriced.length === 0 && expired.length === 0;

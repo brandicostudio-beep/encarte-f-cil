@@ -22,24 +22,26 @@ interface PendingIssuesPanelProps {
 }
 
 export const PendingIssuesPanel: React.FC<PendingIssuesPanelProps> = ({
-  products,
-  unmatchedPhotos,
+  products = [],
+  unmatchedPhotos = [],
   onOpenSpreadsheetModal,
   onEditProduct,
   onFilterChange,
 }) => {
+  const safeProducts = products || [];
+
   // 1. Produtos sem preço (deixam o produto fora do encarte até ser resolvido)
-  const unpricedProducts = products.filter((p) => !p.price || p.price.trim() === "");
+  const unpricedProducts = safeProducts.filter((p) => !p?.price || String(p.price).trim() === "");
 
   // 2. Produtos sem foto (usam placeholder neutro)
-  const missingPhotoProducts = products.filter((p) => !p.image || p.image.trim() === "");
+  const missingPhotoProducts = safeProducts.filter((p) => !p?.image || String(p.image).trim() === "");
 
   // 3. Produtos com validade vencida
-  const expiredProducts = products.filter((p) => isDateExpired(p.validity));
+  const expiredProducts = safeProducts.filter((p) => isDateExpired(p?.validity || ""));
 
   const totalIssues = unpricedProducts.length + expiredProducts.length;
 
-  if (products.length === 0) return null;
+  if (safeProducts.length === 0) return null;
 
   return (
     <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3">

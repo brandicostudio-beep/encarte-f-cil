@@ -1,9 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { toJpeg, toPng } from "html-to-image";
-import { jsPDF } from "jspdf";
-import JSZip from "jszip";
 import { extractCategoryProducts } from "@/lib/product.functions";
 import type {
   EncarteProduct,
@@ -371,9 +368,9 @@ function EncarteApp() {
   };
 
   // Estatísticas
-  const totalProducts = products.length;
+  const totalProducts = (products || []).length;
   const pricedProducts = useMemo(
-    () => products.filter((p) => p.price && p.price.trim() !== ""),
+    () => (products || []).filter((p) => Boolean(p?.price && String(p.price).trim() !== "")),
     [products]
   );
   const unpricedCount = totalProducts - pricedProducts.length;
@@ -501,6 +498,11 @@ function EncarteApp() {
   const executeExportPdf = async () => {
     setExporting(true);
     try {
+      const [{ jsPDF }, { toJpeg }] = await Promise.all([
+        import("jspdf"),
+        import("html-to-image"),
+      ]);
+
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
@@ -563,6 +565,7 @@ function EncarteApp() {
 
     setExporting(true);
     try {
+      const { toPng } = await import("html-to-image");
       const isHighRes = campaign.exportResolution916 === "2160x3840";
       const pixelRatio = is916 ? (isHighRes ? 2 : 1) : 3.125;
 
@@ -604,6 +607,10 @@ function EncarteApp() {
   const executeExportZipAllPages = async () => {
     setExporting(true);
     try {
+      const [{ default: JSZip }, { toPng }] = await Promise.all([
+        import("jszip"),
+        import("html-to-image"),
+      ]);
       const zip = new JSZip();
       const is916 = campaign.format === "story_9_16";
       const isHighRes = campaign.exportResolution916 === "2160x3840";

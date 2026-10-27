@@ -22,7 +22,7 @@ interface ReviewTableProps {
 }
 
 export const ReviewTable: React.FC<ReviewTableProps> = ({
-  products,
+  products = [],
   onPriceChange,
   onToggleIncluded,
   onEditProduct,
@@ -33,8 +33,9 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
 
   // Tratar formatação de preço com duas casas decimais
   const handlePriceBlur = (id: string, rawVal: string) => {
-    if (!rawVal.trim()) return;
-    const formatted = formatPrice(rawVal);
+    const val = String(rawVal || "").trim();
+    if (!val) return;
+    const formatted = formatPrice(val);
     if (formatted) onPriceChange(id, formatted);
   };
 
@@ -48,7 +49,7 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
       // Procurar próximo produto sem preço a partir do índice atual
       for (let i = currentIndex + 1; i < products.length; i++) {
         const nextProd = products[i];
-        if (!nextProd.price || nextProd.price.trim() === "") {
+        if (!nextProd?.price || String(nextProd.price).trim() === "") {
           const el = priceInputRefs.current.get(nextProd.id);
           if (el) {
             el.focus();
@@ -60,7 +61,7 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
       // Se não encontrou depois, busca do início
       for (let i = 0; i < currentIndex; i++) {
         const prevProd = products[i];
-        if (!prevProd.price || prevProd.price.trim() === "") {
+        if (!prevProd?.price || String(prevProd.price).trim() === "") {
           const el = priceInputRefs.current.get(prevProd.id);
           if (el) {
             el.focus();
@@ -109,10 +110,10 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
 
           <tbody className="divide-y divide-neutral-200">
             {products.map((p, idx) => {
-              const isExpired = isDateExpired(p.validity);
-              const hasPrice = Boolean(p.price && p.price.trim() !== "");
-              const hasPhoto = Boolean(p.image && p.image.trim() !== "");
-              const hasPackaging = Boolean(p.packaging && p.packaging.trim() !== "");
+              const isExpired = isDateExpired(p?.validity || "");
+              const hasPrice = Boolean(p?.price && String(p.price).trim() !== "");
+              const hasPhoto = Boolean(p?.image && String(p.image).trim() !== "");
+              const hasPackaging = Boolean(p?.packaging && String(p.packaging).trim() !== "");
 
               // Diagnóstico de pendências com cor E texto explícito (Acessibilidade)
               const issues: { type: string; label: string; className: string }[] = [];
@@ -278,7 +279,7 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                         type="text"
                         inputMode="decimal"
                         placeholder="0,00"
-                        value={p.price}
+                        value={p.price || ""}
                         onChange={(e) => onPriceChange(p.id, e.target.value)}
                         onBlur={(e) => handlePriceBlur(p.id, e.target.value)}
                         onKeyDown={(e) => handlePriceKeyDown(e, idx)}

@@ -19,22 +19,22 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
 }) => {
   const isImageLeft = index % 2 === 0;
 
-  // Preço formatado
-  const [reais, centavos] = (product.price || "0,00").split(",");
+  // Preço formatado com segurança para qualquer formato (string ou número)
+  const [reais, centavos] = String(product?.price || "0,00").replace(".", ",").split(",");
 
   // Cores institucionais
-  const primaryColor = store.primaryColor || DESIGN_TOKENS.colors.primary;
-  const accentColor = store.accentColor || DESIGN_TOKENS.colors.accent;
+  const primaryColor = store?.primaryColor || DESIGN_TOKENS.colors.primary;
+  const accentColor = store?.accentColor || DESIGN_TOKENS.colors.accent;
   const nameColor = DESIGN_TOKENS.colors.nameBurgundy; // #8B0000
 
   // Linhas opcionais
-  const hasValidity = Boolean(product.validity && product.validity.trim() !== "");
-  const hasStock = Boolean(product.stock && product.stock.trim() !== "");
+  const hasValidity = Boolean(product?.validity && String(product.validity).trim() !== "");
+  const hasStock = Boolean(product?.stock && String(product.stock).trim() !== "");
 
   // Código e embalagem em texto único (ex: "23396 · PACOTE 1X24 UNID")
-  const codePackagingText = product.packaging
-    ? `${product.code || "---"} · ${product.packaging}`
-    : product.code || "---";
+  const codePackagingText = product?.packaging
+    ? `${product?.code || "---"} · ${product.packaging}`
+    : product?.code || "---";
 
   // 1. FORMATO HERO (Última página com 1 único produto ocupando a página inteira)
   if (layoutMode === "hero") {
