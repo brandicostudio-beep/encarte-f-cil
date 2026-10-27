@@ -1,5 +1,6 @@
 import React from "react";
 import type { EncarteProduct, StoreConfig, CampaignConfig } from "@/types/encarte";
+import { DESIGN_TOKENS } from "@/lib/design-tokens";
 import { EncarteHeader } from "./EncarteHeader";
 import { EncarteFooter } from "./EncarteFooter";
 import { ProductCardA4 } from "./ProductCardA4";
@@ -11,6 +12,7 @@ interface A4PageProps {
   store: StoreConfig;
   campaign: CampaignConfig;
   domId?: string;
+  totalProductsCount?: number;
 }
 
 export const A4Page: React.FC<A4PageProps> = ({
@@ -20,34 +22,43 @@ export const A4Page: React.FC<A4PageProps> = ({
   store,
   campaign,
   domId,
+  totalProductsCount,
 }) => {
   const isFirstPage = pageNumber === 1;
+  const isLastPage = pageNumber === totalPages && totalPages > 1;
 
-  // Grade sempre com até 8 produtos por página (2 colunas x 4 linhas)
+  // Grade modular: sempre até 8 produtos por página (2 colunas x 4 linhas)
   const displayProducts = products.slice(0, 8);
+  const darkBg = store.darkColor || DESIGN_TOKENS.colors.dark;
 
   return (
     <div
       id={domId}
-      className="flyer-page-print relative flex flex-col justify-between bg-black text-white overflow-hidden shadow-2xl select-none"
+      className="flyer-page-print relative flex flex-col justify-between text-white overflow-hidden shadow-2xl select-none"
       style={{
-        width: "794px",
-        height: "1123px",
-        backgroundColor: store.darkColor || "#0a0a0a",
+        width: `${DESIGN_TOKENS.geometry.screenPreviewWidthPx}px`,
+        height: `${DESIGN_TOKENS.geometry.screenPreviewHeightPx}px`,
+        backgroundColor: darkBg,
+        boxSizing: "border-box",
+        padding: "0",
       }}
     >
-      {/* Cabeçalho */}
+      {/* 1. Cabeçalho (Primeira Página ~25% ou Compacto nas seguintes) */}
       <EncarteHeader
         pageNumber={pageNumber}
         totalPages={totalPages}
         store={store}
         campaign={campaign}
+        isLastPage={isLastPage}
       />
 
-      {/* Corpo com fundo preto: Grade 2 colunas x 4 linhas (8 produtos) */}
+      {/* 2. Corpo do Encarte: Margem de segurança de 5mm, grade modular de 2x4 = 8 produtos */}
       <main
-        className={`flex-1 grid grid-cols-2 grid-rows-4 gap-2.5 px-3 py-2 bg-black overflow-hidden`}
-        style={{ backgroundColor: store.darkColor || "#0a0a0a" }}
+        className="flex-1 grid grid-cols-2 grid-rows-4 gap-2.5 px-3 py-2 overflow-hidden"
+        style={{
+          backgroundColor: darkBg,
+          margin: "0",
+        }}
       >
         {displayProducts.map((prod, idx) => (
           <ProductCardA4
@@ -59,20 +70,24 @@ export const A4Page: React.FC<A4PageProps> = ({
           />
         ))}
 
-        {/* Se a página tiver menos de 8 produtos, preenche slots vazios mantendo o layout limpo */}
+        {/* Preenchimento de slots vazios mantendo a grade equilibrada */}
         {displayProducts.length < 8 &&
           Array.from({ length: 8 - displayProducts.length }).map((_, emptyIdx) => (
             <div
               key={`empty-${emptyIdx}`}
-              className="flex items-center justify-center rounded-2xl border-2 border-dashed border-neutral-800 bg-neutral-900/40 p-4 text-center text-xs text-neutral-600"
+              className="flex items-center justify-center rounded-2xl border-2 border-dashed border-neutral-800 bg-neutral-900/50 p-4 text-center text-xs text-neutral-600"
             >
               Espaço reservado
             </div>
           ))}
       </main>
 
-      {/* Rodapé com logo, endereço, telefone e nota legal */}
-      <EncarteFooter store={store} />
+      {/* 3. Rodapé (Padrão ou Última Página Expandida com Resumo Institucional) */}
+      <EncarteFooter
+        store={store}
+        isLastPage={isLastPage}
+        totalProductsCount={totalProductsCount}
+      />
     </div>
   );
 };

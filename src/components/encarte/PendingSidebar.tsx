@@ -1,0 +1,231 @@
+import React from "react";
+import type { EncarteProduct } from "@/types/encarte";
+import { isDateExpired } from "@/lib/encarte-helpers";
+import {
+  DollarSign,
+  ImageOff,
+  CalendarX,
+  CheckCircle2,
+  Filter,
+  FileQuestion,
+  FileSpreadsheet,
+} from "lucide-react";
+
+export type IssueFilter = "all" | "unpriced" | "missing_photo" | "expired" | "excluded";
+
+interface PendingSidebarProps {
+  products: EncarteProduct[];
+  unmatchedPhotos: string[];
+  activeFilter: IssueFilter;
+  onFilterChange: (filter: IssueFilter) => void;
+  onOpenSpreadsheetModal: () => void;
+}
+
+export const PendingSidebar: React.FC<PendingSidebarProps> = ({
+  products,
+  unmatchedPhotos,
+  activeFilter,
+  onFilterChange,
+  onOpenSpreadsheetModal,
+}) => {
+  const total = products.length;
+  const unpriced = products.filter((p) => !p.price || p.price.trim() === "");
+  const missingPhoto = products.filter((p) => !p.image || p.image.trim() === "");
+  const expired = products.filter((p) => isDateExpired(p.validity));
+  const excluded = products.filter((p) => !p.included);
+
+  const isReadyToExport =
+    total > 0 && unpriced.length === 0 && expired.length === 0;
+
+  return (
+    <aside
+      aria-label="Painel de Pendências"
+      className="rounded-xl border bg-white p-4 shadow-xs space-y-4"
+    >
+      <div className="flex items-center justify-between border-b pb-3">
+        <div>
+          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-800">
+            Painel de Pendências
+          </h2>
+          <p className="text-[11px] text-neutral-500">
+            Clique no contador para filtrar a tabela.
+          </p>
+        </div>
+
+        {isReadyToExport ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10.5px] font-bold text-green-800">
+            <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+            100% Pronto
+          </span>
+        ) : (
+          <span className="text-[11px] font-mono font-bold text-neutral-500">
+            {total} itens
+          </span>
+        )}
+      </div>
+
+      {/* Lista de Contadores Clicáveis (min-h 44px para toque acessível) */}
+      <div className="space-y-1.5" role="group" aria-label="Filtros de pendências">
+        {/* 1. Todos os Produtos */}
+        <button
+          type="button"
+          onClick={() => onFilterChange("all")}
+          className={`w-full min-h-[44px] px-3 py-2 rounded-lg flex items-center justify-between text-xs transition-colors border text-left focus-visible:ring-2 focus-visible:ring-red-600 ${
+            activeFilter === "all"
+              ? "bg-neutral-900 text-white font-bold border-neutral-900 shadow-xs"
+              : "bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border-neutral-200"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Filter className="h-4 w-4" />
+            Todos os produtos
+          </span>
+          <span className="font-mono font-bold px-1.5 py-0.5 rounded bg-black/10 text-[11px]">
+            {total}
+          </span>
+        </button>
+
+        {/* 2. Sem Preço (Crítico - Fora do Encarte) */}
+        <button
+          type="button"
+          onClick={() => onFilterChange("unpriced")}
+          className={`w-full min-h-[44px] px-3 py-2 rounded-lg flex items-center justify-between text-xs transition-colors border text-left focus-visible:ring-2 focus-visible:ring-amber-600 ${
+            activeFilter === "unpriced"
+              ? "bg-amber-600 text-white font-bold border-amber-600 shadow-xs"
+              : unpriced.length > 0
+              ? "bg-amber-50 text-amber-900 hover:bg-amber-100 border-amber-300 font-semibold"
+              : "bg-neutral-50 text-neutral-400 border-neutral-200"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4 text-amber-500" />
+            <span>Sem preço</span>
+          </span>
+          <span
+            className={`font-mono font-bold px-1.5 py-0.5 rounded text-[11px] ${
+              unpriced.length > 0
+                ? activeFilter === "unpriced"
+                  ? "bg-white/20 text-white"
+                  : "bg-amber-200 text-amber-900"
+                : "bg-neutral-200 text-neutral-600"
+            }`}
+          >
+            {unpriced.length}
+          </span>
+        </button>
+
+        {/* 3. Sem Foto (Placeholder neutro) */}
+        <button
+          type="button"
+          onClick={() => onFilterChange("missing_photo")}
+          className={`w-full min-h-[44px] px-3 py-2 rounded-lg flex items-center justify-between text-xs transition-colors border text-left focus-visible:ring-2 focus-visible:ring-neutral-600 ${
+            activeFilter === "missing_photo"
+              ? "bg-neutral-800 text-white font-bold border-neutral-800 shadow-xs"
+              : missingPhoto.length > 0
+              ? "bg-neutral-100 text-neutral-800 hover:bg-neutral-200 border-neutral-300"
+              : "bg-neutral-50 text-neutral-400 border-neutral-200"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <ImageOff className="h-4 w-4 text-neutral-500" />
+            <span>Sem foto</span>
+          </span>
+          <span
+            className={`font-mono font-bold px-1.5 py-0.5 rounded text-[11px] ${
+              activeFilter === "missing_photo"
+                ? "bg-white/20 text-white"
+                : "bg-neutral-200 text-neutral-700"
+            }`}
+          >
+            {missingPhoto.length}
+          </span>
+        </button>
+
+        {/* 4. Validade Vencida */}
+        <button
+          type="button"
+          onClick={() => onFilterChange("expired")}
+          className={`w-full min-h-[44px] px-3 py-2 rounded-lg flex items-center justify-between text-xs transition-colors border text-left focus-visible:ring-2 focus-visible:ring-red-600 ${
+            activeFilter === "expired"
+              ? "bg-red-700 text-white font-bold border-red-700 shadow-xs"
+              : expired.length > 0
+              ? "bg-red-50 text-red-900 hover:bg-red-100 border-red-300 font-semibold"
+              : "bg-neutral-50 text-neutral-400 border-neutral-200"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <CalendarX className="h-4 w-4 text-red-500" />
+            <span>Validade vencida</span>
+          </span>
+          <span
+            className={`font-mono font-bold px-1.5 py-0.5 rounded text-[11px] ${
+              expired.length > 0
+                ? activeFilter === "expired"
+                  ? "bg-white/20 text-white"
+                  : "bg-red-200 text-red-900"
+                : "bg-neutral-200 text-neutral-600"
+            }`}
+          >
+            {expired.length}
+          </span>
+        </button>
+
+        {/* 5. Desmarcados do Encarte */}
+        {excluded.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onFilterChange("excluded")}
+            className={`w-full min-h-[44px] px-3 py-2 rounded-lg flex items-center justify-between text-xs transition-colors border text-left ${
+              activeFilter === "excluded"
+                ? "bg-neutral-700 text-white font-bold border-neutral-700"
+                : "bg-neutral-50 text-neutral-600 hover:bg-neutral-100 border-neutral-200"
+            }`}
+          >
+            <span>Desmarcados</span>
+            <span className="font-mono text-[11px] font-bold">{excluded.length}</span>
+          </button>
+        )}
+      </div>
+
+      {/* Regra de Ouro: Preço errado é o erro mais caro */}
+      {unpriced.length > 0 && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-[11px] text-amber-900 space-y-2">
+          <p className="leading-tight">
+            <strong>Atenção:</strong> {unpriced.length} itens sem preço estão temporariamente <strong>fora do encarte</strong>.
+          </p>
+          <button
+            type="button"
+            onClick={onOpenSpreadsheetModal}
+            className="w-full min-h-[36px] px-2 py-1 bg-white border border-amber-300 hover:bg-amber-100 rounded text-amber-950 font-semibold flex items-center justify-center gap-1.5 text-xs transition-colors shadow-2xs"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5 text-amber-600" />
+            Preencher em massa
+          </button>
+        </div>
+      )}
+
+      {/* Fotos sem produto do Banco de Fotos */}
+      {unmatchedPhotos.length > 0 && (
+        <div className="rounded-lg bg-neutral-100 border border-neutral-300 p-2.5 text-[11px] text-neutral-700 space-y-1">
+          <div className="flex items-center gap-1 font-bold text-neutral-900">
+            <FileQuestion className="h-3.5 w-3.5 text-neutral-500" />
+            Fotos sem produto ({unmatchedPhotos.length})
+          </div>
+          <p className="text-[10px] text-neutral-500">
+            Arquivos recebidos que não deram match com nenhum código:
+          </p>
+          <div className="max-h-16 overflow-y-auto font-mono text-[9.5px] text-neutral-600 pr-1">
+            {unmatchedPhotos.slice(0, 6).map((f, i) => (
+              <div key={i} className="truncate">• {f}</div>
+            ))}
+            {unmatchedPhotos.length > 6 && (
+              <div className="text-[9px] text-neutral-400">
+                + {unmatchedPhotos.length - 6} outros
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </aside>
+  );
+};
