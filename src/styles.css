@@ -56,7 +56,8 @@
   --color-brand-foreground: var(--brand-foreground);
   --color-price: var(--price);
   --color-price-foreground: var(--price-foreground);
-  --font-display: "Anton", Impact, sans-serif;
+  --font-display: "Anton", "Bebas Neue", Impact, sans-serif;
+  --font-condensed: "Bebas Neue", "Anton", Impact, sans-serif;
   --font-sans: "Barlow", system-ui, sans-serif;
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -154,8 +155,52 @@
 }
 
 @media print {
-  @page { size: A4 portrait; margin: 0; }
-  body * { visibility: hidden; }
-  .flyer-print, .flyer-print * { visibility: visible; }
-  .flyer-print { position: fixed; inset: 0; width: 210mm !important; height: 297mm !important; transform: none !important; }
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  body {
+    background: transparent !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .flyer-print-container,
+  .flyer-print-container * {
+    visibility: visible;
+  }
+  .flyer-print-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 210mm;
+    margin: 0;
+    padding: 0;
+  }
+  .flyer-page-print {
+    page-break-after: always;
+    break-after: page;
+    width: 210mm !important;
+    height: 297mm !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+}
+
+.retail-stripes {
+  background: repeating-linear-gradient(
+    -45deg,
+    #facc15,
+    #facc15 14px,
+    #000000 14px,
+    #000000 28px
+  );
+}
+
+.title-3d-glow {
+  text-shadow:
+    2px 2px 0px #dc2626,
+    4px 4px 0px #991b1b,
+    6px 6px 0px #000000,
+    8px 8px 12px rgba(0, 0, 0, 0.7);
 }
