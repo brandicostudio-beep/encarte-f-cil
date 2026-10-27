@@ -45,11 +45,11 @@ describe("parseCategoryHtml", () => {
 
     const prods = parseCategoryHtml(html, "https://loja.com");
     expect(prods).toHaveLength(2);
-    expect(prods[0].name).toBe("BISCOITO RECHEADO 130G");
-    expect(prods[0].code).toBe("1001");
-    expect(prods[0].price).toBe(""); // Preço vazio inicialmente conforme regra
-    expect(prods[1].name).toBe("CAFÉ TORRADO 500G");
-    expect(prods[1].code).toBe("1002");
+    expect(prods[0]?.name).toBe("BISCOITO RECHEADO 130G");
+    expect(prods[0]?.code).toBe("1001");
+    expect(prods[0]?.price).toBe(""); // Preço vazio inicialmente conforme regra
+    expect(prods[1]?.name).toBe("CAFÉ TORRADO 500G");
+    expect(prods[1]?.code).toBe("1002");
   });
 
   it("extracts products from HTML card heuristic", () => {
@@ -65,10 +65,10 @@ describe("parseCategoryHtml", () => {
 
     const prods = parseCategoryHtml(html, "https://loja.com");
     expect(prods).toHaveLength(1);
-    expect(prods[0].code).toBe("48201");
-    expect(prods[0].name).toBe("MOLHO DE TOMATE 300G");
-    expect(prods[0].validity).toBe("15/12/2026");
-    expect(prods[0].stock).toBe("150 UND");
+    expect(prods[0]?.code).toBe("48201");
+    expect(prods[0]?.name).toBe("MOLHO DE TOMATE 300G");
+    expect(prods[0]?.validity).toBe("15/12/2026");
+    expect(prods[0]?.stock).toBe("150 UND");
   });
 });
 

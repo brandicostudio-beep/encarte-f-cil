@@ -46,9 +46,9 @@ function formatSpreadsheetDate(raw: any): string {
   // Se já for formato dd/mm/aaaa ou dd-mm-aaaa
   const brMatch = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (brMatch) {
-    const d = brMatch[1].padStart(2, "0");
-    const m = brMatch[2].padStart(2, "0");
-    let y = brMatch[3];
+    const d = (brMatch[1] ?? "").padStart(2, "0");
+    const m = (brMatch[2] ?? "").padStart(2, "0");
+    let y = brMatch[3] ?? "";
     if (y.length === 2) y = `20${y}`;
     return `${d}/${m}/${y}`;
   }
@@ -56,9 +56,9 @@ function formatSpreadsheetDate(raw: any): string {
   // Se for formato aaaa-mm-dd (ISO)
   const isoMatch = str.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
   if (isoMatch) {
-    const y = isoMatch[1];
-    const m = isoMatch[2].padStart(2, "0");
-    const d = isoMatch[3].padStart(2, "0");
+    const y = isoMatch[1] ?? "";
+    const m = (isoMatch[2] ?? "").padStart(2, "0");
+    const d = (isoMatch[3] ?? "").padStart(2, "0");
     return `${d}/${m}/${y}`;
   }
 
@@ -89,6 +89,14 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
   }
 
   const worksheet = workbook.Sheets[firstSheetName];
+  if (!worksheet) {
+    return {
+      success: false,
+      validProducts: [],
+      errors: [{ line: 1, message: "A planilha está vazia ou não possui abas válidas." }],
+      totalRows: 0,
+    };
+  }
   // Converter para linhas com cabeçalho
   const rows: any[] = XLSX.utils.sheet_to_json(worksheet, {
     raw: false,
@@ -182,7 +190,7 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
       const packMatch =
         name.match(/(\d+\s*X\s*\d+\s*(?:GR|G|KG|ML|L|UN))\b/i) ||
         name.match(/(\d+[\d.,]*\s*(?:GR|G|KG|ML|L|UNID|UN))\b/i);
-      if (packMatch) packaging = packMatch[1].replace(/\s+/g, " ");
+      if (packMatch) packaging = (packMatch[1] ?? "").replace(/\s+/g, " ");
       else packaging = "";
     }
 

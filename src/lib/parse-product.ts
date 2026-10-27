@@ -98,13 +98,13 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
   const seenCodes = new Set<string>();
 
   const addProduct = (raw: {
-    code?: string;
+    code?: string | undefined;
     name: string;
-    packaging?: string;
-    validity?: string;
-    image?: string;
-    stock?: string;
-    price?: string;
+    packaging?: string | undefined;
+    validity?: string | undefined;
+    image?: string | undefined;
+    stock?: string | undefined;
+    price?: string | undefined;
   }) => {
     if (!raw.name || raw.name.length < 2) return;
     const name = decode(raw.name).toUpperCase().slice(0, 120);
@@ -125,7 +125,7 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
       const packMatch =
         name.match(/(\d+\s*X\s*\d+\s*(?:GR|G|KG|ML|L|UN))\b/i) ||
         name.match(/(\d+[\d.,]*\s*(?:GR|G|KG|ML|L|UNID|UN))\b/i);
-      if (packMatch) packaging = packMatch[1].replace(/\s+/g, " ");
+      if (packMatch) packaging = (packMatch[1] ?? "").replace(/\s+/g, " ");
       else packaging = "1 UN";
     }
 
@@ -133,7 +133,7 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
     let validity = (raw.validity || "").trim();
     if (!validity) {
       const valMatch = html.match(/(?:validade|vencimento|val|venc)[\s:.]*([0-9]{1,2}[/-][0-9]{1,2}[/-][0-9]{2,4})/i);
-      if (valMatch) validity = valMatch[1].replace(/-/g, "/");
+      if (valMatch) validity = (valMatch[1] ?? "").replace(/-/g, "/");
     }
 
     let resolvedImg = "";
@@ -197,6 +197,7 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
 
     while ((cardMatch = cardRegex.exec(html)) !== null && count < 60) {
       const card = cardMatch[1];
+      if (!card) continue;
 
       // Nome
       const nameMatch =
@@ -205,32 +206,32 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
         card.match(/<img[^>]+alt=["']([^"']{3,100})["']/i);
 
       if (!nameMatch) continue;
-      const rawName = decode(nameMatch[1].replace(/<[^>]+>/g, ""));
+      const rawName = decode((nameMatch[1] ?? "").replace(/<[^>]+>/g, ""));
       if (!rawName || rawName.length < 3) continue;
 
       // Imagem
       const imgMatch = card.match(/<img[^>]+(?:src|data-src|data-original)=["']([^"']+)["']/i);
-      const imgSrc = imgMatch ? imgMatch[1] : "";
+      const imgSrc = imgMatch ? (imgMatch[1] ?? "") : "";
 
       // Código / SKU
       const codeMatch =
         card.match(/(?:data-sku|data-product-id|data-id)=["']([^"']+)["']/i) ||
         card.match(/(?:cód|código|sku|ref)[:.\s]*([A-Za-z0-9_-]+)/i);
-      const code = codeMatch ? codeMatch[1] : "";
+      const code = codeMatch ? (codeMatch[1] ?? "") : "";
 
       // Validade
       const valMatch = card.match(/(?:validade|vencimento|val|venc)[\s:.]*([0-9]{1,2}[/-][0-9]{1,2}[/-][0-9]{2,4})/i);
-      const validity = valMatch ? valMatch[1].replace(/-/g, "/") : "";
+      const validity = valMatch ? (valMatch[1] ?? "").replace(/-/g, "/") : "";
 
       // Embalagem
       const packMatch =
         card.match(/(\d+\s*X\s*\d+\s*(?:GR|G|KG|ML|L|UN))\b/i) ||
         rawName.match(/(\d+[\d.,]*\s*(?:GR|G|KG|ML|L|UNID|UN))\b/i);
-      const packaging = packMatch ? packMatch[1] : "";
+      const packaging = packMatch ? (packMatch[1] ?? "") : "";
 
       // Estoque
       const stockMatch = card.match(/(?:estoque|saldo|qtd|unidades)[:.\s]*(\d+)/i);
-      const stock = stockMatch ? stockMatch[1] : "";
+      const stock = stockMatch ? (stockMatch[1] ?? "") : "";
 
       addProduct({
         name: rawName,
