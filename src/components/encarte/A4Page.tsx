@@ -22,14 +22,31 @@ export const A4Page: React.FC<A4PageProps> = ({
   store,
   campaign,
   domId,
-  totalProductsCount,
 }) => {
-  const isFirstPage = pageNumber === 1;
-  const isLastPage = pageNumber === totalPages && totalPages > 1;
+  const isLastPage = pageNumber === totalPages;
+  const count = products.length;
+  const perPage = campaign.productsPerPage || 12;
 
-  // Grade modular: sempre até 8 produtos por página (2 colunas x 4 linhas)
-  const displayProducts = products.slice(0, 8);
   const darkBg = store.darkColor || DESIGN_TOKENS.colors.dark;
+
+  // Determinar se o layout padrão dos cards é vertical (3 colunas para 12 e 9) ou horizontal (2 colunas para 8 e 6)
+  const isThreeCols = perPage === 12 || perPage === 9;
+  const defaultCardLayout: "vertical" | "horizontal" = isThreeCols ? "vertical" : "horizontal";
+
+  // Classes de grade conforme produtos por página
+  const getGridClasses = () => {
+    switch (perPage) {
+      case 6:
+        return "grid-cols-2 grid-rows-3 gap-3.5";
+      case 8:
+        return "grid-cols-2 grid-rows-4 gap-2.5";
+      case 9:
+        return "grid-cols-3 grid-rows-3 gap-2.5";
+      case 12:
+      default:
+        return "grid-cols-3 grid-rows-4 gap-2";
+    }
+  };
 
   return (
     <div
@@ -43,7 +60,7 @@ export const A4Page: React.FC<A4PageProps> = ({
         padding: "0",
       }}
     >
-      {/* 1. Cabeçalho (Primeira Página ~25% ou Compacto nas seguintes) */}
+      {/* 1. CABEÇALHO UNIFICADO (repetido em todas as páginas, no mesmo tamanho) */}
       <EncarteHeader
         pageNumber={pageNumber}
         totalPages={totalPages}
@@ -52,41 +69,79 @@ export const A4Page: React.FC<A4PageProps> = ({
         isLastPage={isLastPage}
       />
 
-      {/* 2. Corpo do Encarte: Margem de segurança de 5mm, grade modular de 2x4 = 8 produtos */}
+      {/* 2. CORPO DO ENCARTE (adapta-se conforme produtos por página e regras da última página) */}
       <main
-        className="flex-1 grid grid-cols-2 grid-rows-4 gap-2.5 px-3 py-2 overflow-hidden"
+        className="flex-1 flex flex-col justify-center px-3 py-2 overflow-hidden"
         style={{
           backgroundColor: darkBg,
           margin: "0",
         }}
       >
-        {displayProducts.map((prod, idx) => (
-          <ProductCardA4
-            key={prod.id || `${pageNumber}-${idx}`}
-            product={prod}
-            index={idx}
-            store={store}
-            isCompactPage={!isFirstPage}
-          />
-        ))}
-
-        {/* Preenchimento de slots vazios mantendo a grade equilibrada */}
-        {displayProducts.length < 8 &&
-          Array.from({ length: 8 - displayProducts.length }).map((_, emptyIdx) => (
-            <div
-              key={`empty-${emptyIdx}`}
-              className="flex items-center justify-center rounded-2xl border-2 border-dashed border-neutral-800 bg-neutral-900/50 p-4 text-center text-xs text-neutral-600"
-            >
-              Espaço reservado
-            </div>
-          ))}
+        {/* Caso 1: Última página com um único produto: ocupa a página inteira, centralizado (Hero Card) */}
+        {isLastPage && count === 1 ? (
+          <div className="flex-1 flex items-center justify-center p-2 h-full w-full">
+            <ProductCardA4
+              product={products[0]}
+              index={0}
+              store={store}
+              layoutMode="hero"
+            />
+          </div>
+        ) : isLastPage && count > 1 && count < perPage ? (
+          /* Caso 2: Última página com de 2 até (por página - 1) produtos:
+             manter a grade, centralizar os cards no corpo da página e aumentá-los até preencher a área disponível */
+          <div
+            className={`w-full h-full grid ${
+              isThreeCols
+                ? count <= 3
+                  ? "grid-cols-3 grid-rows-1"
+                  : count <= 6
+                  ? "grid-cols-3 grid-rows-2"
+                  : count <= 9
+                  ? "grid-cols-3 grid-rows-3"
+                  : "grid-cols-3 grid-rows-4"
+                : count <= 2
+                ? "grid-cols-2 grid-rows-1"
+                : count <= 4
+                ? "grid-cols-2 grid-rows-2"
+                : count <= 6
+                ? "grid-cols-2 grid-rows-3"
+                : "grid-cols-2 grid-rows-4"
+            } ${isThreeCols ? "gap-2.5" : "gap-3"} items-center justify-center p-1`}
+          >
+            {products.map((prod, idx) => (
+              <div key={prod.id || `${pageNumber}-${idx}`} className="w-full h-full flex items-center justify-center">
+                <ProductCardA4
+                  product={prod}
+                  index={idx}
+                  store={store}
+                  layoutMode={defaultCardLayout}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          /* Caso 3: Página regular cheia */
+          <div className={`w-full h-full grid ${getGridClasses()} p-0.5`}>
+            {products.map((prod, idx) => (
+              <ProductCardA4
+                key={prod.id || `${pageNumber}-${idx}`}
+                product={prod}
+                index={idx}
+                store={store}
+                layoutMode={defaultCardLayout}
+              />
+            ))}
+          </div>
+        )}
       </main>
 
-      {/* 3. Rodapé (Padrão ou Última Página Expandida com Resumo Institucional) */}
+      {/* 3. RODAPÉ UNIFICADO (repetido em todas as páginas, no mesmo tamanho) */}
       <EncarteFooter
         store={store}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
         isLastPage={isLastPage}
-        totalProductsCount={totalProductsCount}
       />
     </div>
   );

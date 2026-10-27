@@ -9,9 +9,16 @@ import {
   Filter,
   FileQuestion,
   FileSpreadsheet,
+  Package,
 } from "lucide-react";
 
-export type IssueFilter = "all" | "unpriced" | "missing_photo" | "expired" | "excluded";
+export type IssueFilter =
+  | "all"
+  | "unpriced"
+  | "missing_photo"
+  | "missing_packaging"
+  | "expired"
+  | "excluded";
 
 interface PendingSidebarProps {
   products: EncarteProduct[];
@@ -31,6 +38,7 @@ export const PendingSidebar: React.FC<PendingSidebarProps> = ({
   const total = products.length;
   const unpriced = products.filter((p) => !p.price || p.price.trim() === "");
   const missingPhoto = products.filter((p) => !p.image || p.image.trim() === "");
+  const missingPackaging = products.filter((p) => !p.packaging || p.packaging.trim() === "");
   const expired = products.filter((p) => isDateExpired(p.validity));
   const excluded = products.filter((p) => !p.included);
 
@@ -141,15 +149,44 @@ export const PendingSidebar: React.FC<PendingSidebarProps> = ({
           </span>
         </button>
 
-        {/* 4. Validade Vencida */}
+        {/* 4. Embalagem Não Identificada */}
+        <button
+          type="button"
+          onClick={() => onFilterChange("missing_packaging")}
+          className={`w-full min-h-[44px] px-3 py-2 rounded-lg flex items-center justify-between text-xs transition-colors border text-left focus-visible:ring-2 focus-visible:ring-orange-600 ${
+            activeFilter === "missing_packaging"
+              ? "bg-orange-600 text-white font-bold border-orange-600 shadow-xs"
+              : missingPackaging.length > 0
+              ? "bg-orange-50 text-orange-900 hover:bg-orange-100 border-orange-300 font-semibold"
+              : "bg-neutral-50 text-neutral-400 border-neutral-200"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Package className="h-4 w-4 text-orange-500" />
+            <span>Sem embalagem</span>
+          </span>
+          <span
+            className={`font-mono font-bold px-1.5 py-0.5 rounded text-[11px] ${
+              missingPackaging.length > 0
+                ? activeFilter === "missing_packaging"
+                  ? "bg-white/20 text-white"
+                  : "bg-orange-200 text-orange-900"
+                : "bg-neutral-200 text-neutral-600"
+            }`}
+          >
+            {missingPackaging.length}
+          </span>
+        </button>
+
+        {/* 5. Vencidos */}
         <button
           type="button"
           onClick={() => onFilterChange("expired")}
           className={`w-full min-h-[44px] px-3 py-2 rounded-lg flex items-center justify-between text-xs transition-colors border text-left focus-visible:ring-2 focus-visible:ring-red-600 ${
             activeFilter === "expired"
-              ? "bg-red-700 text-white font-bold border-red-700 shadow-xs"
+              ? "bg-red-600 text-white font-bold border-red-600 shadow-xs"
               : expired.length > 0
-              ? "bg-red-50 text-red-900 hover:bg-red-100 border-red-300 font-semibold"
+              ? "bg-red-50 text-red-900 hover:bg-red-100 border-red-300 font-bold"
               : "bg-neutral-50 text-neutral-400 border-neutral-200"
           }`}
         >
@@ -170,59 +207,61 @@ export const PendingSidebar: React.FC<PendingSidebarProps> = ({
           </span>
         </button>
 
-        {/* 5. Desmarcados do Encarte */}
-        {excluded.length > 0 && (
-          <button
-            type="button"
-            onClick={() => onFilterChange("excluded")}
-            className={`w-full min-h-[44px] px-3 py-2 rounded-lg flex items-center justify-between text-xs transition-colors border text-left ${
-              activeFilter === "excluded"
-                ? "bg-neutral-700 text-white font-bold border-neutral-700"
-                : "bg-neutral-50 text-neutral-600 hover:bg-neutral-100 border-neutral-200"
+        {/* 6. Desmarcados (Fora do encarte) */}
+        <button
+          type="button"
+          onClick={() => onFilterChange("excluded")}
+          className={`w-full min-h-[44px] px-3 py-2 rounded-lg flex items-center justify-between text-xs transition-colors border text-left focus-visible:ring-2 focus-visible:ring-neutral-600 ${
+            activeFilter === "excluded"
+              ? "bg-neutral-700 text-white font-bold border-neutral-700 shadow-xs"
+              : excluded.length > 0
+              ? "bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border-neutral-200"
+              : "bg-neutral-50 text-neutral-400 border-neutral-200"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <FileQuestion className="h-4 w-4 text-neutral-400" />
+            <span>Desmarcados</span>
+          </span>
+          <span
+            className={`font-mono font-bold px-1.5 py-0.5 rounded text-[11px] ${
+              excluded.length > 0
+                ? activeFilter === "excluded"
+                  ? "bg-white/20 text-white"
+                  : "bg-neutral-200 text-neutral-700"
+                : "bg-neutral-200 text-neutral-500"
             }`}
           >
-            <span>Desmarcados</span>
-            <span className="font-mono text-[11px] font-bold">{excluded.length}</span>
-          </button>
-        )}
+            {excluded.length}
+          </span>
+        </button>
       </div>
 
-      {/* Regra de Ouro: Preço errado é o erro mais caro */}
+      {/* Ação Rápida: Colar Preços em Massa */}
       {unpriced.length > 0 && (
-        <div className="rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-[11px] text-amber-900 space-y-2">
-          <p className="leading-tight">
-            <strong>Atenção:</strong> {unpriced.length} itens sem preço estão temporariamente <strong>fora do encarte</strong>.
-          </p>
+        <div className="pt-2 border-t space-y-2">
+          <div className="text-[11px] text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+            <strong>Atenção:</strong> Produtos sem preço ficam fora do encarte. Preencha na tabela ou cole em lote.
+          </div>
           <button
             type="button"
             onClick={onOpenSpreadsheetModal}
-            className="w-full min-h-[36px] px-2 py-1 bg-white border border-amber-300 hover:bg-amber-100 rounded text-amber-950 font-semibold flex items-center justify-center gap-1.5 text-xs transition-colors shadow-2xs"
+            className="w-full min-h-[44px] px-3 py-2 rounded-lg text-xs font-bold text-green-800 bg-green-50 border border-green-300 hover:bg-green-100 flex items-center justify-center gap-1.5"
           >
-            <FileSpreadsheet className="h-3.5 w-3.5 text-amber-600" />
-            Preencher em massa
+            <FileSpreadsheet className="h-4 w-4 text-green-600" />
+            Colar Planilha com Preços
           </button>
         </div>
       )}
 
-      {/* Fotos sem produto do Banco de Fotos */}
+      {/* Alerta de Fotos Sem Produto */}
       {unmatchedPhotos.length > 0 && (
-        <div className="rounded-lg bg-neutral-100 border border-neutral-300 p-2.5 text-[11px] text-neutral-700 space-y-1">
-          <div className="flex items-center gap-1 font-bold text-neutral-900">
-            <FileQuestion className="h-3.5 w-3.5 text-neutral-500" />
-            Fotos sem produto ({unmatchedPhotos.length})
-          </div>
-          <p className="text-[10px] text-neutral-500">
-            Arquivos recebidos que não deram match com nenhum código:
-          </p>
-          <div className="max-h-16 overflow-y-auto font-mono text-[9.5px] text-neutral-600 pr-1">
-            {unmatchedPhotos.slice(0, 6).map((f, i) => (
-              <div key={i} className="truncate">• {f}</div>
-            ))}
-            {unmatchedPhotos.length > 6 && (
-              <div className="text-[9px] text-neutral-400">
-                + {unmatchedPhotos.length - 6} outros
-              </div>
-            )}
+        <div className="pt-2 border-t">
+          <div className="text-[11px] text-neutral-600 bg-neutral-100 p-2.5 rounded-lg border border-neutral-200">
+            <strong>Fotos sem produto ({unmatchedPhotos.length}):</strong>
+            <p className="mt-1 line-clamp-2 font-mono text-[10px] text-neutral-500">
+              {unmatchedPhotos.join(", ")}
+            </p>
           </div>
         </div>
       )}

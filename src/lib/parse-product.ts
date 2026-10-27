@@ -1,5 +1,5 @@
 import { parse, HTMLElement } from "node-html-parser";
-import type { EncarteProduct } from "@/types/encarte";
+import type { EncarteProduct, PackagingType, MeasureUnit } from "@/types/encarte";
 
 const decode = (s: string) =>
   s
@@ -43,6 +43,106 @@ export function formatPrice(raw: string | number | undefined | null): string {
   const n = Number(s);
   if (!isFinite(n) || n <= 0) return "";
   return n.toFixed(2).replace(".", ",");
+}
+
+export interface ParsedPackaging {
+  tipo: PackagingType;
+  quantidade: string;
+  unidadeMedida: MeasureUnit;
+  gramatura: string;
+  label: string;
+}
+
+/**
+ * Faz o parsing estruturado de embalagens, separando em:
+ * tipo (UNIDADE, PACOTE, CAIXA, FARDO), quantidade (ex: 1X24),
+ * unidade de medida (UNID, GR, KG, ML, L, LT) e gramatura (ex: 320 GR).
+ * Reconhece variações com/sem espaço, vírgula decimal (ex: 1,01 KG) etc.
+ * Se não for identificada nenhuma embalagem, retorna null (sem preencher valor padrão "1 UN").
+ */
+export function parsePackaging(raw: string | undefined | null): ParsedPackaging | null {
+  if (!raw) return null;
+  const s = raw.trim().replace(/\s+/g, " ");
+  if (!s || /^\d{8,}$/.test(s)) return null;
+
+  // 1. Extrair tipo: UNIDADE, PACOTE, CAIXA, FARDO, BANDEJA, POTE, BALDE, SACHÊ, VIDRO
+  let tipo: PackagingType = "";
+  const tipoMatch = s.match(/\b(UNIDADE|PACOTE|CAIXA|FARDO)\b/i);
+  if (tipoMatch) {
+    tipo = tipoMatch[1].toUpperCase() as PackagingType;
+  }
+
+  // 2. Extrair unidade de medida e multiplicador
+  let unidadeMedida: MeasureUnit = "";
+  let quantidade = "";
+  let gramatura = "";
+
+  // Padrão multiplicador: ex.: 1X24 UNID, 1X320 GR, 18X320 GR, 9X24 UNID, 1X10 GR
+  const multMatch = s.match(/(\d+\s*X\s*[\d.,]+)\s*(UNID(?:ADE)?|UN|GR?|KG|ML|L|LT)?\b/i);
+
+  // Padrão simples: ex.: 1,01 KG, 320 GR, 500 G, 24 UNID
+  const singleMatch = s.match(/([\d.,]+)\s*(UNID(?:ADE)?|UN|GR?|KG|ML|L|LT)\b/i);
+
+  if (multMatch) {
+    quantidade = multMatch[1].replace(/\s+/g, "");
+    if (multMatch[2]) {
+      const u = multMatch[2].toUpperCase();
+      if (u === "G") unidadeMedida = "GR";
+      else if (u === "UN" || u === "UNIDADE") unidadeMedida = "UNID";
+      else unidadeMedida = u as MeasureUnit;
+    }
+
+    if (unidadeMedida && unidadeMedida !== "UNID") {
+      const parts = quantidade.split("X");
+      if (parts.length === 2) {
+        gramatura = `${parts[1]} ${unidadeMedida}`;
+      }
+    }
+  } else if (singleMatch) {
+    const val = singleMatch[1];
+    const u = singleMatch[2].toUpperCase();
+    if (u === "G") unidadeMedida = "GR";
+    else if (u === "UN" || u === "UNIDADE") unidadeMedida = "UNID";
+    else unidadeMedida = u as MeasureUnit;
+
+    if (unidadeMedida === "UNID") {
+      quantidade = `${val} UNID`;
+    } else {
+      gramatura = `${val} ${unidadeMedida}`;
+    }
+  }
+
+  // Se não foi identificado tipo, nem multiplicador, nem gramatura -> inválido
+  if (!tipo && !quantidade && !gramatura) {
+    return null;
+  }
+
+  // Montar label conciso e padronizado: ex.: "PACOTE 1X24 UNID", "UNIDADE 1X320 GR", "1X10 GR"
+  const labelParts: string[] = [];
+  if (tipo) labelParts.push(tipo);
+  if (quantidade) {
+    if (unidadeMedida && !quantidade.toUpperCase().includes(unidadeMedida) && !gramatura) {
+      labelParts.push(`${quantidade} ${unidadeMedida}`);
+    } else {
+      labelParts.push(quantidade);
+      if (unidadeMedida && !quantidade.toUpperCase().includes(unidadeMedida)) {
+        labelParts.push(unidadeMedida);
+      }
+    }
+  } else if (gramatura) {
+    labelParts.push(gramatura);
+  }
+
+  const label = labelParts.join(" ").trim();
+  if (!label) return null;
+
+  return {
+    tipo,
+    quantidade,
+    unidadeMedida,
+    gramatura,
+    label,
+  };
 }
 
 export function parseProductHtml(html: string, baseUrl: string) {
@@ -221,10 +321,16 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
     code?: string | undefined;
     name: string;
     packaging?: string | undefined;
+    packagingType?: PackagingType;
+    packagingQuantity?: string;
+    packagingUnit?: MeasureUnit;
+    packagingWeight?: string;
     validity?: string | undefined;
     image?: string | undefined;
     stock?: string | undefined;
     price?: string | undefined;
+    included?: boolean;
+    productUrl?: string;
   }) => {
     if (!raw.name || raw.name.length < 2) return;
     const name = decode(raw.name).toUpperCase().slice(0, 120);
@@ -234,14 +340,8 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
       code = String(10000 + products.length + 1);
     }
 
-    let packaging = (raw.packaging || "").trim().toUpperCase();
-    if (!packaging || /^\d{8,}$/.test(packaging)) {
-      const packMatch =
-        name.match(/(\d+\s*X\s*\d+[\d.,]*\s*(?:GR|G|KG|ML|L|UNID|UN))\b/i) ||
-        name.match(/(\d+[\d.,]*\s*(?:GR|G|KG|ML|L|UNID|UN))\b/i);
-      if (packMatch) packaging = (packMatch[1] ?? "").replace(/\s+/g, " ");
-      else packaging = "1 UN";
-    }
+    // Validação de embalagem: nunca preencher "1 UN" como valor padrão
+    const packaging = (raw.packaging || "").trim();
 
     let validity = (raw.validity || "").trim();
     if (!validity) {
@@ -263,6 +363,13 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
       if (!existing.image && resolvedImg) existing.image = resolvedImg;
       if (!existing.validity && validity) existing.validity = validity;
       if (!existing.stock && raw.stock) existing.stock = `${raw.stock} UND`;
+      if (!existing.packaging && packaging) {
+        existing.packaging = packaging;
+        existing.packagingType = raw.packagingType;
+        existing.packagingQuantity = raw.packagingQuantity;
+        existing.packagingUnit = raw.packagingUnit;
+        existing.packagingWeight = raw.packagingWeight;
+      }
       return;
     }
 
@@ -271,13 +378,18 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
       code,
       name,
       packaging,
+      packagingType: raw.packagingType,
+      packagingQuantity: raw.packagingQuantity,
+      packagingUnit: raw.packagingUnit,
+      packagingWeight: raw.packagingWeight,
       validity,
       price: raw.price ? formatPrice(raw.price) : "", // Regra de negócio: preço manual e vazio no início
       unit: packaging.toLowerCase().includes("kg") ? "KG" : "UND",
       stock: raw.stock ? `${raw.stock} UND` : "",
       badge: "nenhum",
       image: resolvedImg,
-      included: true,
+      included: raw.included !== undefined ? raw.included : true,
+      productUrl: raw.productUrl,
     };
 
     products.push(prod);
@@ -293,12 +405,17 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
         const name = item.name || el.name;
         if (name) {
           const img = typeof item.image === "string" ? item.image : item.image?.url || (Array.isArray(item.image) ? item.image[0] : "");
-          // Ignorar se a URL do JSON-LD contiver banners/ ou selos
           const safeImg = !/banners?\/|\/selos?\/|\/badges?\/|logo/i.test(img) ? img : "";
+          const parsedPack = parsePackaging(name) || parsePackaging(item.description);
           addProduct({
             name,
             code: item.sku || item.productID || item.identifier,
             image: safeImg,
+            packaging: parsedPack?.label || "",
+            packagingType: parsedPack?.tipo,
+            packagingQuantity: parsedPack?.quantidade,
+            packagingUnit: parsedPack?.unidadeMedida,
+            packagingWeight: parsedPack?.gramatura,
           });
         }
       }
@@ -307,19 +424,24 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
       if (name) {
         const img = typeof block.image === "string" ? block.image : block.image?.url || (Array.isArray(block.image) ? block.image[0] : "");
         const safeImg = !/banners?\/|\/selos?\/|\/badges?\/|logo/i.test(img) ? img : "";
+        const parsedPack = parsePackaging(name) || parsePackaging(block.description);
         addProduct({
           name,
           code: block.sku || block.productID || block.identifier,
           image: safeImg,
+          packaging: parsedPack?.label || "",
+          packagingType: parsedPack?.tipo,
+          packagingQuantity: parsedPack?.quantidade,
+          packagingUnit: parsedPack?.unidadeMedida,
+          packagingWeight: parsedPack?.gramatura,
         });
       }
     }
   }
 
-  // 2. Parser HTML estruturado com node-html-parser (lê cards completos sem cortar em divs aninhadas)
+  // 2. Parser HTML estruturado com node-html-parser
   const root = parse(html);
 
-  // Seletores candidatos a contêineres de cards de produtos
   const candidateSelectors = [
     ".products-list__item",
     "tr.cart-table__row",
@@ -337,7 +459,6 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
   let cardElements: HTMLElement[] = [];
   for (const sel of candidateSelectors) {
     const matched = root.querySelectorAll(sel).filter((el) => {
-      // Ignorar cabeçalhos de tabela
       if (el.rawTagName === "tr" && el.querySelector("th")) return false;
       return el.text.trim().length > 5;
     });
@@ -347,7 +468,6 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
     }
   }
 
-  // Evitar elementos aninhados duplicados (manter apenas os contêineres de topo)
   const topCards = cardElements.filter((el) => {
     let parent = el.parentNode as HTMLElement | null;
     while (parent && parent !== root) {
@@ -388,6 +508,18 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
     const name = decode(rawName).toUpperCase().slice(0, 120);
     if (!name || name.length < 2) continue;
 
+    // Link do produto
+    const linkEl = card.querySelector("a[href*='/']") || (card.rawTagName === "a" ? card : null);
+    let productUrl = "";
+    if (linkEl) {
+      const href = linkEl.getAttribute("href") || "";
+      try {
+        productUrl = new URL(href, baseUrl).toString();
+      } catch {
+        productUrl = href;
+      }
+    }
+
     // Validade
     const valEl = card.querySelector(".product-card__rating-subtitle, .validade, .vencimento, [data-validade]");
     let validity = "";
@@ -400,10 +532,6 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
       if (vm) validity = vm[1].replace(/-/g, "/");
     }
 
-    // Embalagem
-    const packEl = card.querySelector(".embalagem, .pack, [data-embalagem]");
-    let packaging = packEl ? (packEl.getAttribute("data-embalagem") || packEl.text).trim().toUpperCase() : "";
-
     // Estoque
     const stockMatch =
       card.querySelector("[data-estoque], [data-stock]")?.getAttribute("data-estoque") ||
@@ -413,27 +541,95 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
     // Imagem do card
     const rawImg = extractCardImage(card, code);
 
-    addProduct({
-      code,
-      name,
-      validity,
-      packaging,
-      stock: stockMatch,
-      image: rawImg,
-    });
+    // Seletor de opções de compra (embalagem, tipo, quantidade):
+    // Quando a página tiver seletor de opções, cada opção vira uma linha com tipo e embalagem.
+    // O usuário escolhe qual entra no encarte.
+    const optionCandidates: string[] = [];
+    const selectOpts = card.querySelectorAll(
+      "select option, .product-card__embalagem-select option, .product__options option"
+    );
+    for (const opt of selectOpts) {
+      const txt = opt.text.trim();
+      if (txt && !txt.toLowerCase().includes("selecione") && parsePackaging(txt)) {
+        optionCandidates.push(txt);
+      }
+    }
+
+    if (optionCandidates.length === 0) {
+      const featEls = card.querySelectorAll(".product__features--embalagem-nome");
+      for (const f of featEls) {
+        const txt = f.text.replace(/embalagem\s*:\s*/i, "").trim();
+        if (txt && parsePackaging(txt)) {
+          optionCandidates.push(txt);
+        }
+      }
+    }
+
+    if (optionCandidates.length === 0) {
+      const packEl = card.querySelector(".embalagem, .pack, [data-embalagem]");
+      const txt = packEl ? (packEl.getAttribute("data-embalagem") || packEl.text).trim() : "";
+      if (txt && parsePackaging(txt)) {
+        optionCandidates.push(txt);
+      } else {
+        const fromName = parsePackaging(name);
+        if (fromName) {
+          optionCandidates.push(fromName.label);
+        }
+      }
+    }
+
+    if (optionCandidates.length > 0) {
+      // Cada opção vira uma linha com tipo e embalagem
+      optionCandidates.forEach((optStr, optIdx) => {
+        const parsed = parsePackaging(optStr);
+        const optCode = optIdx === 0 ? code : `${code}-OP${optIdx + 1}`;
+        addProduct({
+          code: optCode,
+          name,
+          validity,
+          packaging: parsed?.label || "",
+          packagingType: parsed?.tipo,
+          packagingQuantity: parsed?.quantidade,
+          packagingUnit: parsed?.unidadeMedida,
+          packagingWeight: parsed?.gramatura,
+          stock: stockMatch,
+          image: rawImg,
+          included: optIdx === 0, // Primeira opção marcada, opções secundárias para o usuário escolher
+          productUrl,
+        });
+      });
+    } else {
+      // Sem embalagem identificada: não preencher padrão ("1 UN"), deixar em branco
+      addProduct({
+        code,
+        name,
+        validity,
+        packaging: "",
+        stock: stockMatch,
+        image: rawImg,
+        included: true,
+        productUrl,
+      });
+    }
   }
 
   // 5. Garantir que a mesma imagem não seja atribuída a vários produtos diferentes
-  // Se acontecer, tratar como imagem inválida para permitir posterior fallback
-  const imgCounts = new Map<string, number>();
+  const imgToCodes = new Map<string, Set<string>>();
   for (const p of products) {
     if (p.image) {
-      imgCounts.set(p.image, (imgCounts.get(p.image) || 0) + 1);
+      const baseCode = p.code.replace(/-OP\d+$/, "");
+      if (!imgToCodes.has(p.image)) {
+        imgToCodes.set(p.image, new Set());
+      }
+      imgToCodes.get(p.image)!.add(baseCode);
     }
   }
   for (const p of products) {
-    if (p.image && (imgCounts.get(p.image) || 0) > 1) {
-      p.image = ""; // Imagem duplicada invalidada
+    if (p.image) {
+      const distinctCodes = imgToCodes.get(p.image);
+      if (distinctCodes && distinctCodes.size > 1) {
+        p.image = ""; // Mesma imagem em produtos DIFERENTES -> tratar como inválida para acionar fallback
+      }
     }
   }
 

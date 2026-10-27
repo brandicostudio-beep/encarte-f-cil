@@ -112,6 +112,7 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
               const isExpired = isDateExpired(p.validity);
               const hasPrice = Boolean(p.price && p.price.trim() !== "");
               const hasPhoto = Boolean(p.image && p.image.trim() !== "");
+              const hasPackaging = Boolean(p.packaging && p.packaging.trim() !== "");
 
               // Diagnóstico de pendências com cor E texto explícito (Acessibilidade)
               const issues: { type: string; label: string; className: string }[] = [];
@@ -127,6 +128,13 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                   type: "photo",
                   label: "Sem foto",
                   className: "bg-neutral-100 text-neutral-800 border-neutral-300",
+                });
+              }
+              if (!hasPackaging) {
+                issues.push({
+                  type: "packaging",
+                  label: "Sem embalagem",
+                  className: "bg-orange-100 text-orange-900 border-orange-300",
                 });
               }
               if (isExpired) {
@@ -207,6 +215,9 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                           {iss.type === "photo" && (
                             <ImageOff className="h-3 w-3" />
                           )}
+                          {iss.type === "packaging" && (
+                            <Package className="h-3 w-3" />
+                          )}
                           {iss.type === "expired" && (
                             <CalendarX className="h-3 w-3" />
                           )}
@@ -223,7 +234,11 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                   {/* Embalagem e Estoque */}
                   <td className="p-3 align-middle">
                     <div className="text-neutral-700 font-semibold truncate">
-                      {p.packaging || "1 UN"}
+                      {p.packaging || (
+                        <span className="text-neutral-400 italic font-normal text-[11px]">
+                          Não informada
+                        </span>
+                      )}
                     </div>
                     {p.stock && (
                       <div className="text-[10px] text-neutral-500 font-mono mt-0.5">

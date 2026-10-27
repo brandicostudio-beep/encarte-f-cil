@@ -9,6 +9,7 @@ import type {
   StoreConfig,
   CampaignConfig,
   BadgeType,
+  ProductsPerPageOption,
 } from "@/types/encarte";
 import {
   DEFAULT_STORE,
@@ -347,13 +348,14 @@ function EncarteApp() {
     [flyerProducts]
   );
 
-  // Paginação: exatamente 8 produtos por página A4 (2 colunas x 4 linhas)
-  const totalPages = Math.max(1, Math.ceil(flyerProducts.length / 8));
+  // Paginação: produtos por página (padrão 12, ajustável para 6, 8, 9, 12)
+  const perPage = campaign.productsPerPage || 12;
+  const totalPages = Math.max(1, Math.ceil(flyerProducts.length / perPage));
 
   const pageProducts = useMemo(() => {
-    const start = (currentPage - 1) * 8;
-    return flyerProducts.slice(start, start + 8);
-  }, [flyerProducts, currentPage]);
+    const start = (currentPage - 1) * perPage;
+    return flyerProducts.slice(start, start + perPage);
+  }, [flyerProducts, currentPage, perPage]);
 
   // Lista filtrada da tabela com base no painel de pendências e busca
   const filteredProducts = useMemo(() => {
@@ -371,6 +373,8 @@ function EncarteApp() {
       result = result.filter((p) => !p.price || p.price.trim() === "");
     } else if (activeIssueFilter === "missing_photo") {
       result = result.filter((p) => !p.image || p.image.trim() === "");
+    } else if (activeIssueFilter === "missing_packaging") {
+      result = result.filter((p) => !p.packaging || p.packaging.trim() === "");
     } else if (activeIssueFilter === "expired") {
       result = result.filter((p) => isDateExpired(p.validity));
     } else if (activeIssueFilter === "excluded") {
@@ -564,6 +568,19 @@ function EncarteApp() {
                 <Button
                   onClick={() => {
                     setCompletedSteps((prev) => new Set([...prev, "precos"]));
+                    setCurrentStep("campanha");
+                  }}
+                  className="w-full min-h-[44px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs"
+                >
+                  Configurar Campanha & Layout
+                  <ArrowRight className="h-4 w-4 ml-1.5" />
+                </Button>
+              )}
+
+              {currentStep === "campanha" && (
+                <Button
+                  onClick={() => {
+                    setCompletedSteps((prev) => new Set([...prev, "campanha"]));
                     setCurrentStep("exportar");
                   }}
                   className="w-full min-h-[44px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs"
@@ -583,6 +600,10 @@ function EncarteApp() {
                     <span className="font-bold">{totalPages}</span>
                   </div>
                   <div className="flex justify-between text-neutral-600">
+                    <span>Por página:</span>
+                    <span className="font-bold">{perPage} itens</span>
+                  </div>
+                  <div className="flex justify-between text-neutral-600">
                     <span>Itens no Encarte:</span>
                     <span className="font-bold text-green-700">{flyerProducts.length}</span>
                   </div>
@@ -598,7 +619,7 @@ function EncarteApp() {
 
             {/* ÁREA CENTRAL: TABELA DE REVISÃO OU PRÉ-VISUALIZAÇÃO A4 (9 COLUNAS) */}
             <div className="lg:col-span-9 space-y-6">
-              {/* SE ETAPA FOR PREÇOS OU CAMPANHA */}
+              {/* SE ETAPA FOR PREÇOS */}
               {currentStep === "precos" && (
                 <div className="space-y-4">
                   {/* Barra de Ferramentas da Tabela */}
@@ -648,6 +669,103 @@ function EncarteApp() {
                 </div>
               )}
 
+              {/* SE ETAPA FOR CAMPANHA */}
+              {currentStep === "campanha" && (
+                <div className="space-y-6 rounded-xl border bg-white p-6 shadow-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+                    <div>
+                      <h2 className="text-base font-bold text-neutral-900">
+                        Configuração da Campanha & Layout
+                      </h2>
+                      <p className="text-xs text-neutral-500">
+                        Ajuste os produtos por página, arte de cabeçalho, textos e dados da loja.
+                      </p>
+                    </div>
+
+                    <Button
+                      onClick={() => {
+                        setCompletedSteps((prev) => new Set([...prev, "campanha"]));
+                        setCurrentStep("exportar");
+                      }}
+                      className="min-h-[44px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs"
+                    >
+                      Avançar para Pré-visualização A4
+                      <ArrowRight className="h-4 w-4 ml-1.5" />
+                    </Button>
+                  </div>
+
+                  {/* 1. Grade de Produtos por Página */}
+                  <div className="space-y-3 rounded-lg border p-4 bg-neutral-50/50">
+                    <label className="text-sm font-bold text-neutral-800 block">
+                      Produtos por página A4 (Padrão: 12)
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      {([12, 9, 8, 6] as ProductsPerPageOption[]).map((num) => (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => saveCampaignConfig({ ...campaign, productsPerPage: num })}
+                          className={`min-h-[44px] p-3 rounded-lg border text-center transition-all ${
+                            (campaign.productsPerPage || 12) === num
+                              ? "bg-red-600 text-white font-bold border-red-600 shadow-xs"
+                              : "bg-white text-neutral-800 hover:bg-neutral-100 border-neutral-300 font-medium"
+                          }`}
+                        >
+                          <div className="text-sm font-bold">{num} produtos</div>
+                          <div className="text-[10px] opacity-80">
+                            {num === 12
+                              ? "3 colunas x 4 linhas (vertical)"
+                              : num === 9
+                              ? "3 colunas x 3 linhas (vertical)"
+                              : num === 8
+                              ? "2 colunas x 4 linhas"
+                              : "2 colunas x 3 linhas"}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 2. Cabeçalho Personalizado */}
+                  <div className="space-y-3 rounded-lg border p-4 bg-neutral-50/50">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <label className="text-sm font-bold text-neutral-800 block">
+                          Cabeçalho da Peça A4
+                        </label>
+                        <p className="text-[11px] text-neutral-500">
+                          Especificação: <strong>2480 × 875 px</strong> a 300 DPI (largura de A4 com cerca de 74 mm).
+                        </p>
+                      </div>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setStoreSettingsOpen(true)}
+                        className="text-xs font-semibold"
+                      >
+                        <Store className="h-4 w-4 mr-1.5 text-primary" />
+                        Configurar Loja & Cabeçalho Completo
+                      </Button>
+                    </div>
+
+                    {campaign.customHeaderImage ? (
+                      <div className="rounded-lg border overflow-hidden bg-black max-h-32 flex items-center justify-center relative">
+                        <img
+                          src={campaign.customHeaderImage}
+                          alt="Arte de Cabeçalho"
+                          className="w-full h-32 object-cover object-center"
+                        />
+                      </div>
+                    ) : (
+                      <div className="text-xs text-neutral-600 bg-white p-3 rounded border border-dashed">
+                        Utilizando o <strong>cabeçalho padrão de varejo</strong> preto com título "{campaign.title}" e subtítulo "{campaign.subtitle}".
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* SE ETAPA FOR EXPORTAR OU PRÉ-VISUALIZAÇÃO */}
               {currentStep === "exportar" && (
                 <div className="space-y-4">
@@ -662,8 +780,33 @@ function EncarteApp() {
                       </p>
                     </div>
 
-                    {/* Controles de Escala Real 100% e Zoom */}
-                    <div className="flex items-center gap-2">
+                    {/* Controles de Escala Real 100%, Zoom e Produtos por Página */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Seletor Rápido de Produtos por Página (atualiza a pré-visualização na hora) */}
+                      <div className="flex items-center border rounded-lg bg-neutral-50 px-2 py-1">
+                        <span className="text-[11px] font-bold text-neutral-600 mr-1.5">
+                          Por página:
+                        </span>
+                        {([12, 9, 8, 6] as ProductsPerPageOption[]).map((num) => (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() => {
+                              saveCampaignConfig({ ...campaign, productsPerPage: num });
+                              setCurrentPage(1);
+                            }}
+                            className={`px-2 py-0.5 rounded text-xs font-bold transition-colors ${
+                              (campaign.productsPerPage || 12) === num
+                                ? "bg-red-600 text-white shadow-2xs"
+                                : "text-neutral-700 hover:bg-neutral-200"
+                            }`}
+                            title={`${num} produtos por página`}
+                          >
+                            {num}
+                          </button>
+                        ))}
+                      </div>
+
                       <Button
                         size="sm"
                         variant={isRealScale ? "default" : "outline"}
@@ -810,8 +953,8 @@ function EncarteApp() {
                   {/* Container oculto para renderizar todas as páginas para PDF ou Impressão direta */}
                   <div className="flyer-print-container hidden">
                     {Array.from({ length: totalPages }).map((_, pIdx) => {
-                      const start = pIdx * 8;
-                      const prodsForPage = flyerProducts.slice(start, start + 8);
+                      const start = pIdx * perPage;
+                      const prodsForPage = flyerProducts.slice(start, start + perPage);
                       return (
                         <A4Page
                           key={`export-page-${pIdx + 1}`}

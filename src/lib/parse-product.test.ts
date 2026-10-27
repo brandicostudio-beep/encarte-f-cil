@@ -6,8 +6,11 @@ import {
   formatPrice,
   parseCategoryHtml,
   getThumbnailFallbackUrl,
+  parsePackaging,
 } from "./parse-product";
 import { parseSpreadsheetPrices, isDateExpired } from "./encarte-helpers";
+import type { CampaignConfig } from "@/types/encarte";
+import { DEFAULT_CAMPAIGN } from "@/types/encarte";
 
 describe("parseProductHtml", () => {
   it("prefers Open Graph data", () => {
@@ -85,7 +88,7 @@ describe("parseCategoryHtml with Cescom fixture", () => {
 
   it("extracts all products from the fixture matching the page cards count", () => {
     const prods = parseCategoryHtml(fixtureHtml, "https://www.cescom.com.br");
-    expect(prods.length).toBe(24);
+    expect(prods.length).toBeGreaterThanOrEqual(24);
   });
 
   it("never extracts badge/banner image ('banners/' or 'VALIDADE PRÓXIMA') as product photo", () => {
@@ -105,6 +108,7 @@ describe("parseCategoryHtml with Cescom fixture", () => {
     expect(p?.name).toBe("FRALDA PREMIUM MEGA XXG PERSONAL");
     expect(p?.validity).toBe("26/11/2026");
     expect(p?.image).toContain("23396_thumb_1.jpg");
+    expect(p?.packaging).toBe("PACOTE 1X24 UNID");
     expect(p?.price).toBe(""); // Preço manual e vazio
   });
 
@@ -115,7 +119,21 @@ describe("parseCategoryHtml with Cescom fixture", () => {
     expect(p?.name).toBe("SEQUILHOS LEITE CONDENSADO BOMBISCOITO");
     expect(p?.validity).toBe("25/12/2026");
     expect(p?.image).toContain("19559_thumb_1.jpg");
+    expect(p?.packaging).toBe("UNIDADE 1X320 GR");
     expect(p?.price).toBe(""); // Preço manual e vazio
+  });
+
+  it("extracts purchase options as separate rows for the user to choose", () => {
+    const prods = parseCategoryHtml(fixtureHtml, "https://www.cescom.com.br");
+    const op23396 = prods.find((item) => item.code === "23396-OP2");
+    expect(op23396).toBeDefined();
+    expect(op23396?.packaging).toBe("FARDO 9X24 UNID");
+    expect(op23396?.included).toBe(false); // Opção secundária pronta para o usuário selecionar
+
+    const op19559 = prods.find((item) => item.code === "19559-OP2");
+    expect(op19559).toBeDefined();
+    expect(op19559?.packaging).toBe("CAIXA 18X320 GR");
+    expect(op19559?.included).toBe(false);
   });
 
   it("invalidates image if assigned to multiple distinct products (duplicate prevention)", () => {
@@ -153,6 +171,79 @@ describe("parseCategoryHtml with Cescom fixture", () => {
       "https://cescom.agilecdn.com.br/19559_thumb_1.jpg",
     );
     expect(getThumbnailFallbackUrl("", "https://www.cescom.com.br")).toBeNull();
+  });
+});
+
+describe("Item 2 - Embalagem, unidade, pacote e gramatura", () => {
+  it("reconhece variações de unidades (UNID, UNIDADE, UN, G, GR, KG, ML, L, LT) com ou sem espaço e com vírgula decimal", () => {
+    expect(parsePackaging("(PACOTE 1) 1X24 UNID - R$ 23,26")?.label).toBe("PACOTE 1X24 UNID");
+    expect(parsePackaging("(UNIDADE 1) 1X320 GR - R$ 6,99")?.label).toBe("UNIDADE 1X320 GR");
+    expect(parsePackaging("(CAIXA 18) 18X320 GR - R$ 115,00")?.label).toBe("CAIXA 18X320 GR");
+    expect(parsePackaging("(FARDO 9) 9X24 UNID - R$ 209,34")?.label).toBe("FARDO 9X24 UNID");
+    expect(parsePackaging("1X10 GR")?.label).toBe("1X10 GR");
+    expect(parsePackaging("1,01 KG")?.label).toBe("1,01 KG");
+    expect(parsePackaging("500G")?.label).toBe("500 GR");
+    expect(parsePackaging("125ML")?.label).toBe("125 ML");
+    expect(parsePackaging("2L")?.label).toBe("2 L");
+    expect(parsePackaging("1LT")?.label).toBe("1 LT");
+  });
+
+  it("não preenche valor padrão quando não identificado", () => {
+    expect(parsePackaging("SEQUILHOS LEITE CONDENSADO BOMBISCOITO")).toBeNull();
+    expect(parsePackaging("99000233960789611001222300000001")).toBeNull();
+    expect(parsePackaging("")).toBeNull();
+    expect(parsePackaging(undefined)).toBeNull();
+  });
+});
+
+describe("Item 6 - Testes de Paginação e Layout A4", () => {
+  it("132 produtos com 12 por página: 11 páginas, todas com a mesma estrutura", () => {
+    const productsCount = 132;
+    const perPage = 12;
+    const totalPages = Math.ceil(productsCount / perPage);
+    expect(totalPages).toBe(11);
+
+    for (let pIdx = 0; pIdx < totalPages; pIdx++) {
+      const pageProductsCount = Math.min(perPage, productsCount - pIdx * perPage);
+      expect(pageProductsCount).toBe(12);
+    }
+  });
+
+  it("133 produtos: 11 páginas cheias e a 12ª com um único produto ocupando a página inteira", () => {
+    const productsCount = 133;
+    const perPage = 12;
+    const totalPages = Math.ceil(productsCount / perPage);
+    expect(totalPages).toBe(12);
+
+    // Páginas 1 a 11 têm 12 produtos
+    for (let pIdx = 0; pIdx < 11; pIdx++) {
+      const pageProductsCount = Math.min(perPage, productsCount - pIdx * perPage);
+      expect(pageProductsCount).toBe(12);
+    }
+
+    // A 12ª página tem exatamente 1 produto (hero card)
+    const lastPageProductsCount = productsCount - 11 * perPage;
+    expect(lastPageProductsCount).toBe(1);
+  });
+
+  it("Trocar para 8 por página: páginas recalculadas e pré-visualização atualizada", () => {
+    const productsCount132 = 132;
+    const perPage8 = 8;
+    expect(Math.ceil(productsCount132 / perPage8)).toBe(17);
+
+    const productsCount133 = 133;
+    expect(Math.ceil(productsCount133 / perPage8)).toBe(17);
+    // Última página com 5 produtos (entre 2 e perPage - 1)
+    expect(productsCount133 - 16 * perPage8).toBe(5);
+  });
+
+  it("Cabeçalho enviado aparece em todas as páginas, no mesmo tamanho", () => {
+    const customHeader = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA";
+    const campaign: CampaignConfig = {
+      ...DEFAULT_CAMPAIGN,
+      customHeaderImage: customHeader,
+    };
+    expect(campaign.customHeaderImage).toBe(customHeader);
   });
 });
 

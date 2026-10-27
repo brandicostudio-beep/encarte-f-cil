@@ -1,10 +1,19 @@
 export type BadgeType = "nenhum" | "oferta" | "leve" | "imperdivel";
 
+export type ProductsPerPageOption = 6 | 8 | 9 | 12;
+
+export type PackagingType = "UNIDADE" | "PACOTE" | "CAIXA" | "FARDO" | "";
+export type MeasureUnit = "UNID" | "GR" | "KG" | "ML" | "L" | "LT" | "";
+
 export interface EncarteProduct {
   id: string;
   code: string;            // Código do produto (ex: "24657")
   name: string;            // Nome do produto em caixa alta (ex: "CAFÉ TRADICIONAL A VÁCUO")
-  packaging: string;       // Embalagem (ex: "1X10 GR", "500G")
+  packaging: string;       // Embalagem formatada (ex: "PACOTE 1X24 UNID", "UNIDADE 1X320 GR")
+  packagingType?: PackagingType;
+  packagingQuantity?: string; // ex: "1X24", "18X320"
+  packagingUnit?: MeasureUnit; // ex: "UNID", "GR"
+  packagingWeight?: string;   // ex: "320 GR", "1,01 KG"
   validity: string;        // Validade (ex: "15/11/2026")
   price: string;           // Preço no formato "4,99" (vazio inicialmente se não preenchido)
   unit: string;            // "UND" ou "KG"
@@ -12,6 +21,7 @@ export interface EncarteProduct {
   badge: BadgeType;        // Selo opcional
   image: string;           // Data URL ou URL remota
   included: boolean;       // Marcado para entrar no encarte
+  productUrl?: string;     // URL da página do produto (se disponível)
 }
 
 export interface StoreConfig {
@@ -29,6 +39,9 @@ export interface CampaignConfig {
   title: string;           // Padrão: "DETONA PREÇOS"
   subtitle: string;        // Padrão: "Produtos com validade curta!"
   observation: string;     // Padrão: "Não aceitamos devolução. Prazo 07 dias"
+  productsPerPage: ProductsPerPageOption; // Padrão: 12 (opções: 6, 8, 9, 12)
+  customHeaderImage?: string; // Data URL ou URL da imagem de cabeçalho enviada pelo usuário (2480x875 / 2551x910)
+  headerTextOverlay?: boolean; // Se verdadeiro, renderiza título e subtítulo por cima da arte
 }
 
 export const DEFAULT_STORE: StoreConfig = {
@@ -46,6 +59,9 @@ export const DEFAULT_CAMPAIGN: CampaignConfig = {
   title: "DETONA PREÇOS",
   subtitle: "PRODUTOS COM VALIDADE CURTA!",
   observation: "Não aceitamos devolução. Prazo 07 dias.",
+  productsPerPage: 12,
+  customHeaderImage: "",
+  headerTextOverlay: false,
 };
 
 export const BADGE_LABELS: Record<BadgeType, string> = {

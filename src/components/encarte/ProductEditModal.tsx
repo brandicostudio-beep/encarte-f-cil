@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { EncarteProduct, BadgeType } from "@/types/encarte";
 import { BADGE_LABELS } from "@/types/encarte";
-import { formatPrice } from "@/lib/parse-product";
+import { formatPrice, parsePackaging } from "@/lib/parse-product";
 import { Package, Upload, Trash2 } from "lucide-react";
 
 interface ProductEditModalProps {
@@ -49,8 +49,14 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form) return;
+    const parsedPack = parsePackaging(form.packaging);
     onSave({
       ...form,
+      packaging: form.packaging.trim(),
+      packagingType: parsedPack?.tipo,
+      packagingQuantity: parsedPack?.quantidade,
+      packagingUnit: parsedPack?.unidadeMedida,
+      packagingWeight: parsedPack?.gramatura,
       price: formatPrice(form.price),
     });
     onOpenChange(false);

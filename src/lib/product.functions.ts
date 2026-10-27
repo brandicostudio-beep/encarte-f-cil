@@ -1,6 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { parseProductHtml, parseCategoryHtml, getThumbnailFallbackUrl } from "./parse-product";
+import { parse } from "node-html-parser";
+import {
+  parseProductHtml,
+  parseCategoryHtml,
+  getThumbnailFallbackUrl,
+  parsePackaging,
+} from "./parse-product";
 import type { EncarteProduct } from "@/types/encarte";
 
 const UA =
@@ -8,7 +14,7 @@ const UA =
 
 async function toDataUrl(url: string): Promise<string | null> {
   try {
-    const r = await fetch(url, { headers: { "User-Agent": UA } });
+    const r = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(5000) });
     if (!r.ok) return null;
     const type = r.headers.get("content-type") || "image/jpeg";
     if (!type.startsWith("image/")) return null;
@@ -17,6 +23,39 @@ async function toDataUrl(url: string): Promise<string | null> {
     let bin = "";
     for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
     return `data:${type};base64,${btoa(bin)}`;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchProductDetails(url: string): Promise<{ packaging: string } | null> {
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const root = parse(html);
+
+    let packaging = "";
+    const featEls = root.querySelectorAll(".product__features--embalagem-nome");
+    for (const f of featEls) {
+      const txt = f.text.replace(/embalagem\s*:\s*/i, "").trim();
+      const parsed = parsePackaging(txt);
+      if (parsed) {
+        packaging = parsed.label;
+        break;
+      }
+    }
+    if (!packaging) {
+      const selectOpts = root.querySelectorAll("select option, .product-card__embalagem-select option, .product__options option");
+      for (const opt of selectOpts) {
+        const parsed = parsePackaging(opt.text);
+        if (parsed) {
+          packaging = parsed.label;
+          break;
+        }
+      }
+    }
+    return { packaging };
   } catch {
     return null;
   }
@@ -45,6 +84,7 @@ export const extractProduct = createServerFn({ method: "POST" })
       const r = await fetch(u.toString(), {
         headers: { "User-Agent": UA, Accept: "text/html", "Accept-Language": "pt-BR,pt;q=0.9" },
         redirect: "follow",
+        signal: AbortSignal.timeout(8000),
       });
       if (!r.ok)
         return {
@@ -58,9 +98,17 @@ export const extractProduct = createServerFn({ method: "POST" })
     const p = parseProductHtml(html, u.toString());
     const image = p.imageUrl ? await toDataUrl(p.imageUrl) : null;
     const found = [p.name, p.description, p.price, image].filter(Boolean).length;
+    const parsedPack = parsePackaging(p.name) || parsePackaging(p.description);
+
     return {
       ok: true as const,
-      product: { name: p.name, description: p.description, price: p.price, image: image ?? "" },
+      product: {
+        name: p.name,
+        description: p.description,
+        price: p.price,
+        image: image ?? "",
+        packaging: parsedPack?.label || "",
+      },
       warning: found === 0 ? "O site não forneceu os dados do produto. Preencha manualmente." : undefined,
     };
   });
@@ -79,6 +127,7 @@ export const extractCategoryProducts = createServerFn({ method: "POST" })
           "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
         },
         redirect: "follow",
+        signal: AbortSignal.timeout(12000),
       });
       if (!r.ok) {
         return {
@@ -106,6 +155,7 @@ export const extractCategoryProducts = createServerFn({ method: "POST" })
     // 1. Converter imagens para Data URL para evitar bloqueios de CORS no canvas/PDF
     // 2. Aplicar fallback por código (ex.: Cescom agilecdn) se não houver foto válida no card
     // 3. Deixar com imagem vazia se não houver foto válida após o fallback
+    // 4. Buscar embalagem na página do produto se não foi detectada no card da categoria
     const products: EncarteProduct[] = await pMap(
       rawProducts,
       async (prod) => {
@@ -122,7 +172,8 @@ export const extractCategoryProducts = createServerFn({ method: "POST" })
         // 2. Fallback de imagem: se não houver foto válida no card (ou se falhou a conversão),
         // tentar montar a URL da miniatura pelo código e validar que é imagem válida antes de usar
         if (!finalImage && prod.code) {
-          const fallbackUrl = getThumbnailFallbackUrl(prod.code, u.toString());
+          const cleanCode = prod.code.split("-")[0]; // caso tenha sufixo de opção
+          const fallbackUrl = getThumbnailFallbackUrl(cleanCode, u.toString());
           if (fallbackUrl) {
             const dataUrl = await toDataUrl(fallbackUrl);
             if (dataUrl) {
@@ -131,10 +182,19 @@ export const extractCategoryProducts = createServerFn({ method: "POST" })
           }
         }
 
-        // 3. Sem foto válida após o fallback: deixar com imagem vazia ("sem foto")
+        // 3. Embalagem: se não identificada no card, tentar enriquecer a partir da página do produto
+        let finalPackaging = prod.packaging;
+        if (!finalPackaging && prod.productUrl) {
+          const details = await fetchProductDetails(prod.productUrl);
+          if (details?.packaging) {
+            finalPackaging = details.packaging;
+          }
+        }
+
         return {
           ...prod,
           image: finalImage,
+          packaging: finalPackaging,
         };
       },
       12,
