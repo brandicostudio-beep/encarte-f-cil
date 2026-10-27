@@ -149,7 +149,18 @@ function EncarteApp() {
       if (savedStore) setStore(JSON.parse(savedStore));
 
       const savedCampaign = localStorage.getItem("encarte-campaign-v2");
-      if (savedCampaign) setCampaign(JSON.parse(savedCampaign));
+      if (savedCampaign) {
+        const parsed = JSON.parse(savedCampaign);
+        setCampaign({
+          ...DEFAULT_CAMPAIGN,
+          ...parsed,
+          format: parsed.format || "story_9_16",
+          template916Image:
+            parsed.template916Image || DEFAULT_CAMPAIGN.template916Image,
+          template916Area:
+            parsed.template916Area || DEFAULT_TEMPLATE_9_16_AREA,
+        });
+      }
 
       const savedProds = localStorage.getItem("encarte-products-v2");
       if (savedProds) {
@@ -928,7 +939,7 @@ function EncarteApp() {
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                           <label className="text-sm font-bold text-neutral-800 block">
-                            3. Template do Encarte (1080 × 1920 px)
+                            Template do encarte (PNG ou JPG em 1080 × 1920 px)
                           </label>
                           <p className="text-[11px] text-neutral-500">
                             A imagem é usada como fundo de todas as páginas, sem alterações.

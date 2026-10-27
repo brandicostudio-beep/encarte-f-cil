@@ -43,7 +43,14 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
   }, [store]);
 
   useEffect(() => {
-    setCampForm({ ...campaign });
+    setCampForm({
+      ...DEFAULT_CAMPAIGN,
+      ...campaign,
+      format: campaign.format || "story_9_16",
+      template916Area: campaign.template916Area || DEFAULT_TEMPLATE_9_16_AREA,
+      template916Image:
+        campaign.template916Image || DEFAULT_CAMPAIGN.template916Image,
+    });
     setRatioWarning(null);
   }, [campaign]);
 
@@ -251,7 +258,7 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
 
               <div className="space-y-3">
                 <Label className="block font-semibold">
-                  Arquivo do Template (PNG ou JPG)
+                  Template do encarte (PNG ou JPG)
                 </Label>
                 <p className="text-[11px] text-muted-foreground">
                   A imagem é usada como fundo de todas as páginas, sem alterações. Os produtos são posicionados dentro da área branca (padrão x: 46, y: 661, larg: 1012, alt: 1202 px).

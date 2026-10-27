@@ -33,10 +33,19 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
     priceCents = parts[1] ? parts[1].padEnd(2, "0") : "00";
   }
 
-  // Linha unificada: "CÓDIGO · EMBALAGEM"
-  const codeText = product.code || "";
-  const packagingText = product.packaging || "";
-  const codeAndPackaging = [codeText, packagingText].filter(Boolean).join(" · ");
+  // Linha unificada: "CÓDIGO · EMBALAGEM · GRAMATURA"
+  const detailsParts: string[] = [];
+  if (product.code) detailsParts.push(product.code);
+  if (product.packaging) {
+    detailsParts.push(product.packaging);
+  }
+  if (
+    product.packagingWeight &&
+    !product.packaging?.toUpperCase().includes(product.packagingWeight.toUpperCase())
+  ) {
+    detailsParts.push(product.packagingWeight);
+  }
+  const codeAndPackaging = detailsParts.join(" · ");
 
   // 1. MODO HERO: Quando há apenas 1 produto na última página (ocupa o centro em destaque gigante)
   if (layoutMode === "hero") {
@@ -137,7 +146,7 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
       )}
 
       {/* Área da Foto: Contida e proporcional, sem vazamentos */}
-      <div className="relative w-full flex-1 min-h-[90px] max-h-[140px] flex items-center justify-center p-1 bg-white rounded-xl overflow-hidden">
+      <div className="relative w-full flex-1 min-h-[90px] flex items-center justify-center p-1 bg-white rounded-xl overflow-hidden">
         {product.image ? (
           <img
             src={product.image}

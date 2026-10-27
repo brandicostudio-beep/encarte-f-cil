@@ -131,10 +131,10 @@ export const TemplateAreaAdjuster: React.FC<TemplateAreaAdjusterProps> = ({
         <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
         <div>
           <strong className="font-bold text-amber-900 block mb-0.5">
-            Textos gravados no template não são editáveis:
+            Aviso de Textos do Template:
           </strong>
-          Os textos fixos como <em>"Produtos com validade curta!"</em>,{" "}
-          <em>"Não aceitamos devolução"</em> e <em>"Prazo 07 dias"</em> já fazem parte da arte gráfica desta imagem de fundo. Para alterar esses dizeres, logos ou cores de cabeçalho, basta enviar outro arquivo de template PNG ou JPG.
+          Os textos já gravados no template (<em>"Produtos com validade curta!"</em>,{" "}
+          <em>"Não aceitamos devolução"</em>, <em>"Prazo 07 dias"</em>) não são editáveis. Para mudar esses textos, é preciso enviar outro template.
         </div>
       </div>
 
