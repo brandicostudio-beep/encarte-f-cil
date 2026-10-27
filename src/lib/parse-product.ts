@@ -12,7 +12,7 @@ function meta(html: string, key: string): string {
   return c ? decode(c) : "";
 }
 
-function findProductLd(html: string): Record<string, any> | null {
+function findProductLd(html: string): any {
   const blocks = html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi);
   for (const b of blocks) {
     try {
