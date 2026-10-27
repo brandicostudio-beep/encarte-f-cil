@@ -43,23 +43,43 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
   const widthPct = (safeW / canvasWidth) * 100;
   const heightPct = (safeH / canvasHeight) * 100;
 
-  // Determinar número de colunas padrão da grade
+  // Determinar número de colunas e linhas padrão da grade
   const isThreeCols = perPage === 12 || perPage === 9;
+  const numCols = isThreeCols ? 3 : 2;
+  const numRows = perPage === 12 || perPage === 8 ? 4 : 3;
 
-  // Grade CSS baseada no número de produtos por página
-  const getGridClasses = () => {
-    switch (perPage) {
-      case 6:
-        return "grid-cols-2 grid-rows-3 gap-4";
-      case 8:
-        return "grid-cols-2 grid-rows-4 gap-3";
-      case 9:
-        return "grid-cols-3 grid-rows-3 gap-3";
-      case 12:
-      default:
-        return "grid-cols-3 grid-rows-4 gap-2.5";
-    }
-  };
+  const gapConfig = {
+    12: {
+      gapXClass: "gap-2.5",
+      gapYClass: "gap-2.5",
+      cardWidthStyle: "calc((100% - 20px) / 3)",
+      rowHeightStyle: "calc((100% - 30px) / 4)",
+    },
+    9: {
+      gapXClass: "gap-3",
+      gapYClass: "gap-3",
+      cardWidthStyle: "calc((100% - 24px) / 3)",
+      rowHeightStyle: "calc((100% - 24px) / 3)",
+    },
+    8: {
+      gapXClass: "gap-3",
+      gapYClass: "gap-3",
+      cardWidthStyle: "calc((100% - 12px) / 2)",
+      rowHeightStyle: "calc((100% - 36px) / 4)",
+    },
+    6: {
+      gapXClass: "gap-4",
+      gapYClass: "gap-4",
+      cardWidthStyle: "calc((100% - 16px) / 2)",
+      rowHeightStyle: "calc((100% - 32px) / 3)",
+    },
+  }[perPage || 12];
+
+  // Particiona a lista de produtos em linhas
+  const rows: EncarteProduct[][] = [];
+  for (let i = 0; i < count; i += numCols) {
+    rows.push(products.slice(i, i + numCols));
+  }
 
   return (
     <div
@@ -104,56 +124,70 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
               index={0}
               store={store}
               layoutMode="hero"
+              perPage={perPage}
             />
           </div>
-        ) : isLastPage && count > 1 && count < perPage ? (
-          /* Caso B: Última página com sobra de 2 até (perPage - 1) produtos
-             Centraliza e aumenta os cards para preencher o espaço harmoniosamente */
-          <div
-            className={`w-full h-full grid ${
-              isThreeCols
-                ? count <= 3
-                  ? "grid-cols-3 grid-rows-1"
-                  : count <= 6
-                  ? "grid-cols-3 grid-rows-2"
-                  : count <= 9
-                  ? "grid-cols-3 grid-rows-3"
-                  : "grid-cols-3 grid-rows-4"
-                : count <= 2
-                ? "grid-cols-2 grid-rows-1"
-                : count <= 4
-                ? "grid-cols-2 grid-rows-2"
-                : count <= 6
-                ? "grid-cols-2 grid-rows-3"
-                : "grid-cols-2 grid-rows-4"
-            } ${isThreeCols ? "gap-3" : "gap-4"} items-center justify-center p-2`}
-          >
-            {products.map((prod, idx) => (
-              <div
-                key={prod.id || `${pageNumber}-${idx}`}
-                className="w-full h-full flex items-center justify-center"
-              >
-                <ProductCard916
-                  product={prod}
-                  index={idx}
-                  store={store}
-                  perPage={perPage}
-                />
-              </div>
-            ))}
-          </div>
         ) : (
-          /* Caso C: Página regular cheia (12, 9, 8 ou 6 produtos na grade) */
-          <div className={`w-full h-full grid ${getGridClasses()} p-1`}>
-            {products.map((prod, idx) => (
-              <ProductCard916
-                key={prod.id || `${pageNumber}-${idx}`}
-                product={prod}
-                index={idx}
-                store={store}
-                perPage={perPage}
-              />
-            ))}
+          /* Caso B: Grade com linhas completas e linhas incompletas rigorosamente centralizadas na horizontal */
+          <div
+            data-testid="product-grid-container"
+            className={`w-full h-full flex flex-col justify-center ${gapConfig.gapYClass} p-1`}
+          >
+            {rows.map((row, rowIdx) => {
+              const isFullRow = row.length === numCols;
+
+              if (isFullRow) {
+                return (
+                  <div
+                    key={`row-${rowIdx}`}
+                    data-testid={`grid-row-${rowIdx}`}
+                    style={{ height: gapConfig.rowHeightStyle }}
+                    className={`w-full grid ${
+                      numCols === 3 ? "grid-cols-3" : "grid-cols-2"
+                    } ${gapConfig.gapXClass} shrink-0 items-center`}
+                  >
+                    {row.map((prod, colIdx) => (
+                      <div
+                        key={prod.id || `${pageNumber}-${rowIdx * numCols + colIdx}`}
+                        className="w-full h-full flex items-center justify-center"
+                      >
+                        <ProductCard916
+                          product={prod}
+                          index={rowIdx * numCols + colIdx}
+                          store={store}
+                          perPage={perPage}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+
+              // Linha incompleta: Centralizada horizontalmente com o mesmo tamanho dos demais cards
+              return (
+                <div
+                  key={`row-${rowIdx}`}
+                  data-testid="incomplete-row-centered"
+                  style={{ height: gapConfig.rowHeightStyle }}
+                  className={`w-full flex justify-center items-center ${gapConfig.gapXClass} shrink-0`}
+                >
+                  {row.map((prod, colIdx) => (
+                    <div
+                      key={prod.id || `${pageNumber}-${rowIdx * numCols + colIdx}`}
+                      style={{ width: gapConfig.cardWidthStyle }}
+                      className="h-full flex items-center justify-center"
+                    >
+                      <ProductCard916
+                        product={prod}
+                        index={rowIdx * numCols + colIdx}
+                        store={store}
+                        perPage={perPage}
+                      />
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

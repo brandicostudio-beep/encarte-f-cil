@@ -32,21 +32,40 @@ export const A4Page: React.FC<A4PageProps> = ({
   // Determinar se o layout padrão dos cards é vertical (3 colunas para 12 e 9) ou horizontal (2 colunas para 8 e 6)
   const isThreeCols = perPage === 12 || perPage === 9;
   const defaultCardLayout: "vertical" | "horizontal" = isThreeCols ? "vertical" : "horizontal";
+  const numCols = isThreeCols ? 3 : 2;
+  const numRows = perPage === 12 || perPage === 8 ? 4 : 3;
 
-  // Classes de grade conforme produtos por página
-  const getGridClasses = () => {
-    switch (perPage) {
-      case 6:
-        return "grid-cols-2 grid-rows-3 gap-3.5";
-      case 8:
-        return "grid-cols-2 grid-rows-4 gap-2.5";
-      case 9:
-        return "grid-cols-3 grid-rows-3 gap-2.5";
-      case 12:
-      default:
-        return "grid-cols-3 grid-rows-4 gap-2";
-    }
-  };
+  const gapConfig = {
+    12: {
+      gapXClass: "gap-2",
+      gapYClass: "gap-2",
+      cardWidthStyle: "calc((100% - 16px) / 3)",
+      rowHeightStyle: "calc((100% - 24px) / 4)",
+    },
+    9: {
+      gapXClass: "gap-2.5",
+      gapYClass: "gap-2.5",
+      cardWidthStyle: "calc((100% - 20px) / 3)",
+      rowHeightStyle: "calc((100% - 20px) / 3)",
+    },
+    8: {
+      gapXClass: "gap-2.5",
+      gapYClass: "gap-2.5",
+      cardWidthStyle: "calc((100% - 10px) / 2)",
+      rowHeightStyle: "calc((100% - 30px) / 4)",
+    },
+    6: {
+      gapXClass: "gap-3.5",
+      gapYClass: "gap-3.5",
+      cardWidthStyle: "calc((100% - 14px) / 2)",
+      rowHeightStyle: "calc((100% - 28px) / 3)",
+    },
+  }[perPage || 12];
+
+  const rows: EncarteProduct[][] = [];
+  for (let i = 0; i < count; i += numCols) {
+    rows.push(products.slice(i, i + numCols));
+  }
 
   return (
     <div
@@ -87,51 +106,66 @@ export const A4Page: React.FC<A4PageProps> = ({
               layoutMode="hero"
             />
           </div>
-        ) : isLastPage && count > 1 && count < perPage ? (
-          /* Caso 2: Última página com de 2 até (por página - 1) produtos:
-             manter a grade, centralizar os cards no corpo da página e aumentá-los até preencher a área disponível */
-          <div
-            className={`w-full h-full grid ${
-              isThreeCols
-                ? count <= 3
-                  ? "grid-cols-3 grid-rows-1"
-                  : count <= 6
-                  ? "grid-cols-3 grid-rows-2"
-                  : count <= 9
-                  ? "grid-cols-3 grid-rows-3"
-                  : "grid-cols-3 grid-rows-4"
-                : count <= 2
-                ? "grid-cols-2 grid-rows-1"
-                : count <= 4
-                ? "grid-cols-2 grid-rows-2"
-                : count <= 6
-                ? "grid-cols-2 grid-rows-3"
-                : "grid-cols-2 grid-rows-4"
-            } ${isThreeCols ? "gap-2.5" : "gap-3"} items-center justify-center p-1`}
-          >
-            {products.map((prod, idx) => (
-              <div key={prod.id || `${pageNumber}-${idx}`} className="w-full h-full flex items-center justify-center">
-                <ProductCardA4
-                  product={prod}
-                  index={idx}
-                  store={store}
-                  layoutMode={defaultCardLayout}
-                />
-              </div>
-            ))}
-          </div>
         ) : (
-          /* Caso 3: Página regular cheia */
-          <div className={`w-full h-full grid ${getGridClasses()} p-0.5`}>
-            {products.map((prod, idx) => (
-              <ProductCardA4
-                key={prod.id || `${pageNumber}-${idx}`}
-                product={prod}
-                index={idx}
-                store={store}
-                layoutMode={defaultCardLayout}
-              />
-            ))}
+          /* Caso 2: Linhas completas e linhas incompletas centralizadas na horizontal */
+          <div
+            data-testid="product-grid-container"
+            className={`w-full h-full flex flex-col justify-center ${gapConfig.gapYClass} p-0.5`}
+          >
+            {rows.map((row, rowIdx) => {
+              const isFullRow = row.length === numCols;
+
+              if (isFullRow) {
+                return (
+                  <div
+                    key={`row-${rowIdx}`}
+                    style={{ height: gapConfig.rowHeightStyle }}
+                    className={`w-full grid ${
+                      numCols === 3 ? "grid-cols-3" : "grid-cols-2"
+                    } ${gapConfig.gapXClass} shrink-0 items-center`}
+                  >
+                    {row.map((prod, colIdx) => (
+                      <div
+                        key={prod.id || `${pageNumber}-${rowIdx * numCols + colIdx}`}
+                        className="w-full h-full flex items-center justify-center"
+                      >
+                        <ProductCardA4
+                          product={prod}
+                          index={rowIdx * numCols + colIdx}
+                          store={store}
+                          layoutMode={defaultCardLayout}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+
+              // Linha incompleta: Centralizada horizontalmente com o mesmo tamanho dos demais cards
+              return (
+                <div
+                  key={`row-${rowIdx}`}
+                  data-testid="incomplete-row-centered"
+                  style={{ height: gapConfig.rowHeightStyle }}
+                  className={`w-full flex justify-center items-center ${gapConfig.gapXClass} shrink-0`}
+                >
+                  {row.map((prod, colIdx) => (
+                    <div
+                      key={prod.id || `${pageNumber}-${rowIdx * numCols + colIdx}`}
+                      style={{ width: gapConfig.cardWidthStyle }}
+                      className="h-full flex items-center justify-center"
+                    >
+                      <ProductCardA4
+                        product={prod}
+                        index={rowIdx * numCols + colIdx}
+                        store={store}
+                        layoutMode={defaultCardLayout}
+                      />
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         )}
       </main>

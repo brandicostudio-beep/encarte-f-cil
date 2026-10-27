@@ -104,6 +104,155 @@ describe("Modo de Encarte 9:16 (1080 × 1920 px) com Template PNG", () => {
     expect(htmlLastPage).toContain("text-7xl");
   });
 
+  // TESTES DE CENTRALIZAÇÃO DE LINHAS E PÁGINAS INCOMPLETAS (Novas Regras de Diagramação)
+  it("13 produtos em página de 12: a segunda página tem 1 card centralizado e ampliado", () => {
+    const products = createMockProducts(13);
+    const perPage = 12;
+    const totalPages = Math.ceil(products.length / perPage); // 2 páginas
+
+    expect(totalPages).toBe(2);
+
+    const campaign: CampaignConfig = {
+      ...DEFAULT_CAMPAIGN,
+      format: "story_9_16",
+      productsPerPage: 12,
+    };
+
+    const page2Slice = products.slice(12, 13);
+    expect(page2Slice.length).toBe(1);
+
+    const htmlPage2 = renderToString(
+      React.createElement(StoryPage916, {
+        pageNumber: 2,
+        totalPages: 2,
+        products: page2Slice,
+        store: DEFAULT_STORE,
+        campaign,
+        domId: "story-page-2",
+      })
+    );
+
+    // Deve ser modo hero: centralizado horizontal e verticalmente, ampliado
+    expect(htmlPage2).toContain("max-w-[840px]");
+    expect(htmlPage2).toContain("h-[950px]");
+    expect(htmlPage2).toContain("PRODUTO DE TESTE 13");
+  });
+
+  it("14 produtos em página de 12: a segunda página tem 2 cards centralizados na mesma linha", () => {
+    const products = createMockProducts(14);
+    const perPage = 12;
+    const totalPages = Math.ceil(products.length / perPage); // 2 páginas
+
+    expect(totalPages).toBe(2);
+
+    const campaign: CampaignConfig = {
+      ...DEFAULT_CAMPAIGN,
+      format: "story_9_16",
+      productsPerPage: 12,
+    };
+
+    const page2Slice = products.slice(12, 14);
+    expect(page2Slice.length).toBe(2);
+
+    const htmlPage2 = renderToString(
+      React.createElement(StoryPage916, {
+        pageNumber: 2,
+        totalPages: 2,
+        products: page2Slice,
+        store: DEFAULT_STORE,
+        campaign,
+        domId: "story-page-2",
+      })
+    );
+
+    // Deve conter linha incompleta centralizada
+    expect(htmlPage2).toContain('data-testid="incomplete-row-centered"');
+    expect(htmlPage2).toContain("justify-center");
+    // Ambos os cards devem estar na mesma linha com a largura padronizada de 3 colunas
+    expect(htmlPage2).toContain("calc((100% - 20px) / 3)");
+    expect(htmlPage2).toContain("PRODUTO DE TESTE 13");
+    expect(htmlPage2).toContain("PRODUTO DE TESTE 14");
+    // Não deve ser o hero gigante
+    expect(htmlPage2).not.toContain("h-[950px]");
+  });
+
+  it("11 produtos em grade de 2 colunas: a última linha tem 1 card centralizado", () => {
+    const products = createMockProducts(11);
+    const campaign: CampaignConfig = {
+      ...DEFAULT_CAMPAIGN,
+      format: "story_9_16",
+      productsPerPage: 8, // Grade de 2 colunas
+    };
+
+    const html = renderToString(
+      React.createElement(StoryPage916, {
+        pageNumber: 1,
+        totalPages: 1,
+        products,
+        store: DEFAULT_STORE,
+        campaign,
+        domId: "story-page-1",
+      })
+    );
+
+    // Deve conter a linha incompleta com centralização horizontal
+    expect(html).toContain('data-testid="incomplete-row-centered"');
+    expect(html).toContain("justify-center");
+    // O card avulso da última linha possui a largura padrão da coluna
+    expect(html).toContain("calc((100% - 12px) / 2)");
+    expect(html).toContain("PRODUTO DE TESTE 11");
+  });
+
+  it("Confirma que nenhum card ultrapassa a área branca do template em nenhum desses casos", () => {
+    const campaign: CampaignConfig = {
+      ...DEFAULT_CAMPAIGN,
+      format: "story_9_16",
+      productsPerPage: 12,
+    };
+
+    // Caso 1: 13 produtos (Page 2 com 1 produto Hero)
+    const htmlHero = renderToString(
+      React.createElement(StoryPage916, {
+        pageNumber: 2,
+        totalPages: 2,
+        products: createMockProducts(1),
+        store: DEFAULT_STORE,
+        campaign,
+      })
+    );
+    expect(htmlHero).toContain('data-testid="product-white-area"');
+    expect(htmlHero).toContain("overflow-hidden");
+
+    // Caso 2: 14 produtos (Page 2 com 2 produtos centralizados)
+    const htmlTwoProds = renderToString(
+      React.createElement(StoryPage916, {
+        pageNumber: 2,
+        totalPages: 2,
+        products: createMockProducts(2),
+        store: DEFAULT_STORE,
+        campaign,
+      })
+    );
+    expect(htmlTwoProds).toContain('data-testid="product-white-area"');
+    expect(htmlTwoProds).toContain("overflow-hidden");
+    // Larguras e alturas são limitadas por porcentagem calculada dentro do container
+    expect(htmlTwoProds).toContain("calc((100% - 20px) / 3)");
+    expect(htmlTwoProds).toContain("calc((100% - 30px) / 4)");
+
+    // Caso 3: 11 produtos em 2 colunas
+    const htmlElevenTwoCols = renderToString(
+      React.createElement(StoryPage916, {
+        pageNumber: 1,
+        totalPages: 1,
+        products: createMockProducts(11),
+        store: DEFAULT_STORE,
+        campaign: { ...campaign, productsPerPage: 8 },
+      })
+    );
+    expect(htmlElevenTwoCols).toContain('data-testid="product-white-area"');
+    expect(htmlElevenTwoCols).toContain("overflow-hidden");
+  });
+
   it("Verifica que nenhuma imagem ou card ultrapassa a área branca dos produtos", () => {
     const area = DEFAULT_TEMPLATE_9_16_AREA;
 
