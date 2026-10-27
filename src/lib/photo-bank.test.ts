@@ -39,7 +39,7 @@ describe("photo-bank", () => {
 
     const result = matchPhotosWithProducts(photos, products);
     // "24657_frente.jpg" vem antes de "24657_verso.jpg" alfabeticamente
-    expect(result.updatedProducts[0].image).toBe("data:frente");
+    expect(result.updatedProducts[0]?.image).toBe("data:frente");
     expect(result.matchedCount).toBe(1);
     expect(result.unmatchedPhotos).toHaveLength(0);
   });
