@@ -50,7 +50,7 @@ export function extractProductCodeFromFilename(
   // 2. Extração genérica: pega o token alfanumérico inicial antes do primeiro delimitador (- ou _)
   const tokenMatch = cleanBase.match(/^([A-Za-z0-9]+)/);
   if (tokenMatch) {
-    return tokenMatch[1];
+    return tokenMatch[1] ?? cleanBase;
   }
 
   return cleanBase;
@@ -89,7 +89,7 @@ export async function processPhotoBankUpload(
 
         for (const path of entries) {
           const zipEntry = zip.files[path];
-          if (!zipEntry.dir) {
+          if (zipEntry && !zipEntry.dir) {
             const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
             const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "svg" ? "image/svg+xml" : "image/jpeg";
             const base64 = await zipEntry.async("base64");
@@ -145,7 +145,8 @@ export function matchPhotosWithProducts(
   const selectedPhotoByCode = new Map<string, LoadedPhoto>();
   for (const [code, list] of photosByCode.entries()) {
     list.sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true }));
-    selectedPhotoByCode.set(code, list[0]);
+    const first = list[0];
+    if (first) selectedPhotoByCode.set(code, first);
   }
 
   const validProductCodes = new Set(products.map((p) => p.code.toLowerCase().trim()));
