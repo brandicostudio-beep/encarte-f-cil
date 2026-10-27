@@ -35,6 +35,26 @@ export interface StoreConfig {
   darkColor: string;       // Preto padrão: #0a0a0a
 }
 
+export type EncarteFormat = "story_9_16" | "a4";
+
+export interface TemplateProductArea {
+  x: number;          // Posição X da área branca em pixels no canvas base (padrão 46)
+  y: number;          // Posição Y da área branca em pixels no canvas base (padrão 661)
+  width: number;      // Largura da área branca em pixels (padrão 1012)
+  height: number;     // Altura da área branca em pixels (padrão 1202)
+  canvasWidth: number;  // Largura base do template (padrão 1080)
+  canvasHeight: number; // Altura base do template (padrão 1920)
+}
+
+export const DEFAULT_TEMPLATE_9_16_AREA: TemplateProductArea = {
+  x: 46,
+  y: 661,
+  width: 1012,
+  height: 1202,
+  canvasWidth: 1080,
+  canvasHeight: 1920,
+};
+
 export interface CampaignConfig {
   title: string;           // Padrão: "DETONA PREÇOS"
   subtitle: string;        // Padrão: "Produtos com validade curta!"
@@ -42,6 +62,12 @@ export interface CampaignConfig {
   productsPerPage: ProductsPerPageOption; // Padrão: 12 (opções: 6, 8, 9, 12)
   customHeaderImage?: string; // Data URL ou URL da imagem de cabeçalho enviada pelo usuário (2480x875 / 2551x910)
   headerTextOverlay?: boolean; // Se verdadeiro, renderiza título e subtítulo por cima da arte
+  
+  // Modo de Encarte e Template 9:16 (1080 × 1920 px)
+  format: EncarteFormat;
+  template916Image: string; // PNG/JPG do template completo
+  template916Area: TemplateProductArea;
+  exportResolution916?: "1080x1920" | "2160x3840";
 }
 
 export const DEFAULT_STORE: StoreConfig = {
@@ -62,6 +88,10 @@ export const DEFAULT_CAMPAIGN: CampaignConfig = {
   productsPerPage: 12,
   customHeaderImage: "",
   headerTextOverlay: false,
+  format: "story_9_16",
+  template916Image: "/templates/template-detona-precos-9-16.png",
+  template916Area: DEFAULT_TEMPLATE_9_16_AREA,
+  exportResolution916: "1080x1920",
 };
 
 export const BADGE_LABELS: Record<BadgeType, string> = {

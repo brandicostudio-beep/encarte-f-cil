@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { toJpeg } from "html-to-image";
+import { toJpeg, toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
+import JSZip from "jszip";
 import { extractCategoryProducts } from "@/lib/product.functions";
 import type {
   EncarteProduct,
@@ -10,10 +11,13 @@ import type {
   CampaignConfig,
   BadgeType,
   ProductsPerPageOption,
+  EncarteFormat,
+  TemplateProductArea,
 } from "@/types/encarte";
 import {
   DEFAULT_STORE,
   DEFAULT_CAMPAIGN,
+  DEFAULT_TEMPLATE_9_16_AREA,
   BADGE_LABELS,
 } from "@/types/encarte";
 import {
@@ -30,6 +34,8 @@ import { ReviewTable } from "@/components/encarte/ReviewTable";
 import { SourceSelector } from "@/components/encarte/SourceSelector";
 import { EmptyState } from "@/components/encarte/EmptyState";
 import { A4Page } from "@/components/encarte/A4Page";
+import { StoryPage916 } from "@/components/encarte/StoryPage916";
+import { TemplateAreaAdjuster } from "@/components/encarte/TemplateAreaAdjuster";
 import { SpreadsheetModal } from "@/components/encarte/SpreadsheetModal";
 import { ProductEditModal } from "@/components/encarte/ProductEditModal";
 import { StoreSettingsModal } from "@/components/encarte/StoreSettingsModal";
@@ -62,6 +68,9 @@ import {
   Maximize2,
   CheckCircle2,
   ArrowRight,
+  Smartphone,
+  Archive,
+  Upload,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -390,7 +399,52 @@ function EncarteApp() {
     });
   }, [products, searchQuery, activeIssueFilter, sortBy]);
 
-  // Exportar PDF 300 DPI
+  // Slug da campanha para nomenclatura de arquivos (ex: "encarte-validade-curta-01.png")
+  const campaignSlug = useMemo(() => {
+    return (
+      (campaign.title || "encarte")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "detona-precos"
+    );
+  }, [campaign.title]);
+
+  // Upload de Template 9:16 direto na etapa de campanha
+  const handleTemplate916UploadInPage = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result);
+      const img = new Image();
+      img.onload = () => {
+        const w = img.width || 1080;
+        const h = img.height || 1920;
+
+        const scaleX = w / 1080;
+        const scaleY = h / 1920;
+
+        const newArea: TemplateProductArea = {
+          x: Math.round(46 * scaleX),
+          y: Math.round(661 * scaleY),
+          width: Math.round(1012 * scaleX),
+          height: Math.round(1202 * scaleY),
+          canvasWidth: w,
+          canvasHeight: h,
+        };
+
+        saveCampaignConfig({
+          ...campaign,
+          template916Image: dataUrl,
+          template916Area: newArea,
+        });
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Exportar PDF 300 DPI (Modo A4)
   const executeExportPdf = async () => {
     setExporting(true);
     try {
@@ -401,7 +455,9 @@ function EncarteApp() {
       });
 
       for (let pIdx = 1; pIdx <= totalPages; pIdx++) {
-        const pageEl = document.getElementById(`encarte-page-${pIdx}`);
+        const pageEl =
+          document.getElementById(`batch-a4-page-${pIdx}`) ||
+          document.getElementById(`encarte-page-${pIdx}`);
         if (!pageEl) continue;
 
         // Renderiza em 300 DPI equivalente (pixelRatio: 3.125 para atingir ~2480x3508px)
@@ -417,14 +473,12 @@ function EncarteApp() {
         pdf.addImage(dataUrl, "JPEG", 0, 0, 210, 297, undefined, "FAST");
       }
 
-      const filename = `encarte-${campaign.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")}.pdf`;
+      const filename = `encarte-${campaignSlug}.pdf`;
       pdf.save(filename);
       setCompletedSteps((prev) => new Set([...prev, "exportar"]));
     } catch (err) {
       console.error(err);
-      alert("Erro ao gerar PDF. Você pode imprimir diretamente ou exportar JPG.");
+      alert("Erro ao gerar PDF. Você pode imprimir diretamente ou exportar PNG.");
     } finally {
       setExporting(false);
     }
@@ -443,40 +497,113 @@ function EncarteApp() {
     executeExportPdf();
   };
 
-  // Exportar JPG em Alta Resolução
-  const executeExportJpgCurrentPage = async () => {
-    const pageEl = document.getElementById(`encarte-page-${currentPage}`);
+  // Exportar PNG em Resolução 1080 × 1920 ou 2160 × 3840 (ou A4)
+  const executeExportPngCurrentPage = async () => {
+    const is916 = campaign.format === "story_9_16";
+    const pageEl =
+      document.getElementById(`batch-story-page-${currentPage}`) ||
+      document.getElementById(`story-page-${currentPage}`) ||
+      document.getElementById(`batch-a4-page-${currentPage}`) ||
+      document.getElementById(`encarte-page-${currentPage}`);
+
     if (!pageEl) return;
 
     setExporting(true);
     try {
-      const dataUrl = await toJpeg(pageEl, {
-        quality: 0.98,
-        pixelRatio: 3.125,
+      const isHighRes = campaign.exportResolution916 === "2160x3840";
+      const pixelRatio = is916 ? (isHighRes ? 2 : 1) : 3.125;
+
+      const dataUrl = await toPng(pageEl, {
+        pixelRatio,
+        cacheBust: true,
         style: { transform: "none" },
       });
+
+      const pageStr = String(currentPage).padStart(2, "0");
+      const filename = `encarte-${campaignSlug}-${pageStr}.png`;
       const a = document.createElement("a");
       a.href = dataUrl;
-      a.download = `encarte-pagina-${currentPage}.jpg`;
+      a.download = filename;
       a.click();
-    } catch {
-      alert("Erro ao exportar imagem JPG.");
+      setCompletedSteps((prev) => new Set([...prev, "exportar"]));
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao exportar imagem PNG.");
     } finally {
       setExporting(false);
     }
   };
 
-  const handleExportJpg = () => {
+  const handleExportPng = () => {
     if (flyerProducts.length === 0) {
       alert("Nenhum produto com preço está marcado para entrar no encarte.");
       return;
     }
     if (expiredInFlyer.length > 0) {
-      setPendingExportAction(() => executeExportJpgCurrentPage);
+      setPendingExportAction(() => executeExportPngCurrentPage);
       setExpiredWarningOpen(true);
       return;
     }
-    executeExportJpgCurrentPage();
+    executeExportPngCurrentPage();
+  };
+
+  // Exportar Todas as Páginas em Arquivo ZIP
+  const executeExportZipAllPages = async () => {
+    setExporting(true);
+    try {
+      const zip = new JSZip();
+      const is916 = campaign.format === "story_9_16";
+      const isHighRes = campaign.exportResolution916 === "2160x3840";
+      const pixelRatio = is916 ? (isHighRes ? 2 : 1) : 3.125;
+
+      for (let pIdx = 1; pIdx <= totalPages; pIdx++) {
+        const pageEl =
+          document.getElementById(`batch-story-page-${pIdx}`) ||
+          document.getElementById(`story-page-${pIdx}`) ||
+          document.getElementById(`batch-a4-page-${pIdx}`) ||
+          document.getElementById(`encarte-page-${pIdx}`);
+
+        if (!pageEl) continue;
+
+        const dataUrl = await toPng(pageEl, {
+          pixelRatio,
+          cacheBust: true,
+          style: { transform: "none" },
+        });
+
+        const base64Data = dataUrl.replace(/^data:image\/png;base64,/, "");
+        const pageStr = String(pIdx).padStart(2, "0");
+        const filename = `encarte-${campaignSlug}-${pageStr}.png`;
+        zip.file(filename, base64Data, { base64: true });
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `encarte-${campaignSlug}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setCompletedSteps((prev) => new Set([...prev, "exportar"]));
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao gerar arquivo ZIP com as páginas do encarte.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportZip = () => {
+    if (flyerProducts.length === 0) {
+      alert("Nenhum produto com preço está marcado para entrar no encarte.");
+      return;
+    }
+    if (expiredInFlyer.length > 0) {
+      setPendingExportAction(() => executeExportZipAllPages);
+      setExpiredWarningOpen(true);
+      return;
+    }
+    executeExportZipAllPages();
   };
 
   return (
@@ -678,7 +805,7 @@ function EncarteApp() {
                         Configuração da Campanha & Layout
                       </h2>
                       <p className="text-xs text-neutral-500">
-                        Ajuste os produtos por página, arte de cabeçalho, textos e dados da loja.
+                        Escolha o formato do encarte (Story 9:16 ou A4 Impresso), template de fundo, quantidade de produtos por página e dados da loja.
                       </p>
                     </div>
 
@@ -686,18 +813,84 @@ function EncarteApp() {
                       onClick={() => {
                         setCompletedSteps((prev) => new Set([...prev, "campanha"]));
                         setCurrentStep("exportar");
+                        // Ajustar zoom inicial para visualização confortável
+                        if (campaign.format === "story_9_16") {
+                          setPreviewZoom(0.38);
+                        } else {
+                          setPreviewZoom(0.68);
+                        }
                       }}
                       className="min-h-[44px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs"
                     >
-                      Avançar para Pré-visualização A4
+                      Avançar para Pré-visualização
                       <ArrowRight className="h-4 w-4 ml-1.5" />
                     </Button>
                   </div>
 
-                  {/* 1. Grade de Produtos por Página */}
+                  {/* 1. Escolha do Formato do Encarte */}
                   <div className="space-y-3 rounded-lg border p-4 bg-neutral-50/50">
                     <label className="text-sm font-bold text-neutral-800 block">
-                      Produtos por página A4 (Padrão: 12)
+                      1. Formato do Encarte
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          saveCampaignConfig({ ...campaign, format: "story_9_16" });
+                          setPreviewZoom(0.38);
+                        }}
+                        className={`min-h-[56px] p-3.5 rounded-xl border text-left flex items-center justify-between transition-all ${
+                          campaign.format === "story_9_16"
+                            ? "bg-red-600 text-white font-bold border-red-600 shadow-xs"
+                            : "bg-white text-neutral-800 hover:bg-neutral-100 border-neutral-300 font-medium"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Smartphone className="h-6 w-6 shrink-0" />
+                          <div>
+                            <div className="text-sm font-bold">Story 9:16 (Digital & Redes)</div>
+                            <div className="text-[11px] opacity-85">
+                              1080 × 1920 px · Template PNG completo · WhatsApp & Instagram
+                            </div>
+                          </div>
+                        </div>
+                        {campaign.format === "story_9_16" && (
+                          <CheckCircle2 className="h-5 w-5 text-yellow-300 shrink-0" />
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          saveCampaignConfig({ ...campaign, format: "a4" });
+                          setPreviewZoom(0.68);
+                        }}
+                        className={`min-h-[56px] p-3.5 rounded-xl border text-left flex items-center justify-between transition-all ${
+                          campaign.format === "a4"
+                            ? "bg-red-600 text-white font-bold border-red-600 shadow-xs"
+                            : "bg-white text-neutral-800 hover:bg-neutral-100 border-neutral-300 font-medium"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-6 w-6 shrink-0" />
+                          <div>
+                            <div className="text-sm font-bold">A4 Impresso (Gráfica / Folheto)</div>
+                            <div className="text-[11px] opacity-85">
+                              210 × 297 mm · PDF pronto para impressão a 300 DPI
+                            </div>
+                          </div>
+                        </div>
+                        {campaign.format === "a4" && (
+                          <CheckCircle2 className="h-5 w-5 text-yellow-300 shrink-0" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 2. Grade de Produtos por Página */}
+                  <div className="space-y-3 rounded-lg border p-4 bg-neutral-50/50">
+                    <label className="text-sm font-bold text-neutral-800 block">
+                      2. Produtos por página (Padrão: 12)
                     </label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                       {([12, 9, 8, 6] as ProductsPerPageOption[]).map((num) => (
@@ -714,9 +907,9 @@ function EncarteApp() {
                           <div className="text-sm font-bold">{num} produtos</div>
                           <div className="text-[10px] opacity-80">
                             {num === 12
-                              ? "3 colunas x 4 linhas (vertical)"
+                              ? "3 colunas x 4 linhas"
                               : num === 9
-                              ? "3 colunas x 3 linhas (vertical)"
+                              ? "3 colunas x 3 linhas"
                               : num === 8
                               ? "2 colunas x 4 linhas"
                               : "2 colunas x 3 linhas"}
@@ -724,68 +917,220 @@ function EncarteApp() {
                         </button>
                       ))}
                     </div>
+                    <p className="text-[11px] text-neutral-500 mt-1">
+                      Se a última página tiver sobra de produtos, os cards serão centralizados e aumentados para preencher todo o espaço da página.
+                    </p>
                   </div>
 
-                  {/* 2. Cabeçalho Personalizado */}
-                  <div className="space-y-3 rounded-lg border p-4 bg-neutral-50/50">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <label className="text-sm font-bold text-neutral-800 block">
-                          Cabeçalho da Peça A4
-                        </label>
-                        <p className="text-[11px] text-neutral-500">
-                          Especificação: <strong>2480 × 875 px</strong> a 300 DPI (largura de A4 com cerca de 74 mm).
-                        </p>
+                  {/* 3. Configuração Específica do Formato (Template 9:16 ou Cabeçalho A4) */}
+                  {campaign.format === "story_9_16" ? (
+                    <div className="space-y-4 rounded-lg border p-4 bg-neutral-50/50">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <label className="text-sm font-bold text-neutral-800 block">
+                            3. Template do Encarte (1080 × 1920 px)
+                          </label>
+                          <p className="text-[11px] text-neutral-500">
+                            A imagem é usada como fundo de todas as páginas, sem alterações.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <label className="cursor-pointer inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border bg-white text-xs font-bold hover:bg-neutral-100 shadow-2xs">
+                            <Upload className="h-4 w-4 text-red-600" />
+                            Enviar Novo Template (PNG / JPG)
+                            <input
+                              type="file"
+                              accept="image/png, image/jpeg, image/jpg"
+                              className="hidden"
+                              onChange={(e) =>
+                                e.target.files?.[0] &&
+                                handleTemplate916UploadInPage(e.target.files[0])
+                              }
+                            />
+                          </label>
+
+                          {campaign.template916Image &&
+                            campaign.template916Image !==
+                              "/templates/template-detona-precos-9-16.png" && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  saveCampaignConfig({
+                                    ...campaign,
+                                    template916Image:
+                                      "/templates/template-detona-precos-9-16.png",
+                                    template916Area: { ...DEFAULT_TEMPLATE_9_16_AREA },
+                                  });
+                                }}
+                                className="text-xs text-neutral-600"
+                              >
+                                Restaurar "Detona Preços"
+                              </Button>
+                            )}
+                        </div>
                       </div>
 
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setStoreSettingsOpen(true)}
-                        className="text-xs font-semibold"
-                      >
-                        <Store className="h-4 w-4 mr-1.5 text-primary" />
-                        Configurar Loja & Cabeçalho Completo
-                      </Button>
+                      {/* Ajustador visual da área branca interativo */}
+                      <TemplateAreaAdjuster
+                        templateImage={
+                          campaign.template916Image ||
+                          "/templates/template-detona-precos-9-16.png"
+                        }
+                        area={
+                          campaign.template916Area || DEFAULT_TEMPLATE_9_16_AREA
+                        }
+                        onChange={(newArea) =>
+                          saveCampaignConfig({
+                            ...campaign,
+                            template916Area: newArea,
+                          })
+                        }
+                      />
                     </div>
+                  ) : (
+                    <div className="space-y-3 rounded-lg border p-4 bg-neutral-50/50">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <label className="text-sm font-bold text-neutral-800 block">
+                            3. Cabeçalho da Peça A4
+                          </label>
+                          <p className="text-[11px] text-neutral-500">
+                            Especificação: <strong>2480 × 875 px</strong> a 300 DPI (largura de A4 com cerca de 74 mm).
+                          </p>
+                        </div>
 
-                    {campaign.customHeaderImage ? (
-                      <div className="rounded-lg border overflow-hidden bg-black max-h-32 flex items-center justify-center relative">
-                        <img
-                          src={campaign.customHeaderImage}
-                          alt="Arte de Cabeçalho"
-                          className="w-full h-32 object-cover object-center"
-                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setStoreSettingsOpen(true)}
+                          className="text-xs font-semibold"
+                        >
+                          <Store className="h-4 w-4 mr-1.5 text-primary" />
+                          Configurar Loja & Cabeçalho Completo
+                        </Button>
                       </div>
-                    ) : (
-                      <div className="text-xs text-neutral-600 bg-white p-3 rounded border border-dashed">
-                        Utilizando o <strong>cabeçalho padrão de varejo</strong> preto com título "{campaign.title}" e subtítulo "{campaign.subtitle}".
-                      </div>
-                    )}
-                  </div>
+
+                      {campaign.customHeaderImage ? (
+                        <div className="rounded-lg border overflow-hidden bg-black max-h-32 flex items-center justify-center relative">
+                          <img
+                            src={campaign.customHeaderImage}
+                            alt="Arte de Cabeçalho"
+                            className="w-full h-32 object-cover object-center"
+                          />
+                        </div>
+                      ) : (
+                        <div className="text-xs text-neutral-600 bg-white p-3 rounded border border-dashed">
+                          Utilizando o <strong>cabeçalho padrão de varejo</strong> preto com título "{campaign.title}" e subtítulo "{campaign.subtitle}".
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* SE ETAPA FOR EXPORTAR OU PRÉ-VISUALIZAÇÃO */}
               {currentStep === "exportar" && (
                 <div className="space-y-4">
-                  {/* Barra de Controles de Impressão e Escala */}
-                  <div className="rounded-xl border bg-white p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  {/* Barra de Controles de Formato, Resolução, Impressão e Escala */}
+                  <div className="rounded-xl border bg-white p-4 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     <div>
-                      <h2 className="text-sm font-bold text-neutral-900">
-                        Conferência da Peça A4 ({flyerProducts.length} itens inclusos)
-                      </h2>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-sm font-bold text-neutral-900">
+                          Conferência do Encarte ({flyerProducts.length} itens inclusos)
+                        </h2>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 uppercase">
+                          {campaign.format === "story_9_16" ? "Story 9:16" : "A4 Impresso"}
+                        </span>
+                      </div>
                       <p className="text-[11px] text-neutral-500">
-                        {totalPages} {totalPages === 1 ? "página A4" : "páginas A4"} · Padrão gráfica 300 DPI
+                        {totalPages} {totalPages === 1 ? "página" : "páginas"} · {campaign.format === "story_9_16" ? "1080 × 1920 px (ou 2160 × 3840 4K)" : "Padrão gráfica 300 DPI"}
                       </p>
                     </div>
 
-                    {/* Controles de Escala Real 100%, Zoom e Produtos por Página */}
+                    {/* Controles de Formato, Resolução, Zoom e Produtos por Página */}
                     <div className="flex items-center gap-2 flex-wrap">
-                      {/* Seletor Rápido de Produtos por Página (atualiza a pré-visualização na hora) */}
+                      {/* Seletor Rápido de Formato */}
+                      <div className="flex items-center border rounded-lg bg-neutral-50 p-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            saveCampaignConfig({ ...campaign, format: "story_9_16" });
+                            setPreviewZoom(0.38);
+                          }}
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-bold transition-colors ${
+                            campaign.format === "story_9_16"
+                              ? "bg-red-600 text-white shadow-2xs"
+                              : "text-neutral-700 hover:bg-neutral-200"
+                          }`}
+                          title="Alternar para Formato Story 9:16"
+                        >
+                          <Smartphone className="h-3.5 w-3.5" />
+                          Story 9:16
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            saveCampaignConfig({ ...campaign, format: "a4" });
+                            setPreviewZoom(0.68);
+                          }}
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-bold transition-colors ${
+                            campaign.format === "a4"
+                              ? "bg-red-600 text-white shadow-2xs"
+                              : "text-neutral-700 hover:bg-neutral-200"
+                          }`}
+                          title="Alternar para Formato A4 Impresso"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          A4 Impresso
+                        </button>
+                      </div>
+
+                      {/* Seletor Rápido de Resolução para 9:16 */}
+                      {campaign.format === "story_9_16" && (
+                        <div className="flex items-center border rounded-lg bg-neutral-50 p-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              saveCampaignConfig({
+                                ...campaign,
+                                exportResolution916: "1080x1920",
+                              })
+                            }
+                            className={`px-2 py-1 rounded text-[11px] font-bold transition-colors ${
+                              (campaign.exportResolution916 || "1080x1920") === "1080x1920"
+                                ? "bg-black text-yellow-300"
+                                : "text-neutral-600 hover:bg-neutral-200"
+                            }`}
+                            title="Resolução 1080 × 1920 px (padrão)"
+                          >
+                            1080p
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              saveCampaignConfig({
+                                ...campaign,
+                                exportResolution916: "2160x3840",
+                              })
+                            }
+                            className={`px-2 py-1 rounded text-[11px] font-bold transition-colors ${
+                              campaign.exportResolution916 === "2160x3840"
+                                ? "bg-black text-yellow-300"
+                                : "text-neutral-600 hover:bg-neutral-200"
+                            }`}
+                            title="Resolução 2160 × 3840 px (Ultra Nitidez 4K)"
+                          >
+                            4K (Ultra)
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Seletor Rápido de Produtos por Página */}
                       <div className="flex items-center border rounded-lg bg-neutral-50 px-2 py-1">
                         <span className="text-[11px] font-bold text-neutral-600 mr-1.5">
-                          Por página:
+                          Itens:
                         </span>
                         {([12, 9, 8, 6] as ProductsPerPageOption[]).map((num) => (
                           <button
@@ -807,20 +1152,27 @@ function EncarteApp() {
                         ))}
                       </div>
 
+                      {/* Zoom e Escala Real */}
                       <Button
                         size="sm"
                         variant={isRealScale ? "default" : "outline"}
                         onClick={() => {
                           setIsRealScale(!isRealScale);
-                          setPreviewZoom(isRealScale ? 0.68 : 1.0);
+                          setPreviewZoom(
+                            isRealScale
+                              ? campaign.format === "story_9_16"
+                                ? 0.38
+                                : 0.68
+                              : 1.0
+                          );
                         }}
-                        className={`min-h-[44px] text-xs font-bold ${
+                        className={`min-h-[40px] text-xs font-bold ${
                           isRealScale ? "bg-black text-[#FFD400]" : ""
                         }`}
                         title="Alternar entre Escala Real 100% e Ajuste de Tela"
                       >
                         <Maximize2 className="h-3.5 w-3.5 mr-1" />
-                        {isRealScale ? "Escala 100% Ativa" : "Escala Real 100%"}
+                        {isRealScale ? "100%" : "Ajustar"}
                       </Button>
 
                       <div className="flex items-center border rounded-lg bg-neutral-50 p-1">
@@ -829,7 +1181,7 @@ function EncarteApp() {
                           variant="ghost"
                           onClick={() => {
                             setIsRealScale(false);
-                            setPreviewZoom((z) => Math.max(0.4, z - 0.1));
+                            setPreviewZoom((z) => Math.max(0.2, z - 0.05));
                           }}
                           className="h-8 w-8 p-0"
                           title="Diminuir Zoom"
@@ -844,7 +1196,7 @@ function EncarteApp() {
                           variant="ghost"
                           onClick={() => {
                             setIsRealScale(false);
-                            setPreviewZoom((z) => Math.min(1.2, z + 0.1));
+                            setPreviewZoom((z) => Math.min(1.5, z + 0.05));
                           }}
                           className="h-8 w-8 p-0"
                           title="Aumentar Zoom"
@@ -854,40 +1206,66 @@ function EncarteApp() {
                       </div>
                     </div>
 
-                    {/* Botões de Ação de Impressão & Exportação (Mínimo 44px de toque) */}
+                    {/* Botões de Ação de Impressão & Exportação */}
                     <div className="flex items-center gap-2">
-                      <Button
-                        onClick={handleExportPdf}
-                        disabled={exporting || flyerProducts.length === 0}
-                        className="min-h-[44px] px-5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs"
-                      >
-                        <FileText className="h-4 w-4 mr-1.5" />
-                        {exporting ? "Gerando 300 DPI..." : "Baixar PDF (300 DPI)"}
-                      </Button>
+                      {campaign.format === "story_9_16" ? (
+                        <>
+                          <Button
+                            onClick={handleExportPng}
+                            disabled={exporting || flyerProducts.length === 0}
+                            className="min-h-[44px] px-4 bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs"
+                          >
+                            <Download className="h-4 w-4 mr-1.5" />
+                            {exporting
+                              ? "Gerando..."
+                              : `Baixar PNG (Pág. ${currentPage})`}
+                          </Button>
 
-                      <Button
-                        variant="outline"
-                        onClick={handleExportJpg}
-                        disabled={exporting || flyerProducts.length === 0}
-                        className="min-h-[44px] text-xs font-semibold"
-                      >
-                        <Download className="h-4 w-4 mr-1.5" />
-                        Baixar JPG
-                      </Button>
+                          <Button
+                            onClick={handleExportZip}
+                            disabled={exporting || flyerProducts.length === 0}
+                            className="min-h-[44px] px-4 bg-neutral-900 hover:bg-neutral-800 text-yellow-300 font-bold text-xs shadow-xs"
+                          >
+                            <Archive className="h-4 w-4 mr-1.5 text-yellow-400" />
+                            {exporting ? "Gerando ZIP..." : "Baixar Todas (.ZIP)"}
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            onClick={handleExportPdf}
+                            disabled={exporting || flyerProducts.length === 0}
+                            className="min-h-[44px] px-5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs"
+                          >
+                            <FileText className="h-4 w-4 mr-1.5" />
+                            {exporting ? "Gerando 300 DPI..." : "Baixar PDF (300 DPI)"}
+                          </Button>
 
-                      <Button
-                        variant="outline"
-                        onClick={() => window.print()}
-                        disabled={flyerProducts.length === 0}
-                        className="min-h-[44px] text-xs font-semibold"
-                      >
-                        <Printer className="h-4 w-4 mr-1.5" />
-                        Imprimir
-                      </Button>
+                          <Button
+                            variant="outline"
+                            onClick={handleExportPng}
+                            disabled={exporting || flyerProducts.length === 0}
+                            className="min-h-[44px] text-xs font-semibold"
+                          >
+                            <Download className="h-4 w-4 mr-1.5" />
+                            Baixar PNG
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            onClick={() => window.print()}
+                            disabled={flyerProducts.length === 0}
+                            className="min-h-[44px] text-xs font-semibold"
+                          >
+                            <Printer className="h-4 w-4 mr-1.5" />
+                            Imprimir
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
 
-                  {/* Navegação de Páginas A4 */}
+                  {/* Navegação de Páginas */}
                   {totalPages > 1 && (
                     <div className="flex items-center justify-between bg-white px-4 py-2 rounded-xl border text-xs">
                       <Button
@@ -920,45 +1298,80 @@ function EncarteApp() {
                     </div>
                   )}
 
-                  {/* PALCO DE RENDERIZAÇÃO A4 (210 x 297 mm) */}
+                  {/* PALCO DE RENDERIZAÇÃO INTERATIVO */}
                   <div className="rounded-2xl border bg-neutral-900/95 p-6 shadow-inner flex flex-col items-center justify-center overflow-auto min-h-[640px]">
-                    <div
-                      className="origin-top transition-transform shadow-2xl"
-                      style={{
-                        transform: `scale(${previewZoom})`,
-                        width: `${DESIGN_TOKENS.geometry.screenPreviewWidthPx}px`,
-                        height: `${DESIGN_TOKENS.geometry.screenPreviewHeightPx}px`,
-                        marginBottom: `-${
-                          DESIGN_TOKENS.geometry.screenPreviewHeightPx *
-                          (1 - previewZoom)
-                        }px`,
-                        marginRight: `-${
-                          DESIGN_TOKENS.geometry.screenPreviewWidthPx *
-                          (1 - previewZoom)
-                        }px`,
-                      }}
-                    >
-                      <A4Page
-                        domId={`encarte-page-${currentPage}`}
-                        pageNumber={currentPage}
-                        totalPages={totalPages}
-                        products={pageProducts}
-                        store={store}
-                        campaign={campaign}
-                        totalProductsCount={flyerProducts.length}
-                      />
-                    </div>
+                    {campaign.format === "story_9_16" ? (
+                      <div
+                        className="origin-top transition-transform shadow-2xl rounded-2xl overflow-hidden"
+                        style={{
+                          transform: `scale(${previewZoom})`,
+                          width: "1080px",
+                          height: "1920px",
+                          marginBottom: `-${1920 * (1 - previewZoom)}px`,
+                          marginRight: `-${1080 * (1 - previewZoom)}px`,
+                        }}
+                      >
+                        <StoryPage916
+                          domId={`story-page-${currentPage}`}
+                          pageNumber={currentPage}
+                          totalPages={totalPages}
+                          products={pageProducts}
+                          store={store}
+                          campaign={campaign}
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        className="origin-top transition-transform shadow-2xl"
+                        style={{
+                          transform: `scale(${previewZoom})`,
+                          width: `${DESIGN_TOKENS.geometry.screenPreviewWidthPx}px`,
+                          height: `${DESIGN_TOKENS.geometry.screenPreviewHeightPx}px`,
+                          marginBottom: `-${
+                            DESIGN_TOKENS.geometry.screenPreviewHeightPx *
+                            (1 - previewZoom)
+                          }px`,
+                          marginRight: `-${
+                            DESIGN_TOKENS.geometry.screenPreviewWidthPx *
+                            (1 - previewZoom)
+                          }px`,
+                        }}
+                      >
+                        <A4Page
+                          domId={`encarte-page-${currentPage}`}
+                          pageNumber={currentPage}
+                          totalPages={totalPages}
+                          products={pageProducts}
+                          store={store}
+                          campaign={campaign}
+                          totalProductsCount={flyerProducts.length}
+                        />
+                      </div>
+                    )}
                   </div>
 
-                  {/* Container oculto para renderizar todas as páginas para PDF ou Impressão direta */}
-                  <div className="flyer-print-container hidden">
+                  {/* Container off-screen para renderizar todas as páginas e exportar em lote sem cortes */}
+                  <div
+                    className="fixed -left-[99999px] top-0 pointer-events-none opacity-0"
+                    style={{ width: "1080px", overflow: "hidden" }}
+                  >
                     {Array.from({ length: totalPages }).map((_, pIdx) => {
                       const start = pIdx * perPage;
                       const prodsForPage = flyerProducts.slice(start, start + perPage);
-                      return (
+                      return campaign.format === "story_9_16" ? (
+                        <StoryPage916
+                          key={`batch-story-page-${pIdx + 1}`}
+                          domId={`batch-story-page-${pIdx + 1}`}
+                          pageNumber={pIdx + 1}
+                          totalPages={totalPages}
+                          products={prodsForPage}
+                          store={store}
+                          campaign={campaign}
+                        />
+                      ) : (
                         <A4Page
-                          key={`export-page-${pIdx + 1}`}
-                          domId={`encarte-page-${pIdx + 1}`}
+                          key={`batch-a4-page-${pIdx + 1}`}
+                          domId={`batch-a4-page-${pIdx + 1}`}
                           pageNumber={pIdx + 1}
                           totalPages={totalPages}
                           products={prodsForPage}
