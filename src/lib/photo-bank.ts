@@ -1,9 +1,14 @@
 import type { EncarteProduct } from "@/types/encarte";
+import { parsePhotoCodeAndSuffix } from "./drive-api";
 
 export interface LoadedPhoto {
   filename: string;
   dataUrl: string;
   extractedCode: string;
+  fileId?: string;
+  modifiedTime?: string;
+  isPrimary?: boolean;
+  source?: "drive" | "zip" | "upload";
 }
 
 export interface PhotoBankResult {
@@ -120,51 +125,104 @@ export async function processPhotoBankUpload(
 
 /**
  * Associa as fotos carregadas aos produtos.
- * Regra: Quando houver mais de uma foto do mesmo código, usar a primeira em ordem alfabética.
+ * Regras:
+ * - A imagem sem sufixo ("24657.jpg") ou com o menor sufixo ("24657-1.jpg") é a principal.
+ * - As demais ficam como alternativas para o usuário escolher na revisão.
+ * - A foto do banco tem prioridade sobre a imagem da página de origem.
  */
 export function matchPhotosWithProducts(
   loadedPhotos: LoadedPhoto[],
-  products: EncarteProduct[]
+  products: EncarteProduct[],
+  defaultSource: "drive" | "zip" | "upload" = "upload"
 ): {
   updatedProducts: EncarteProduct[];
   matchedCount: number;
   unmatchedPhotos: string[];
+  ambiguousCodes: string[];
 } {
+  const knownCodes = products.map((p) => p.code);
+
   // Agrupar fotos por código do produto
-  const photosByCode = new Map<string, LoadedPhoto[]>();
+  const photosByCode = new Map<
+    string,
+    {
+      photo: LoadedPhoto;
+      suffixOrder: number;
+    }[]
+  >();
 
   for (const photo of loadedPhotos) {
-    const code = photo.extractedCode.toLowerCase().trim();
+    const parsed = parsePhotoCodeAndSuffix(photo.filename, knownCodes);
+    const code = (parsed?.code || photo.extractedCode).toLowerCase().trim();
+    const suffixOrder = parsed?.suffixOrder ?? 0;
+
     if (!photosByCode.has(code)) {
       photosByCode.set(code, []);
     }
-    photosByCode.get(code)!.push(photo);
+    photosByCode.get(code)!.push({ photo, suffixOrder });
   }
 
-  // Para cada código com múltiplas fotos, ordenar alfabeticamente pelo filename e pegar a primeira
-  const selectedPhotoByCode = new Map<string, LoadedPhoto>();
+  // Para cada código: ordenar por menor suffixOrder (0 sem sufixo, depois 1, 2...), e em empate ordem alfabética
+  const selectedPhotosByCode = new Map<
+    string,
+    {
+      primary: LoadedPhoto;
+      alternatives: LoadedPhoto[];
+    }
+  >();
+  const ambiguousCodes: string[] = [];
+
   for (const [code, list] of photosByCode.entries()) {
-    list.sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true }));
-    const first = list[0];
-    if (first) selectedPhotoByCode.set(code, first);
+    list.sort((a, b) => {
+      if (a.suffixOrder !== b.suffixOrder) {
+        return a.suffixOrder - b.suffixOrder;
+      }
+      return a.photo.filename.localeCompare(b.photo.filename, undefined, {
+        numeric: true,
+      });
+    });
+
+    const primary = list[0]?.photo;
+    const alternatives = list.slice(1).map((item) => item.photo);
+
+    if (primary) {
+      selectedPhotosByCode.set(code, { primary, alternatives });
+      if (alternatives.length > 0) {
+        ambiguousCodes.push(primary.extractedCode || code);
+      }
+    }
   }
 
   const validProductCodes = new Set(products.map((p) => p.code.toLowerCase().trim()));
   const matchedCodes = new Set<string>();
 
   // Prioridade da imagem:
-  // 1. Foto do banco de fotos
-  // 2. Imagem da página (se já tiver)
+  // 1. Foto do banco de fotos / Drive / ZIP (substitui foto anterior da página de origem)
+  // 2. Imagem prévia da página (se não houver no banco)
   // 3. Placeholder neutro (se vazio)
   const updatedProducts = products.map((product) => {
     const code = product.code.toLowerCase().trim();
-    const photo = selectedPhotoByCode.get(code);
+    const entry = selectedPhotosByCode.get(code);
 
-    if (photo) {
+    if (entry && entry.primary) {
       matchedCodes.add(code);
+      const photoSrc = entry.primary.source || defaultSource;
+
+      const alts = entry.alternatives.map((alt) => ({
+        id: alt.fileId || alt.filename,
+        filename: alt.filename,
+        dataUrl: alt.dataUrl,
+        fileId: alt.fileId,
+        isPrimary: false,
+        source: alt.source || defaultSource,
+      }));
+
       return {
         ...product,
-        image: photo.dataUrl,
+        image: entry.primary.dataUrl,
+        photoSource: photoSrc,
+        photoOriginName: entry.primary.filename,
+        alternativePhotos: alts.length > 0 ? alts : undefined,
       };
     }
     return product;
@@ -173,7 +231,8 @@ export function matchPhotosWithProducts(
   // Fotos que não correspondem a nenhum produto
   const unmatchedPhotos: string[] = [];
   for (const photo of loadedPhotos) {
-    const code = photo.extractedCode.toLowerCase().trim();
+    const parsed = parsePhotoCodeAndSuffix(photo.filename, knownCodes);
+    const code = (parsed?.code || photo.extractedCode).toLowerCase().trim();
     if (!validProductCodes.has(code)) {
       unmatchedPhotos.push(photo.filename);
     }
@@ -183,5 +242,6 @@ export function matchPhotosWithProducts(
     updatedProducts,
     matchedCount: matchedCodes.size,
     unmatchedPhotos,
+    ambiguousCodes,
   };
 }

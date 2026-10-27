@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   parseGoogleDriveUrl,
-  scrapeFolderHtmlFiles,
   extractPhotosFromZipBuffer,
 } from "./drive-service";
 import JSZip from "jszip";
@@ -36,24 +35,6 @@ describe("Serviço de Extração do Google Drive (drive-service)", () => {
     expect(parseGoogleDriveUrl("")).toBeNull();
     expect(parseGoogleDriveUrl("https://example.com/photos.zip")).toBeNull();
     expect(parseGoogleDriveUrl("https://cescom.com.br/categoria")).toBeNull();
-  });
-
-  it("Raspa arquivos de imagem do HTML de uma pasta pública", () => {
-    const mockHtml = `
-      <html>
-        <body>
-          <script>
-            window['_DRIVE_ivd'] = '[["1A2B3C4D5E6F7G8H9I0J-KlMnOpQrStU",["24657.jpg","image/jpeg"]],["9Z8Y7X6W5V4U3T2S1R0Q-PoNmLkJiHgF",["10982-frente.png","image/png"]]]';
-          </script>
-        </body>
-      </html>
-    `;
-
-    const files = scrapeFolderHtmlFiles(mockHtml);
-    expect(files.length).toBe(2);
-    expect(files[0].id).toBe("1A2B3C4D5E6F7G8H9I0J-KlMnOpQrStU");
-    expect(files[0].filename).toBe("24657.jpg");
-    expect(files[1].filename).toBe("10982-frente.png");
   });
 
   it("Descompacta fotos de buffer ZIP e extrai códigos de produtos", async () => {

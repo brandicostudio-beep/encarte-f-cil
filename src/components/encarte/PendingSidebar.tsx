@@ -10,12 +10,14 @@ import {
   FileQuestion,
   FileSpreadsheet,
   Package,
+  Layers,
 } from "lucide-react";
 
 export type IssueFilter =
   | "all"
   | "unpriced"
   | "missing_photo"
+  | "ambiguous_photo"
   | "missing_packaging"
   | "expired"
   | "excluded";
@@ -39,6 +41,7 @@ export const PendingSidebar: React.FC<PendingSidebarProps> = ({
   const total = safeProducts.length;
   const unpriced = safeProducts.filter((p) => !p?.price || String(p.price).trim() === "");
   const missingPhoto = safeProducts.filter((p) => !p?.image || String(p.image).trim() === "");
+  const ambiguousPhoto = safeProducts.filter((p) => Boolean(p?.alternativePhotos && p.alternativePhotos.length > 0));
   const missingPackaging = safeProducts.filter((p) => !p?.packaging || String(p.packaging).trim() === "");
   const expired = safeProducts.filter((p) => isDateExpired(p?.validity || ""));
   const excluded = safeProducts.filter((p) => !p?.included);
@@ -147,6 +150,35 @@ export const PendingSidebar: React.FC<PendingSidebarProps> = ({
             }`}
           >
             {missingPhoto.length}
+          </span>
+        </button>
+
+        {/* 3.1 Fotos Ambíguas (Múltiplas opções no Drive/ZIP) */}
+        <button
+          type="button"
+          onClick={() => onFilterChange("ambiguous_photo")}
+          className={`w-full min-h-[44px] px-3 py-2 rounded-lg flex items-center justify-between text-xs transition-colors border text-left focus-visible:ring-2 focus-visible:ring-indigo-600 ${
+            activeFilter === "ambiguous_photo"
+              ? "bg-indigo-700 text-white font-bold border-indigo-700 shadow-xs"
+              : ambiguousPhoto.length > 0
+              ? "bg-indigo-50 text-indigo-900 hover:bg-indigo-100 border-indigo-300 font-semibold"
+              : "bg-neutral-50 text-neutral-400 border-neutral-200"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Layers className="h-4 w-4 text-indigo-600" />
+            <span>Fotos ambíguas</span>
+          </span>
+          <span
+            className={`font-mono font-bold px-1.5 py-0.5 rounded text-[11px] ${
+              ambiguousPhoto.length > 0
+                ? activeFilter === "ambiguous_photo"
+                  ? "bg-white/20 text-white"
+                  : "bg-indigo-200 text-indigo-950"
+                : "bg-neutral-200 text-neutral-600"
+            }`}
+          >
+            {ambiguousPhoto.length}
           </span>
         </button>
 

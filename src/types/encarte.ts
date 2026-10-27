@@ -23,6 +23,16 @@ export interface EncarteProduct {
   imageScale?: number;     // Escala / zoom óptico da foto (padrão: 1.0)
   included: boolean;       // Marcado para entrar no encarte
   productUrl?: string;     // URL da página do produto (se disponível)
+  photoSource?: "drive" | "zip" | "upload" | "link" | "sample"; // Origem da foto
+  photoOriginName?: string; // Nome do arquivo de foto
+  alternativePhotos?: {
+    id: string;
+    filename: string;
+    dataUrl?: string;
+    fileId?: string;
+    isPrimary?: boolean;
+    source?: "drive" | "zip" | "upload";
+  }[];
 }
 
 export interface StoreConfig {

@@ -10,8 +10,13 @@ import {
 import {
   parseGoogleDriveUrl,
   extractPhotosFromZipBuffer,
-  scrapeFolderHtmlFiles,
 } from "./drive-service";
+import {
+  listDriveFolderFilesRecursively,
+  downloadCampaignPhotosFromDrive,
+  type DriveIndexedPhoto,
+  type DriveApiErrorCode,
+} from "./drive-api";
 import { extractProductCodeFromFilename } from "./photo-bank";
 import type { LoadedPhoto } from "./photo-bank";
 import type { EncarteProduct } from "@/types/encarte";
@@ -335,74 +340,132 @@ export const extractDrivePhotos = createServerFn({ method: "POST" })
       }
     }
 
-    // Caso 3: Pasta compartilhada no Google Drive
+    // Caso 3: Pasta compartilhada no Google Drive via Google Drive API v3
     if (linkInfo.type === "folder") {
       try {
-        const folderUrl = `https://drive.google.com/drive/folders/${linkInfo.id}`;
-        const folderRes = await fetch(folderUrl, {
-          headers: {
-            "User-Agent": UA,
-            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8",
-          },
-          signal: AbortSignal.timeout(12000),
+        const indexResult = await listDriveFolderFilesRecursively({
+          folderId: linkInfo.id,
+          knownCodes: data.knownCodes || [],
         });
 
-        if (!folderRes.ok) {
+        if (!indexResult.ok) {
           return {
             ok: false as const,
-            error: "Não foi possível acessar a pasta do Google Drive. Verifique se o link está correto e se o acesso está definido como 'Qualquer pessoa com o link'.",
+            error:
+              indexResult.errorMessage ||
+              "Não foi possível acessar a pasta do Google Drive. Verifique as permissões de acesso.",
+            errorCode: indexResult.error,
           };
         }
 
-        const html = await folderRes.text();
-        const scrapedFiles = scrapeFolderHtmlFiles(html);
+        // Determinar quais fotos baixar:
+        // Prioriza as fotos dos produtos da campanha atual (knownCodes)
+        const knownSet = new Set((data.knownCodes || []).map((c) => c.toLowerCase().trim()));
+        let itemsToDownload: typeof indexResult.indexedPhotos = [];
 
-        if (scrapedFiles.length === 0) {
-          return {
-            ok: false as const,
-            error: "Nenhuma foto de produto foi detectada automaticamente nesta pasta do Drive. Dica: você pode abrir a pasta no Google Drive, clicar em 'Fazer download' (o Drive baixa um arquivo .zip com todas as fotos) e arrastar o .zip na aba 'Arquivos do Computador'.",
-          };
+        if (knownSet.size > 0) {
+          itemsToDownload = indexResult.indexedPhotos.filter(
+            (p) => knownSet.has(p.code.toLowerCase().trim()) && p.isPrimary
+          );
+        } else {
+          // Se não há produtos na campanha ainda, baixa as primárias até um limite inicial razoável
+          itemsToDownload = indexResult.indexedPhotos.filter((p) => p.isPrimary).slice(0, 50);
         }
 
-        // Baixar thumbnails de alta resolução em paralelo
-        const photos: LoadedPhoto[] = [];
-        await pMap(
-          scrapedFiles,
-          async (file) => {
-            const thumbUrl = `https://drive.google.com/thumbnail?id=${file.id}&sz=w1000`;
-            const dataUrl = await toDataUrl(thumbUrl);
-            if (dataUrl) {
-              const extractedCode = extractProductCodeFromFilename(file.filename, data.knownCodes || []);
-              photos.push({
-                filename: file.filename,
-                dataUrl,
-                extractedCode,
-              });
-            }
-          },
-          8
-        );
+        let downloadedPhotos: LoadedPhoto[] = [];
+        let corruptFilesList: { id?: string; code?: string; name?: string; reason: string }[] = [];
 
-        if (photos.length === 0) {
-          return {
-            ok: false as const,
-            error: "Arquivos foram encontrados na pasta, mas o Google bloqueou o download direto das imagens. Recomendamos baixar o .zip da pasta no Google Drive e arrastá-lo na aba 'Arquivos do Computador'.",
-          };
+        if (itemsToDownload.length > 0) {
+          const downloadRes = await downloadCampaignPhotosFromDrive({
+            items: itemsToDownload.map((item) => ({
+              id: item.id,
+              code: item.code,
+              filename: item.name,
+              modifiedTime: item.modifiedTime,
+              isPrimary: item.isPrimary,
+            })),
+          });
+
+          downloadedPhotos = downloadRes.photos.map((p) => ({
+            filename: p.filename,
+            dataUrl: p.dataUrl,
+            extractedCode: p.code,
+          }));
+
+          corruptFilesList = downloadRes.corruptFiles.map((c) => ({
+            id: c.fileId,
+            code: c.code,
+            name: c.filename,
+            reason: c.reason,
+          }));
         }
 
         return {
           ok: true as const,
-          photos,
-          totalFound: photos.length,
+          folderName: indexResult.folder?.name || "Pasta do Google Drive",
+          photos: downloadedPhotos,
+          totalFound: downloadedPhotos.length,
+          totalImagesIndexed: indexResult.totalImages,
+          indexedPhotos: indexResult.indexedPhotos,
+          ambiguousCodes: indexResult.ambiguousCodes,
+          subfolderCount: indexResult.subfolderCount,
+          corruptFiles: corruptFilesList,
         };
-      } catch {
+      } catch (err) {
+        console.error("Erro na leitura da pasta via Drive API:", err);
         return {
           ok: false as const,
           error: "Falha na comunicação com o Google Drive ao ler a pasta. Verifique a conexão e o link.",
+          errorCode: "generic" as const,
         };
       }
     }
 
     return { ok: false as const, error: "Tipo de link não suportado." };
+  });
+
+export const indexDriveFolder = createServerFn({ method: "POST" })
+  .validator((d: { url: string; knownCodes?: string[] }) =>
+    z.object({
+      url: z.string().url().max(2000),
+      knownCodes: z.array(z.string()).optional(),
+    }).parse(d)
+  )
+  .handler(async ({ data }) => {
+    const linkInfo = parseGoogleDriveUrl(data.url.trim());
+    if (!linkInfo || linkInfo.type !== "folder") {
+      return {
+        ok: false as const,
+        error: "O link fornecido não é uma pasta válida do Google Drive.",
+        errorCode: "not_found_or_forbidden" as DriveApiErrorCode,
+      };
+    }
+
+    const result = await listDriveFolderFilesRecursively({
+      folderId: linkInfo.id,
+      knownCodes: data.knownCodes || [],
+    });
+
+    return result;
+  });
+
+export const downloadCampaignDrivePhotos = createServerFn({ method: "POST" })
+  .validator((d: { items: { id: string; code: string; filename: string; modifiedTime?: string; isPrimary?: boolean }[] }) =>
+    z.object({
+      items: z.array(
+        z.object({
+          id: z.string(),
+          code: z.string(),
+          filename: z.string(),
+          modifiedTime: z.string().optional(),
+          isPrimary: z.boolean().optional(),
+        })
+      ),
+    }).parse(d)
+  )
+  .handler(async ({ data }) => {
+    const result = await downloadCampaignPhotosFromDrive({
+      items: data.items,
+    });
+    return result;
   });

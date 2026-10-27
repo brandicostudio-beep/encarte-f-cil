@@ -516,6 +516,8 @@ function EncarteApp() {
       result = result.filter((p) => !p?.price || String(p.price).trim() === "");
     } else if (activeIssueFilter === "missing_photo") {
       result = result.filter((p) => !p?.image || String(p.image).trim() === "");
+    } else if (activeIssueFilter === "ambiguous_photo") {
+      result = result.filter((p) => Boolean(p?.alternativePhotos && p.alternativePhotos.length > 0));
     } else if (activeIssueFilter === "missing_packaging") {
       result = result.filter((p) => !p?.packaging || String(p.packaging).trim() === "");
     } else if (activeIssueFilter === "expired") {

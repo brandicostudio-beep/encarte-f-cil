@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import type { EncarteProduct, BadgeType } from "@/types/encarte";
 import { BADGE_LABELS } from "@/types/encarte";
 import { formatPrice, parsePackaging } from "@/lib/parse-product";
-import { Package, Upload, Trash2, Scissors, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { Package, Upload, Trash2, Scissors, ZoomIn, ZoomOut, RotateCcw, Layers } from "lucide-react";
 import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
 
 interface ProductEditModalProps {
@@ -232,7 +232,24 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
 
           {/* Foto do Produto */}
           <div>
-            <Label className="block mb-1.5 font-semibold">Foto do Produto</Label>
+            <div className="flex items-center justify-between mb-1.5">
+              <Label className="font-semibold">Foto do Produto</Label>
+              {form.photoSource && (
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase ${
+                    form.photoSource === "drive"
+                      ? "bg-blue-50 text-blue-700 border-blue-300"
+                      : form.photoSource === "zip"
+                      ? "bg-purple-50 text-purple-700 border-purple-300"
+                      : form.photoSource === "upload"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                      : "bg-neutral-100 text-neutral-600 border-neutral-300"
+                  }`}
+                >
+                  Origem: {form.photoSource === "drive" ? "Google Drive" : form.photoSource === "zip" ? "Arquivo .ZIP" : "Upload Local"}
+                </span>
+              )}
+            </div>
             <div className="flex items-start gap-4">
               <div className="h-20 w-20 rounded-xl border bg-neutral-50 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
                 {form.image ? (
@@ -344,6 +361,77 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                       <Scissors className="h-3.5 w-3.5 mr-1 text-indigo-600" />
                       {isTrimming ? "Recortando..." : "Recortar Bordas Brancas (Auto-Trim)"}
                     </Button>
+                  </div>
+                )}
+
+                {/* Seleção de Fotos Alternativas do Drive / ZIP para este código */}
+                {form.alternativePhotos && form.alternativePhotos.length > 0 && (
+                  <div className="pt-2 border-t mt-2 space-y-2 bg-indigo-50/60 p-3 rounded-lg border border-indigo-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-950">
+                        <Layers className="h-4 w-4 text-indigo-600" />
+                        <span>
+                          Fotos alternativas encontradas ({form.alternativePhotos.length})
+                        </span>
+                      </div>
+                      <span className="text-[10.5px] text-indigo-700">
+                        Clique para trocar a imagem ativa
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      {form.alternativePhotos.map((alt, idx) => {
+                        const isCurrent = form.image === alt.dataUrl;
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => {
+                              if (alt.dataUrl) {
+                                setForm((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        image: alt.dataUrl || "",
+                                        photoOriginName: alt.filename,
+                                        photoSource: alt.source || prev.photoSource || "drive",
+                                        imageScale: 1.0,
+                                      }
+                                    : null
+                                );
+                              }
+                            }}
+                            className={`flex items-center gap-2.5 p-2 rounded-lg border bg-white cursor-pointer transition-all ${
+                              isCurrent
+                                ? "ring-2 ring-indigo-600 border-indigo-600 bg-indigo-50/30"
+                                : "border-neutral-200 hover:border-indigo-400"
+                            }`}
+                          >
+                            <div className="h-10 w-10 rounded border bg-neutral-50 flex items-center justify-center shrink-0 overflow-hidden">
+                              {alt.dataUrl ? (
+                                <img
+                                  src={alt.dataUrl}
+                                  alt=""
+                                  className="h-full w-full object-contain p-0.5"
+                                />
+                              ) : (
+                                <Package className="h-5 w-5 text-neutral-400" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div
+                                className="font-mono text-[11px] font-bold text-neutral-900 truncate"
+                                title={alt.filename}
+                              >
+                                {alt.filename}
+                              </div>
+                              <div className="text-[10px] font-semibold text-indigo-700">
+                                {isCurrent ? "✓ Imagem em uso" : "Selecionar esta imagem"}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

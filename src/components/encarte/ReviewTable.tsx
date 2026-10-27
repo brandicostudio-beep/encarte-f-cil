@@ -11,6 +11,7 @@ import {
   Edit3,
   Trash2,
   Package,
+  Layers,
 } from "lucide-react";
 
 interface ReviewTableProps {
@@ -174,30 +175,59 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                     </div>
                   </td>
 
-                  {/* Miniatura */}
+                  {/* Miniatura com Origem */}
                   <td className="p-2 text-center align-middle">
-                    <div
-                      className="relative h-11 w-11 mx-auto rounded-lg border bg-white flex items-center justify-center overflow-hidden shadow-2xs group cursor-pointer hover:border-red-400"
-                      onClick={() => onEditProduct(p)}
-                      title={p.image ? `Clique para editar foto e proporção (${Math.round((p.imageScale || 1.0) * 100)}%)` : "Clique para adicionar foto"}
-                    >
-                      {p.image ? (
-                        <img
-                          src={p.image}
-                          alt=""
-                          style={{
-                            transform: `scale(${p.imageScale || 1.0})`,
-                            transformOrigin: "center center",
-                          }}
-                          className="h-full w-full object-contain p-0.5 transition-transform"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <Package className="h-5 w-5 text-neutral-400" />
-                      )}
-                      {p.imageScale && p.imageScale !== 1.0 && (
-                        <span className="absolute bottom-0 right-0 bg-neutral-900/80 text-[8px] font-mono font-bold text-white px-0.5 rounded-tl leading-none">
-                          {Math.round(p.imageScale * 100)}%
+                    <div className="flex flex-col items-center gap-1">
+                      <div
+                        className="relative h-11 w-11 rounded-lg border bg-white flex items-center justify-center overflow-hidden shadow-2xs group cursor-pointer hover:border-red-400"
+                        onClick={() => onEditProduct(p)}
+                        title={
+                          p.image
+                            ? `Clique para editar foto e proporção (${Math.round((p.imageScale || 1.0) * 100)}%)`
+                            : "Clique para adicionar foto"
+                        }
+                      >
+                        {p.image ? (
+                          <img
+                            src={p.image}
+                            alt=""
+                            style={{
+                              transform: `scale(${p.imageScale || 1.0})`,
+                              transformOrigin: "center center",
+                            }}
+                            className="h-full w-full object-contain p-0.5 transition-transform"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <Package className="h-5 w-5 text-neutral-400" />
+                        )}
+                        {p.imageScale && p.imageScale !== 1.0 && (
+                          <span className="absolute bottom-0 right-0 bg-neutral-900/80 text-[8px] font-mono font-bold text-white px-0.5 rounded-tl leading-none">
+                            {Math.round(p.imageScale * 100)}%
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Selo de Origem da Foto (Drive, ZIP, Upload) */}
+                      {p.photoSource && (
+                        <span
+                          className={`text-[8.5px] font-black px-1 py-0.2 rounded border uppercase tracking-tight leading-none ${
+                            p.photoSource === "drive"
+                              ? "bg-blue-50 text-blue-700 border-blue-200"
+                              : p.photoSource === "zip"
+                              ? "bg-purple-50 text-purple-700 border-purple-200"
+                              : p.photoSource === "upload"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-neutral-100 text-neutral-600 border-neutral-200"
+                          }`}
+                        >
+                          {p.photoSource === "drive"
+                            ? "Drive"
+                            : p.photoSource === "zip"
+                            ? "ZIP"
+                            : p.photoSource === "upload"
+                            ? "Upload"
+                            : p.photoSource}
                         </span>
                       )}
                     </div>
@@ -215,6 +245,19 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                         <Badge className="text-[9.5px] px-1.5 py-0 uppercase bg-yellow-400 text-black font-black border border-black/10">
                           {p.badge.toUpperCase()}
                         </Badge>
+                      )}
+
+                      {/* Foto Ambígua (Mais de uma imagem encontrada no Drive ou ZIP) */}
+                      {p.alternativePhotos && p.alternativePhotos.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => onEditProduct(p)}
+                          className="inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.2 rounded border bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 transition-colors"
+                          title={`${p.alternativePhotos.length} foto(s) alternativa(s) encontrada(s) no Drive/ZIP. Clique para escolher.`}
+                        >
+                          <Layers className="h-3 w-3 text-indigo-600" />
+                          <span>Ambígua (+{p.alternativePhotos.length} fotos)</span>
+                        </button>
                       )}
 
                       {/* Marcadores de Pendência com Ícone e Texto Explicativo (Cor nunca é o único sinal) */}

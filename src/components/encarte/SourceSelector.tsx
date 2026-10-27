@@ -4,7 +4,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { parseSpreadsheetFile, type SpreadsheetValidationResult } from "@/lib/spreadsheet-parser";
 import { processPhotoBankUpload, matchPhotosWithProducts, type LoadedPhoto } from "@/lib/photo-bank";
-import { extractDrivePhotos } from "@/lib/product.functions";
+import {
+  extractDrivePhotos,
+  indexDriveFolder,
+  downloadCampaignDrivePhotos,
+} from "@/lib/product.functions";
+import { parseGoogleDriveUrl, type DriveIndexedPhoto } from "@/lib/drive-api";
+import {
+  getCachedPhoto,
+  setCachedPhoto,
+  isPhotoCacheValid,
+} from "@/lib/drive-cache";
+import { DriveConnectorCard } from "./DriveConnectorCard";
 import type { EncarteProduct } from "@/types/encarte";
 import { DropzoneUpload } from "./DropzoneUpload";
 import { EmptyState } from "./EmptyState";
@@ -20,6 +31,7 @@ import {
   Upload,
   CloudDownload,
   CheckCircle2,
+  FolderCheck,
 } from "lucide-react";
 
 interface SourceSelectorProps {
@@ -63,6 +75,12 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
   const [driveUrl, setDriveUrl] = useState("");
   const [loadingDrivePhotos, setLoadingDrivePhotos] = useState(false);
   const [driveError, setDriveError] = useState<string | null>(null);
+  const [driveFolderName, setDriveFolderName] = useState<string | null>(null);
+  const [driveImagesCount, setDriveImagesCount] = useState<number | null>(null);
+  const [driveProgressMessage, setDriveProgressMessage] = useState<string | null>(null);
+  const [driveConnectorStatus, setDriveConnectorStatus] = useState<"not_connected" | "token_expired" | null>(null);
+  const [driveIndexedPhotos, setDriveIndexedPhotos] = useState<DriveIndexedPhoto[]>([]);
+  const [corruptDriveFiles, setCorruptDriveFiles] = useState<{ name: string; reason: string }[]>([]);
 
   // Upload e Parse da Planilha (.xlsx ou .csv)
   const handleSpreadsheetFiles = async (files: File[] | FileList) => {
@@ -84,9 +102,80 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
       if (result.validProducts.length > 0) {
         let prods = result.validProducts;
 
-        // Se já tiver fotos carregadas no banco de fotos, sincroniza
-        if (loadedPhotos.length > 0) {
-          const matchResult = matchPhotosWithProducts(loadedPhotos, prods);
+        // Se já tiver fotos indexadas do Google Drive, sincroniza e baixa para os produtos da planilha
+        if (driveIndexedPhotos.length > 0) {
+          const knownSet = new Set(prods.map((p) => p.code.toLowerCase().trim()));
+          const matchedIndexed = driveIndexedPhotos.filter((item) => knownSet.has(item.code.toLowerCase().trim()));
+
+          const photosToMatch: LoadedPhoto[] = [];
+          const itemsToDownload: { id: string; code: string; filename: string; modifiedTime?: string; isPrimary: boolean }[] = [];
+
+          for (const item of matchedIndexed) {
+            if (isPhotoCacheValid(item.code, item.id, item.modifiedTime)) {
+              const cached = getCachedPhoto(item.code);
+              if (cached?.dataUrl) {
+                photosToMatch.push({
+                  filename: item.name,
+                  dataUrl: cached.dataUrl,
+                  extractedCode: item.code,
+                  fileId: item.id,
+                  isPrimary: item.isPrimary,
+                  modifiedTime: item.modifiedTime,
+                  source: "drive",
+                });
+                continue;
+              }
+            }
+            itemsToDownload.push({
+              id: item.id,
+              code: item.code,
+              filename: item.name,
+              modifiedTime: item.modifiedTime,
+              isPrimary: item.isPrimary,
+            });
+          }
+
+          if (itemsToDownload.length > 0) {
+            try {
+              const dlRes = await downloadCampaignDrivePhotos({
+                data: { items: itemsToDownload },
+              });
+              if (dlRes.ok) {
+                for (const p of dlRes.photos) {
+                  setCachedPhoto({
+                    code: p.code,
+                    fileId: p.fileId,
+                    filename: p.filename,
+                    modifiedTime: p.modifiedTime,
+                    dataUrl: p.dataUrl,
+                    cachedAt: Date.now(),
+                  });
+                  photosToMatch.push({
+                    filename: p.filename,
+                    dataUrl: p.dataUrl,
+                    extractedCode: p.code,
+                    fileId: p.fileId,
+                    isPrimary: p.isPrimary,
+                    modifiedTime: p.modifiedTime,
+                    source: "drive",
+                  });
+                }
+              }
+            } catch (err) {
+              console.warn("Aviso ao baixar fotos do Drive para nova planilha:", err);
+            }
+          }
+
+          const allLoaded = [...loadedPhotos, ...photosToMatch];
+          setLoadedPhotos(allLoaded);
+          const matchResult = matchPhotosWithProducts(allLoaded, prods, "drive");
+          prods = matchResult.updatedProducts;
+          setUnmatchedPhotoNames(matchResult.unmatchedPhotos);
+          setPhotoBankSummary(
+            `${driveFolderName || "Google Drive"}: ${driveIndexedPhotos.length} fotos indexadas · ${matchResult.matchedCount} associadas à planilha`
+          );
+        } else if (loadedPhotos.length > 0) {
+          const matchResult = matchPhotosWithProducts(loadedPhotos, prods, "upload");
           prods = matchResult.updatedProducts;
           setUnmatchedPhotoNames(matchResult.unmatchedPhotos);
           setPhotoBankSummary(
@@ -123,7 +212,7 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
       setLoadedPhotos(photos);
 
       if (pendingProducts.length > 0) {
-        const matchResult = matchPhotosWithProducts(photos, pendingProducts);
+        const matchResult = matchPhotosWithProducts(photos, pendingProducts, "upload");
         setPendingProducts(matchResult.updatedProducts);
         setUnmatchedPhotoNames(matchResult.unmatchedPhotos);
         setPhotoBankSummary(
@@ -140,38 +229,200 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
     }
   };
 
-  // Puxar fotos do Google Drive (pasta pública ou arquivo .zip)
+  // Puxar fotos do Google Drive (pasta via Google Drive API ou arquivo .zip)
   const handleFetchDrivePhotos = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!driveUrl.trim()) return;
 
     setLoadingDrivePhotos(true);
     setDriveError(null);
+    setDriveConnectorStatus(null);
+    setDriveFolderName(null);
+    setDriveImagesCount(null);
+    setDriveProgressMessage("Conectando ao Google Drive...");
+    setCorruptDriveFiles([]);
 
     try {
-      const knownCodes = pendingProducts.map((p) => p.code);
+      const linkInfo = parseGoogleDriveUrl(driveUrl.trim());
+
+      // CASO 1: Pasta no Google Drive (leitura via API v3 com conector Lovable)
+      if (linkInfo && linkInfo.type === "folder") {
+        setDriveProgressMessage("Lendo pasta e subpastas via Google Drive API...");
+        const knownCodes = pendingProducts.map((p) => p.code);
+        const indexRes = await indexDriveFolder({
+          data: {
+            url: driveUrl.trim(),
+            knownCodes: knownCodes.length > 0 ? knownCodes : undefined,
+          },
+        });
+
+        if (!indexRes.ok) {
+          if (indexRes.errorCode === "not_connected") {
+            setDriveConnectorStatus("not_connected");
+            setDriveError(null);
+            return;
+          }
+          if (indexRes.errorCode === "token_expired") {
+            setDriveConnectorStatus("token_expired");
+            setDriveError(null);
+            return;
+          }
+          setDriveError(
+            indexRes.errorMessage ||
+              "A pasta precisa estar compartilhada com a conta conectada e a conexão precisa de permissão de leitura do Drive."
+          );
+          return;
+        }
+
+        setDriveFolderName(indexRes.folder?.name || "Pasta do Google Drive");
+        setDriveImagesCount(indexRes.totalImages);
+        setDriveIndexedPhotos(indexRes.indexedPhotos);
+
+        // Baixar apenas as fotos dos produtos da campanha atual
+        setDriveProgressMessage(
+          `Pasta '${indexRes.folder?.name}' (${indexRes.totalImages} fotos). Baixando imagens da campanha...`
+        );
+
+        const photosToMatch: LoadedPhoto[] = [];
+        const itemsToDownload: {
+          id: string;
+          code: string;
+          filename: string;
+          modifiedTime?: string;
+          isPrimary: boolean;
+        }[] = [];
+
+        const knownSet = new Set(knownCodes.map((c) => c.toLowerCase().trim()));
+        const targetIndexed =
+          knownSet.size > 0
+            ? indexRes.indexedPhotos.filter((p) => knownSet.has(p.code.toLowerCase().trim()))
+            : indexRes.indexedPhotos.filter((p) => p.isPrimary).slice(0, 50);
+
+        for (const item of targetIndexed) {
+          if (isPhotoCacheValid(item.code, item.id, item.modifiedTime)) {
+            const cached = getCachedPhoto(item.code);
+            if (cached?.dataUrl) {
+              photosToMatch.push({
+                filename: item.name,
+                dataUrl: cached.dataUrl,
+                extractedCode: item.code,
+                fileId: item.id,
+                isPrimary: item.isPrimary,
+                modifiedTime: item.modifiedTime,
+                source: "drive",
+              });
+              continue;
+            }
+          }
+          itemsToDownload.push({
+            id: item.id,
+            code: item.code,
+            filename: item.name,
+            modifiedTime: item.modifiedTime,
+            isPrimary: item.isPrimary,
+          });
+        }
+
+        if (itemsToDownload.length > 0) {
+          setDriveProgressMessage(
+            `Baixando ${itemsToDownload.length} foto(s) da campanha com files/{id}?alt=media...`
+          );
+          const dlRes = await downloadCampaignDrivePhotos({
+            data: { items: itemsToDownload },
+          });
+
+          if (dlRes.ok) {
+            for (const p of dlRes.photos) {
+              setCachedPhoto({
+                code: p.code,
+                fileId: p.fileId,
+                filename: p.filename,
+                modifiedTime: p.modifiedTime,
+                dataUrl: p.dataUrl,
+                cachedAt: Date.now(),
+              });
+              photosToMatch.push({
+                filename: p.filename,
+                dataUrl: p.dataUrl,
+                extractedCode: p.code,
+                fileId: p.fileId,
+                isPrimary: p.isPrimary,
+                modifiedTime: p.modifiedTime,
+                source: "drive",
+              });
+            }
+
+            if (dlRes.corruptFiles && dlRes.corruptFiles.length > 0) {
+              setCorruptDriveFiles(
+                dlRes.corruptFiles.map((c) => ({
+                  name: c.filename,
+                  reason: c.reason,
+                }))
+              );
+            }
+          }
+        }
+
+        setDriveProgressMessage(null);
+        const allLoaded = [...loadedPhotos, ...photosToMatch];
+        setLoadedPhotos(allLoaded);
+
+        if (pendingProducts.length > 0) {
+          const matchResult = matchPhotosWithProducts(allLoaded, pendingProducts, "drive");
+          setPendingProducts(matchResult.updatedProducts);
+          setUnmatchedPhotoNames(matchResult.unmatchedPhotos);
+          setPhotoBankSummary(
+            `Pasta '${indexRes.folder?.name}' (${indexRes.totalImages} imagens no Drive) · ${matchResult.matchedCount} associadas à campanha`
+          );
+        } else {
+          setPhotoBankSummary(
+            `Pasta '${indexRes.folder?.name}' lida com sucesso (${indexRes.totalImages} imagens indexadas no Drive)`
+          );
+          setUnmatchedPhotoNames(indexRes.indexedPhotos.map((p) => p.name));
+        }
+        return;
+      }
+
+      // CASO 2: Arquivo compartilhado no Drive ou arquivo .zip
+      setDriveProgressMessage("Baixando arquivo do Google Drive...");
       const res = await extractDrivePhotos({
         data: {
           url: driveUrl.trim(),
-          knownCodes: knownCodes.length > 0 ? knownCodes : undefined,
+          knownCodes: pendingProducts.map((p) => p.code),
         },
       });
 
       if (!res.ok) {
-        setDriveError(res.error);
+        if (res.errorCode === "not_connected") {
+          setDriveConnectorStatus("not_connected");
+          setDriveError(null);
+          return;
+        }
+        if (res.errorCode === "token_expired") {
+          setDriveConnectorStatus("token_expired");
+          setDriveError(null);
+          return;
+        }
+        setDriveError(
+          res.error ||
+            "A pasta precisa estar compartilhada com a conta conectada e a conexão precisa de permissão de leitura do Drive."
+        );
         return;
       }
 
-      const photos = res.photos || [];
+      const photos = (res.photos || []).map((p) => ({
+        ...p,
+        source: "drive" as const,
+      }));
       const allLoaded = [...loadedPhotos, ...photos];
       setLoadedPhotos(allLoaded);
 
       if (pendingProducts.length > 0) {
-        const matchResult = matchPhotosWithProducts(allLoaded, pendingProducts);
+        const matchResult = matchPhotosWithProducts(allLoaded, pendingProducts, "drive");
         setPendingProducts(matchResult.updatedProducts);
         setUnmatchedPhotoNames(matchResult.unmatchedPhotos);
         setPhotoBankSummary(
-          `${photos.length} fotos recebidas do Google Drive · ${matchResult.matchedCount} associadas aos produtos · ${matchResult.unmatchedPhotos.length} sem produto`
+          `${photos.length} fotos recebidas do Google Drive · ${matchResult.matchedCount} associadas aos produtos`
         );
       } else {
         setPhotoBankSummary(`${photos.length} fotos recebidas do Google Drive`);
@@ -180,10 +431,11 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
     } catch (err) {
       console.error("Erro ao puxar fotos do Google Drive:", err);
       setDriveError(
-        "Não foi possível ler as fotos do Google Drive. Verifique se o link está correto e se o acesso está público ('Qualquer pessoa com o link')."
+        "A pasta precisa estar compartilhada com a conta conectada e a conexão precisa de permissão de leitura do Drive."
       );
     } finally {
       setLoadingDrivePhotos(false);
+      setDriveProgressMessage(null);
     }
   };
 
@@ -513,6 +765,14 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
         {/* MODO 2: IMPORTAÇÃO POR LINK DO GOOGLE DRIVE */}
         {photoBankSource === "drive" && (
           <div className="space-y-3 bg-white p-4 rounded-xl border border-neutral-200 shadow-xs">
+            {/* Card de Conexão com o Conector Google Drive do Lovable */}
+            {driveConnectorStatus && (
+              <DriveConnectorCard
+                reason={driveConnectorStatus}
+                onSwitchToZip={() => setPhotoBankSource("upload")}
+              />
+            )}
+
             <form onSubmit={handleFetchDrivePhotos} className="space-y-3">
               <Label
                 htmlFor="drive-url"
@@ -520,7 +780,7 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
               >
                 <span>Link da Pasta ou Arquivo (.zip) no Google Drive</span>
                 <span className="text-[11px] font-semibold text-blue-600">
-                  Acesso "Qualquer pessoa com o link"
+                  Google Drive API v3 (Conector Lovable)
                 </span>
               </Label>
 
@@ -530,7 +790,7 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
                   <Input
                     id="drive-url"
                     type="url"
-                    placeholder="https://drive.google.com/drive/folders/... ou https://drive.google.com/file/d/..."
+                    placeholder="https://drive.google.com/drive/folders/... ou drive/u/0/folders/..."
                     value={driveUrl}
                     onChange={(e) => setDriveUrl(e.target.value)}
                     required
@@ -557,34 +817,88 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
               </div>
             </form>
 
-            {/* Mensagem de Erro Clara com Dica */}
+            {/* Progresso Detalhado com Nome da Pasta e Quantidade de Imagens */}
+            {loadingDrivePhotos && driveProgressMessage && (
+              <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-blue-900 space-y-1.5 animate-pulse">
+                <div className="flex items-center gap-2 font-bold text-blue-950">
+                  <div className="h-2 w-2 rounded-full bg-blue-600 animate-ping" />
+                  <span>{driveProgressMessage}</span>
+                </div>
+                {driveFolderName && (
+                  <div className="text-[11.5px] text-blue-800 flex items-center gap-2 font-mono">
+                    <FolderCheck className="h-3.5 w-3.5 text-blue-700 shrink-0" />
+                    <span>
+                      Pasta: <strong>{driveFolderName}</strong>
+                      {typeof driveImagesCount === "number" && (
+                        <> · {driveImagesCount} imagens identificadas</>
+                      )}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Pasta e Quantidade de Imagens Encontradas com Sucesso */}
+            {driveFolderName && !loadingDrivePhotos && (
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-blue-50/80 border border-blue-200 text-xs text-blue-900">
+                <FolderCheck className="h-4 w-4 text-blue-600 shrink-0" />
+                <span>
+                  Pasta: <strong>{driveFolderName}</strong>
+                </span>
+                {typeof driveImagesCount === "number" && (
+                  <span className="bg-white px-2 py-0.5 rounded border border-blue-200 font-mono text-[11px] font-bold text-blue-800">
+                    {driveImagesCount} imagens encontradas
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Alerta de Arquivos Corrompidos Pulados */}
+            {corruptDriveFiles.length > 0 && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-amber-800">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+                  Arquivos corrompidos ou ilegíveis ({corruptDriveFiles.length}):
+                </div>
+                <p className="text-[11px] text-amber-800">
+                  Estes arquivos foram pulados automaticamente e não impediram a leitura dos demais. Estão registrados na lista de pendências.
+                </p>
+                <div className="font-mono text-[10.5px] text-amber-950 max-h-16 overflow-y-auto space-y-0.5 pt-1">
+                  {corruptDriveFiles.map((c, i) => (
+                    <div key={i}>• {c.name}: {c.reason}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Mensagem de Erro Clara */}
             {driveError && (
               <div className="rounded-lg bg-red-50 border border-red-200 p-3.5 text-xs text-red-900 space-y-1">
                 <div className="flex items-center gap-1.5 font-bold text-red-800">
                   <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
-                  Não foi possível ler as fotos deste link
+                  Falha ao acessar o Google Drive
                 </div>
-                <p className="text-neutral-700">{driveError}</p>
+                <p className="text-neutral-800 leading-relaxed font-medium">{driveError}</p>
               </div>
             )}
 
             {/* Resumo de Sucesso */}
-            {photoBankSummary && (
+            {photoBankSummary && !loadingDrivePhotos && (
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-50 border border-green-200 text-xs font-bold text-green-800">
                 <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
                 <span>{photoBankSummary}</span>
               </div>
             )}
 
-            {/* Guia Visual de Ajuda do Google Drive */}
+            {/* Guia Visual de Ajuda do Google Drive mantendo o ZIP como alternativa */}
             <div className="rounded-lg bg-blue-50/70 border border-blue-200 p-3.5 text-xs text-blue-900 space-y-1.5">
               <div className="font-bold flex items-center gap-1.5 text-blue-950">
                 <span>💡 Como configurar e compartilhar as fotos no Google Drive:</span>
               </div>
               <ol className="list-decimal list-inside space-y-1 text-[11.5px] text-blue-900/90 leading-relaxed pl-1">
                 <li>No Google Drive, clique com o botão direito na pasta (ou arquivo .zip) e escolha <strong>Compartilhar &gt; Compartilhar</strong>.</li>
-                <li>Em <em>Acesso geral</em>, altere de "Restrito" para <strong>Qualquer pessoa com o link</strong> (como Leitor).</li>
-                <li>Copie o link e cole no campo acima. Os nomes das fotos devem conter o código do produto (ex: <code>24657.jpg</code> ou <code>24657_frente.png</code>).</li>
+                <li>Em <em>Acesso geral</em>, certifique-se de compartilhar com a conta conectada ou definir como <strong>Qualquer pessoa com o link</strong> (como Leitor).</li>
+                <li>Copie o link e cole no campo acima. Os nomes das fotos devem conter o código do produto (ex: <code>24657.jpg</code> ou <code>24657-1.jpg</code>).</li>
               </ol>
               <div className="pt-1 text-[11px] text-blue-800 font-semibold border-t border-blue-200/80 mt-1.5">
                 Dica alternativa: Se sua pasta corporativa for bloqueada para acesso externo, clique com o botão direito na pasta no Drive e selecione <strong>Fazer download</strong> (o Drive baixa um .zip) e envie na aba "Computador / .ZIP".

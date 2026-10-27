@@ -11,6 +11,7 @@ import {
   FileQuestion,
   FileSpreadsheet,
   Edit3,
+  Layers,
 } from "lucide-react";
 
 interface PendingIssuesPanelProps {
@@ -18,7 +19,7 @@ interface PendingIssuesPanelProps {
   unmatchedPhotos: string[];
   onOpenSpreadsheetModal: () => void;
   onEditProduct: (product: EncarteProduct) => void;
-  onFilterChange: (filter: "all" | "priced" | "unpriced" | "excluded" | "expired") => void;
+  onFilterChange: (filter: "all" | "priced" | "unpriced" | "excluded" | "expired" | "ambiguous_photo" | "missing_photo") => void;
 }
 
 export const PendingIssuesPanel: React.FC<PendingIssuesPanelProps> = ({
@@ -36,7 +37,12 @@ export const PendingIssuesPanel: React.FC<PendingIssuesPanelProps> = ({
   // 2. Produtos sem foto (usam placeholder neutro)
   const missingPhotoProducts = safeProducts.filter((p) => !p?.image || String(p.image).trim() === "");
 
-  // 3. Produtos com validade vencida
+  // 3. Produtos com fotos ambíguas (múltiplas fotos no Drive ou ZIP)
+  const ambiguousPhotoProducts = safeProducts.filter(
+    (p) => Boolean(p?.alternativePhotos && p.alternativePhotos.length > 0)
+  );
+
+  // 4. Produtos com validade vencida
   const expiredProducts = safeProducts.filter((p) => isDateExpired(p?.validity || ""));
 
   const totalIssues = unpricedProducts.length + expiredProducts.length;
@@ -62,7 +68,7 @@ export const PendingIssuesPanel: React.FC<PendingIssuesPanelProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {unpricedProducts.length > 0 && (
             <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300">
               {unpricedProducts.length} sem preço
@@ -71,6 +77,11 @@ export const PendingIssuesPanel: React.FC<PendingIssuesPanelProps> = ({
           {missingPhotoProducts.length > 0 && (
             <Badge variant="outline" className="text-xs bg-neutral-100 text-neutral-700">
               {missingPhotoProducts.length} sem foto
+            </Badge>
+          )}
+          {ambiguousPhotoProducts.length > 0 && (
+            <Badge variant="outline" className="text-xs bg-indigo-50 text-indigo-700 border-indigo-300">
+              {ambiguousPhotoProducts.length} fotos ambíguas
             </Badge>
           )}
           {expiredProducts.length > 0 && (
@@ -230,6 +241,47 @@ export const PendingIssuesPanel: React.FC<PendingIssuesPanelProps> = ({
           )}
         </div>
       </div>
+
+      {/* Alerta de Fotos Ambíguas (Múltiplas opções no Drive / ZIP) */}
+      {ambiguousPhotoProducts.length > 0 && (
+        <div className="rounded-lg bg-indigo-50/80 border border-indigo-200 p-3 text-xs text-indigo-950 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 font-bold text-indigo-900">
+              <Layers className="h-4 w-4 text-indigo-600 shrink-0" />
+              <span>
+                {ambiguousPhotoProducts.length} produto(s) com fotos ambíguas (mais de uma imagem encontrada no Drive ou ZIP):
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onFilterChange("ambiguous_photo")}
+              className="h-6 text-[10.5px] bg-white border-indigo-200 text-indigo-800 hover:bg-indigo-100"
+            >
+              Filtrar na tabela
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-0.5">
+            {ambiguousPhotoProducts.slice(0, 6).map((p) => (
+              <div
+                key={p.id}
+                onClick={() => onEditProduct(p)}
+                className="cursor-pointer flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-indigo-200 hover:border-indigo-400 hover:shadow-2xs transition-all"
+              >
+                <div className="min-w-0 pr-2">
+                  <div className="font-mono font-bold text-[11px] text-indigo-950 truncate">
+                    {p.code} - {p.name}
+                  </div>
+                  <div className="text-[10px] text-indigo-600 font-semibold">
+                    +{p.alternativePhotos?.length || 1} alternativa(s)
+                  </div>
+                </div>
+                <Edit3 className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Alerta de Fotos sem Correspondência no Banco de Fotos */}
       {unmatchedPhotos.length > 0 && (
