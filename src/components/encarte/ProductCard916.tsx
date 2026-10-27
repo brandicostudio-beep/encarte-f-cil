@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import type { EncarteProduct, StoreConfig, ProductsPerPageOption } from "@/types/encarte";
 import { isDateExpired } from "@/lib/encarte-helpers";
 import { BADGE_LABELS } from "@/types/encarte";
 import { AlertCircle, Calendar, Package } from "lucide-react";
+import { calculateOpticalScale } from "@/lib/image-normalizer";
 
 interface ProductCard916Props {
   product: EncarteProduct;
@@ -43,6 +44,24 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
   // Especificação de Embalagem e Gramatura
   const packagingText = product?.packaging ? String(product.packaging).trim() : "";
 
+  // Normalização óptica de tamanho: detecta aspecto da foto para manter garrafas estreitas
+  // e caixas/sacos na mesma proporção visual de escala (evita produtos anões e produtos gigantes)
+  const [aspectRatio, setAspectRatio] = useState<number | null>(null);
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (img.naturalWidth && img.naturalHeight) {
+      setAspectRatio(img.naturalWidth / img.naturalHeight);
+    }
+  };
+
+  const autoScale = aspectRatio ? calculateOpticalScale(aspectRatio) : 1.0;
+  const userScale =
+    typeof product.imageScale === "number" && !isNaN(product.imageScale) && product.imageScale > 0
+      ? product.imageScale
+      : 1.0;
+  const totalScale = Number((autoScale * userScale).toFixed(2));
+
   // 1. MODO HERO: Quando há apenas 1 produto na última página (ocupa o centro em destaque gigante)
   if (layoutMode === "hero") {
     return (
@@ -60,7 +79,12 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
             <img
               src={product.image}
               alt={product.name}
-              className="max-h-full max-w-full object-contain filter drop-shadow-2xl"
+              onLoad={handleImageLoad}
+              style={{
+                transform: `scale(${totalScale})`,
+                transformOrigin: "center center",
+              }}
+              className="max-h-full max-w-full object-contain filter drop-shadow-2xl transition-transform duration-200"
               crossOrigin="anonymous"
               loading="eager"
             />
@@ -204,14 +228,19 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
         </div>
       )}
 
-      {/* 1. Área da Foto: Generosa, centralizada e com sombra natural */}
+      {/* 1. Área da Foto: Generosa, centralizada, proporção normalizada e com sombra natural */}
       <div
-        className={`relative w-full flex-1 ${sizeConfig.photoHeight} flex items-center justify-center p-1 overflow-hidden`}
+        className={`relative w-full ${sizeConfig.photoHeight} flex items-center justify-center p-1 overflow-hidden shrink-0`}
       >
         {product.image ? (
           <img
             src={product.image}
             alt={product.name}
+            onLoad={handleImageLoad}
+            style={{
+              transform: `scale(${totalScale})`,
+              transformOrigin: "center center",
+            }}
             className="max-h-full max-w-full object-contain filter drop-shadow-[0_4px_8px_rgba(0,0,0,0.12)] transition-transform duration-200 hover:scale-105"
             crossOrigin="anonymous"
             loading="eager"

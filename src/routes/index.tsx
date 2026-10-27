@@ -23,6 +23,7 @@ import {
 } from "@/lib/encarte-helpers";
 import { formatPrice } from "@/lib/parse-product";
 import { DESIGN_TOKENS } from "@/lib/design-tokens";
+import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
 
 // Componentes da Interface de Alta Experiência (UX/UI)
 import { EditorStepper, type EditorStep } from "@/components/encarte/EditorStepper";
@@ -68,6 +69,7 @@ import {
   Smartphone,
   Archive,
   Upload,
+  Scale,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -293,6 +295,37 @@ function EncarteApp() {
     setSavedNotice("Campanha salva");
   };
 
+  const [isBalancingImages, setIsBalancingImages] = useState(false);
+
+  // Normalização e recorte de bordas brancas para manter todos os produtos na mesma proporção
+  const handleAutoBalanceImages = async () => {
+    setIsBalancingImages(true);
+    try {
+      const updated = await Promise.all(
+        products.map(async (prod) => {
+          if (!prod.image || prod.image.trim() === "") return prod;
+          try {
+            const res = await autoTrimImageWhitespace(prod.image);
+            if (res.wasTrimmed) {
+              return {
+                ...prod,
+                image: res.trimmedSrc,
+                imageScale: 1.0,
+              };
+            }
+          } catch {
+            // fallback silencioso
+          }
+          return prod;
+        })
+      );
+      updateProductsState(updated);
+      setSavedNotice("Proporções de todas as fotos equilibradas e bordas recortadas!");
+    } finally {
+      setIsBalancingImages(false);
+    }
+  };
+
   // Carregar produtos de qualquer origem (Planilha ou Link)
   const handleDataLoaded = (
     loaded: EncarteProduct[],
@@ -303,6 +336,27 @@ function EncarteApp() {
     setUnmatchedPhotos(unmatched);
     setCompletedSteps((prev) => new Set([...prev, "origem", "dados"]));
     setCurrentStep("precos");
+
+    // Auto-balanceia bordas brancas em segundo plano para novos produtos carregados
+    if (typeof window !== "undefined") {
+      setTimeout(async () => {
+        try {
+          const trimmed = await Promise.all(
+            loaded.map(async (prod) => {
+              if (!prod.image || prod.image.trim() === "") return prod;
+              try {
+                const res = await autoTrimImageWhitespace(prod.image);
+                if (res.wasTrimmed) {
+                  return { ...prod, image: res.trimmedSrc };
+                }
+              } catch {}
+              return prod;
+            })
+          );
+          updateProductsState(trimmed);
+        } catch {}
+      }, 100);
+    }
   };
 
   // Carregar dados de demonstração (16 produtos com codes, fotos e validade)
@@ -858,6 +912,18 @@ function EncarteApp() {
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isBalancingImages}
+                        onClick={handleAutoBalanceImages}
+                        className="min-h-[44px] text-xs font-bold text-indigo-900 bg-indigo-50 border-indigo-200 hover:bg-indigo-100"
+                        title="Normaliza o tamanho visual e recorta sobras brancas de todas as fotos para ficarem na mesma proporção"
+                      >
+                        <Scale className="h-4 w-4 mr-1.5 text-indigo-600" />
+                        {isBalancingImages ? "Equilibrando..." : "Equilibrar Proporções"}
+                      </Button>
+
                       <Button
                         size="sm"
                         variant="outline"

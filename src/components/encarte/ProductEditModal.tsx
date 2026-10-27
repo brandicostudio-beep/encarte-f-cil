@@ -13,7 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import type { EncarteProduct, BadgeType } from "@/types/encarte";
 import { BADGE_LABELS } from "@/types/encarte";
 import { formatPrice, parsePackaging } from "@/lib/parse-product";
-import { Package, Upload, Trash2 } from "lucide-react";
+import { Package, Upload, Trash2, Scissors, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
 
 interface ProductEditModalProps {
   product: EncarteProduct | null;
@@ -38,12 +39,40 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
 
   if (!form) return null;
 
+  const [isTrimming, setIsTrimming] = useState(false);
+
   const handleFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
-      setForm((prev) => (prev ? { ...prev, image: String(reader.result) } : null));
+      setForm((prev) => (prev ? { ...prev, image: String(reader.result), imageScale: 1.0 } : null));
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleTrimWhitespace = async () => {
+    if (!form?.image) return;
+    setIsTrimming(true);
+    try {
+      const res = await autoTrimImageWhitespace(form.image);
+      if (res.wasTrimmed) {
+        setForm((prev) => (prev ? { ...prev, image: res.trimmedSrc, imageScale: 1.0 } : null));
+      }
+    } finally {
+      setIsTrimming(false);
+    }
+  };
+
+  const handleScaleChange = (delta: number) => {
+    setForm((prev) => {
+      if (!prev) return null;
+      const current = typeof prev.imageScale === "number" ? prev.imageScale : 1.0;
+      const next = Math.min(2.0, Math.max(0.5, Number((current + delta).toFixed(2))));
+      return { ...prev, imageScale: next };
+    });
+  };
+
+  const handleResetScale = () => {
+    setForm((prev) => (prev ? { ...prev, imageScale: 1.0 } : null));
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -58,6 +87,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
       packagingUnit: parsedPack?.unidadeMedida,
       packagingWeight: parsedPack?.gramatura,
       price: formatPrice(form.price),
+      imageScale: typeof form.imageScale === "number" ? form.imageScale : 1.0,
     });
     onOpenChange(false);
   };
@@ -203,16 +233,20 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
           {/* Foto do Produto */}
           <div>
             <Label className="block mb-1.5 font-semibold">Foto do Produto</Label>
-            <div className="flex items-center gap-4">
-              <div className="h-16 w-16 rounded-lg border bg-neutral-100 flex items-center justify-center overflow-hidden shrink-0">
+            <div className="flex items-start gap-4">
+              <div className="h-20 w-20 rounded-xl border bg-neutral-50 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
                 {form.image ? (
                   <img
                     src={form.image}
                     alt=""
-                    className="h-full w-full object-contain p-1"
+                    style={{
+                      transform: `scale(${form.imageScale || 1.0})`,
+                      transformOrigin: "center center",
+                    }}
+                    className="h-full w-full object-contain p-1 transition-transform"
                   />
                 ) : (
-                  <Package className="h-7 w-7 text-neutral-400" />
+                  <Package className="h-8 w-8 text-neutral-400" />
                 )}
               </div>
 
@@ -223,7 +257,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                   onChange={(e) => setForm({ ...form, image: e.target.value })}
                   className="text-xs"
                 />
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium hover:bg-muted">
                     <Upload className="h-3.5 w-3.5" />
                     Enviar foto do computador
@@ -241,7 +275,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => setForm({ ...form, image: "" })}
+                      onClick={() => setForm({ ...form, image: "", imageScale: 1.0 })}
                       className="text-destructive h-8 px-2"
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-1" />
@@ -249,6 +283,69 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                     </Button>
                   )}
                 </div>
+
+                {/* Controles de Proporção e Escala da Foto */}
+                {form.image && (
+                  <div className="pt-2 border-t mt-2 flex flex-wrap items-center gap-2 bg-neutral-50 p-2.5 rounded-lg border border-neutral-200">
+                    <div className="flex items-center gap-1 mr-2">
+                      <span className="text-xs font-bold text-neutral-700">
+                        Escala / Proporção:
+                      </span>
+                      <span className="font-mono text-xs font-black text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
+                        {Math.round((form.imageScale || 1.0) * 100)}%
+                      </span>
+                    </div>
+
+                    <div className="inline-flex items-center rounded-md border bg-white shadow-2xs">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleScaleChange(-0.1)}
+                        className="h-7 px-2 text-xs"
+                        title="Diminuir tamanho da foto (-10%)"
+                      >
+                        <ZoomOut className="h-3.5 w-3.5 mr-1" />
+                        -10%
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleResetScale}
+                        className="h-7 px-2 text-xs border-x"
+                        title="Resetar para 100%"
+                      >
+                        <RotateCcw className="h-3 w-3 mr-1" />
+                        100%
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleScaleChange(0.1)}
+                        className="h-7 px-2 text-xs"
+                        title="Aumentar tamanho da foto (+10%)"
+                      >
+                        <ZoomIn className="h-3.5 w-3.5 mr-1" />
+                        +10%
+                      </Button>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isTrimming}
+                      onClick={handleTrimWhitespace}
+                      className="h-7 px-2.5 text-xs font-semibold text-indigo-700 bg-indigo-50/50 border-indigo-200 hover:bg-indigo-100"
+                      title="Remove margens brancas vazias ao redor do produto para que ele preencha a área proporcionalmente"
+                    >
+                      <Scissors className="h-3.5 w-3.5 mr-1 text-indigo-600" />
+                      {isTrimming ? "Recortando..." : "Recortar Bordas Brancas (Auto-Trim)"}
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

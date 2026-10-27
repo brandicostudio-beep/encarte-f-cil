@@ -20,6 +20,7 @@ export interface EncarteProduct {
   stock?: string;          // Estoque opcional (ex: "50 UND")
   badge: BadgeType;        // Selo opcional
   image: string;           // Data URL ou URL remota
+  imageScale?: number;     // Escala / zoom óptico da foto (padrão: 1.0)
   included: boolean;       // Marcado para entrar no encarte
   productUrl?: string;     // URL da página do produto (se disponível)
 }

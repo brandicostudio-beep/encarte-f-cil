@@ -176,16 +176,29 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
 
                   {/* Miniatura */}
                   <td className="p-2 text-center align-middle">
-                    <div className="h-11 w-11 mx-auto rounded-lg border bg-white flex items-center justify-center overflow-hidden shadow-2xs">
+                    <div
+                      className="relative h-11 w-11 mx-auto rounded-lg border bg-white flex items-center justify-center overflow-hidden shadow-2xs group cursor-pointer hover:border-red-400"
+                      onClick={() => onEditProduct(p)}
+                      title={p.image ? `Clique para editar foto e proporção (${Math.round((p.imageScale || 1.0) * 100)}%)` : "Clique para adicionar foto"}
+                    >
                       {p.image ? (
                         <img
                           src={p.image}
                           alt=""
-                          className="h-full w-full object-contain p-0.5"
+                          style={{
+                            transform: `scale(${p.imageScale || 1.0})`,
+                            transformOrigin: "center center",
+                          }}
+                          className="h-full w-full object-contain p-0.5 transition-transform"
                           loading="lazy"
                         />
                       ) : (
                         <Package className="h-5 w-5 text-neutral-400" />
+                      )}
+                      {p.imageScale && p.imageScale !== 1.0 && (
+                        <span className="absolute bottom-0 right-0 bg-neutral-900/80 text-[8px] font-mono font-bold text-white px-0.5 rounded-tl leading-none">
+                          {Math.round(p.imageScale * 100)}%
+                        </span>
                       )}
                     </div>
                   </td>

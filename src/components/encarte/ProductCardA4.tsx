@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import type { EncarteProduct, StoreConfig } from "@/types/encarte";
 import { BADGE_LABELS } from "@/types/encarte";
 import { DESIGN_TOKENS } from "@/lib/design-tokens";
 import { Package } from "lucide-react";
+import { calculateOpticalScale } from "@/lib/image-normalizer";
 
 interface ProductCardA4Props {
   product: EncarteProduct;
@@ -35,6 +36,23 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
   const codePackagingText = product?.packaging
     ? `${product?.code || "---"} · ${product.packaging}`
     : product?.code || "---";
+
+  // Normalização óptica para que garrafas estreitas e pacotes volumosos fiquem proporcionais
+  const [aspectRatio, setAspectRatio] = useState<number | null>(null);
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (img.naturalWidth && img.naturalHeight) {
+      setAspectRatio(img.naturalWidth / img.naturalHeight);
+    }
+  };
+
+  const autoScale = aspectRatio ? calculateOpticalScale(aspectRatio) : 1.0;
+  const userScale =
+    typeof product.imageScale === "number" && !isNaN(product.imageScale) && product.imageScale > 0
+      ? product.imageScale
+      : 1.0;
+  const totalScale = Number((autoScale * userScale).toFixed(2));
 
   // 1. FORMATO HERO (Última página com 1 único produto ocupando a página inteira)
   if (layoutMode === "hero") {
@@ -77,7 +95,12 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
             <img
               src={product.image}
               alt={product.name}
-              className="max-h-full max-w-full object-contain filter drop-shadow-md"
+              onLoad={handleImageLoad}
+              style={{
+                transform: `scale(${totalScale})`,
+                transformOrigin: "center center",
+              }}
+              className="max-h-full max-w-full object-contain filter drop-shadow-md transition-transform duration-200"
             />
           ) : (
             <div className="flex flex-col h-full w-full items-center justify-center rounded-2xl bg-neutral-100 p-6 text-center text-neutral-400 border-2 border-dashed border-neutral-300">
@@ -172,7 +195,12 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
             <img
               src={product.image}
               alt={product.name}
-              className="max-h-full max-w-full object-contain filter drop-shadow-2xs"
+              onLoad={handleImageLoad}
+              style={{
+                transform: `scale(${totalScale})`,
+                transformOrigin: "center center",
+              }}
+              className="max-h-full max-w-full object-contain filter drop-shadow-2xs transition-transform duration-200"
             />
           ) : (
             <div className="flex flex-col h-full w-full items-center justify-center rounded-lg bg-neutral-100 p-1 text-center text-neutral-400 border border-dashed border-neutral-300">
@@ -289,7 +317,12 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
           <img
             src={product.image}
             alt={product.name}
-            className="max-h-full max-w-full object-contain filter drop-shadow-xs"
+            onLoad={handleImageLoad}
+            style={{
+              transform: `scale(${totalScale})`,
+              transformOrigin: "center center",
+            }}
+            className="max-h-full max-w-full object-contain filter drop-shadow-xs transition-transform duration-200"
           />
         ) : (
           <div className="flex flex-col h-full w-full items-center justify-center rounded-xl bg-neutral-100 p-2 text-center text-neutral-400 border border-dashed border-neutral-300">
