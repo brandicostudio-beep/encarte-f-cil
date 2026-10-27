@@ -16,7 +16,7 @@ function findProductLd(html: string): any {
   const blocks = html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi);
   for (const b of blocks) {
     try {
-      const stack: any[] = [JSON.parse(b[1].trim())];
+      const stack: any[] = [JSON.parse((b[1] ?? "").trim())];
       while (stack.length) {
         const n = stack.pop();
         if (!n || typeof n !== "object") continue;
