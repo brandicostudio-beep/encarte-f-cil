@@ -11,16 +11,16 @@ export function isDateExpired(dateStr: string): boolean {
 
   const brMatch = clean.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (brMatch) {
-    day = parseInt(brMatch[1], 10);
-    month = parseInt(brMatch[2], 10) - 1;
-    year = parseInt(brMatch[3], 10);
+    day = parseInt(brMatch[1] ?? "0", 10);
+    month = parseInt(brMatch[2] ?? "0", 10) - 1;
+    year = parseInt(brMatch[3] ?? "0", 10);
     if (year < 100) year += 2000;
   } else {
     const isoMatch = clean.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
     if (isoMatch) {
-      year = parseInt(isoMatch[1], 10);
-      month = parseInt(isoMatch[2], 10) - 1;
-      day = parseInt(isoMatch[3], 10);
+      year = parseInt(isoMatch[1] ?? "0", 10);
+      month = parseInt(isoMatch[2] ?? "0", 10) - 1;
+      day = parseInt(isoMatch[3] ?? "0", 10);
     } else {
       return false;
     }
