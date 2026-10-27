@@ -52,6 +52,12 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
   --color-sidebar: var(--sidebar);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-price: var(--price);
+  --color-price-foreground: var(--price-foreground);
+  --font-display: "Anton", Impact, sans-serif;
+  --font-sans: "Barlow", system-ui, sans-serif;
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
@@ -62,15 +68,19 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
+  --radius: 0.5rem;
+  --background: oklch(0.975 0.012 85);
+  --brand: oklch(0.55 0.21 27);
+  --brand-foreground: oklch(0.99 0 0);
+  --price: oklch(0.88 0.18 95);
+  --price-foreground: oklch(0.2 0.02 30);
   --foreground: oklch(0.129 0.042 264.695);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.129 0.042 264.695);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
+  --primary: oklch(0.55 0.21 27);
+  --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.968 0.007 247.896);
   --secondary-foreground: oklch(0.208 0.042 265.755);
   --muted: oklch(0.968 0.007 247.896);
@@ -141,4 +151,11 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+}
+
+@media print {
+  @page { size: A4 portrait; margin: 0; }
+  body * { visibility: hidden; }
+  .flyer-print, .flyer-print * { visibility: visible; }
+  .flyer-print { position: fixed; inset: 0; width: 210mm !important; height: 297mm !important; transform: none !important; }
 }
