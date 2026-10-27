@@ -142,37 +142,68 @@ function EncarteApp() {
     image: "",
   });
 
-  // Carregar dados salvos no localStorage
+  // Carregar dados salvos no localStorage com sanitização defensiva
   useEffect(() => {
     try {
       const savedStore = localStorage.getItem("encarte-store-v2");
-      if (savedStore) setStore(JSON.parse(savedStore));
+      if (savedStore) {
+        const parsed = JSON.parse(savedStore);
+        if (parsed && typeof parsed === "object") {
+          setStore((prev) => ({ ...prev, ...parsed }));
+        }
+      }
 
       const savedCampaign = localStorage.getItem("encarte-campaign-v2");
       if (savedCampaign) {
         const parsed = JSON.parse(savedCampaign);
-        setCampaign({
-          ...DEFAULT_CAMPAIGN,
-          ...parsed,
-          format: parsed.format || "story_9_16",
-          template916Image:
-            parsed.template916Image || DEFAULT_CAMPAIGN.template916Image,
-          template916Area:
-            parsed.template916Area || DEFAULT_TEMPLATE_9_16_AREA,
-        });
+        if (parsed && typeof parsed === "object") {
+          setCampaign({
+            ...DEFAULT_CAMPAIGN,
+            ...parsed,
+            format: parsed.format === "a4" ? "a4" : "story_9_16",
+            productsPerPage: [6, 8, 9, 12].includes(Number(parsed.productsPerPage))
+              ? (Number(parsed.productsPerPage) as ProductsPerPageOption)
+              : 12,
+            template916Image:
+              parsed.template916Image || DEFAULT_CAMPAIGN.template916Image,
+            template916Area: {
+              ...DEFAULT_TEMPLATE_9_16_AREA,
+              ...(parsed.template916Area || {}),
+            },
+          });
+        }
       }
 
       const savedProds = localStorage.getItem("encarte-products-v2");
       if (savedProds) {
         const parsed = JSON.parse(savedProds);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setProducts(parsed);
+          const sanitized: EncarteProduct[] = parsed.map((p, idx) => ({
+            id: p?.id || `p-${Date.now()}-${idx}`,
+            code: String(p?.code ?? idx + 1),
+            name: String(p?.name ?? "PRODUTO SEM NOME"),
+            packaging: String(p?.packaging ?? ""),
+            packagingType: p?.packagingType || "",
+            packagingQuantity: p?.packagingQuantity || "",
+            packagingUnit: p?.packagingUnit || "",
+            packagingWeight: p?.packagingWeight || "",
+            validity: String(p?.validity ?? ""),
+            price: p?.price !== undefined && p?.price !== null ? String(p.price) : "",
+            unit: String(p?.unit || "UND"),
+            stock: String(p?.stock ?? ""),
+            badge: p?.badge || "nenhum",
+            image: String(p?.image ?? ""),
+            included: p?.included !== undefined ? Boolean(p.included) : true,
+            productUrl: p?.productUrl || "",
+          }));
+
+          setProducts(sanitized);
           setCurrentStep("precos");
           setCompletedSteps(new Set(["origem", "dados"]));
         }
       }
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.error("Aviso ao carregar localStorage:", err);
     }
   }, []);
 
@@ -350,62 +381,73 @@ function EncarteApp() {
   // Produtos que realmente entrarão no encarte (com preço e incluídos)
   const flyerProducts = useMemo(() => {
     const eligible = products.filter(
-      (p) => p.included && p.price && p.price.trim() !== ""
+      (p) => p && p.included && p.price && String(p.price).trim() !== ""
     );
 
     return eligible.sort((a, b) => {
-      if (sortBy === "code-asc") return a.code.localeCompare(b.code, undefined, { numeric: true });
-      if (sortBy === "code-desc") return b.code.localeCompare(a.code, undefined, { numeric: true });
-      if (sortBy === "name-asc") return a.name.localeCompare(b.name);
-      if (sortBy === "name-desc") return b.name.localeCompare(a.name);
+      const codeA = String(a?.code ?? "");
+      const codeB = String(b?.code ?? "");
+      const nameA = String(a?.name ?? "");
+      const nameB = String(b?.name ?? "");
+
+      if (sortBy === "code-asc") return codeA.localeCompare(codeB, undefined, { numeric: true });
+      if (sortBy === "code-desc") return codeB.localeCompare(codeA, undefined, { numeric: true });
+      if (sortBy === "name-asc") return nameA.localeCompare(nameB);
+      if (sortBy === "name-desc") return nameB.localeCompare(nameA);
       return 0;
     });
   }, [products, sortBy]);
 
   // Produtos vencidos no encarte
   const expiredInFlyer = useMemo(
-    () => flyerProducts.filter((p) => isDateExpired(p.validity)),
+    () => flyerProducts.filter((p) => isDateExpired(p?.validity || "")),
     [flyerProducts]
   );
 
   // Paginação: produtos por página (padrão 12, ajustável para 6, 8, 9, 12)
-  const perPage = campaign.productsPerPage || 12;
-  const totalPages = Math.max(1, Math.ceil(flyerProducts.length / perPage));
+  const perPage = campaign?.productsPerPage || 12;
+  const totalPages = Math.max(1, Math.ceil((flyerProducts || []).length / perPage));
 
   const pageProducts = useMemo(() => {
     const start = (currentPage - 1) * perPage;
-    return flyerProducts.slice(start, start + perPage);
+    return (flyerProducts || []).slice(start, start + perPage);
   }, [flyerProducts, currentPage, perPage]);
 
   // Lista filtrada da tabela com base no painel de pendências e busca
   const filteredProducts = useMemo(() => {
-    let result = products;
+    let result = products || [];
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter(
         (p) =>
-          p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)
+          String(p?.name ?? "").toLowerCase().includes(q) ||
+          String(p?.code ?? "").toLowerCase().includes(q)
       );
     }
 
     if (activeIssueFilter === "unpriced") {
-      result = result.filter((p) => !p.price || p.price.trim() === "");
+      result = result.filter((p) => !p?.price || String(p.price).trim() === "");
     } else if (activeIssueFilter === "missing_photo") {
-      result = result.filter((p) => !p.image || p.image.trim() === "");
+      result = result.filter((p) => !p?.image || String(p.image).trim() === "");
     } else if (activeIssueFilter === "missing_packaging") {
-      result = result.filter((p) => !p.packaging || p.packaging.trim() === "");
+      result = result.filter((p) => !p?.packaging || String(p.packaging).trim() === "");
     } else if (activeIssueFilter === "expired") {
-      result = result.filter((p) => isDateExpired(p.validity));
+      result = result.filter((p) => isDateExpired(p?.validity || ""));
     } else if (activeIssueFilter === "excluded") {
-      result = result.filter((p) => !p.included);
+      result = result.filter((p) => !p?.included);
     }
 
     return result.sort((a, b) => {
-      if (sortBy === "code-asc") return a.code.localeCompare(b.code, undefined, { numeric: true });
-      if (sortBy === "code-desc") return b.code.localeCompare(a.code, undefined, { numeric: true });
-      if (sortBy === "name-asc") return a.name.localeCompare(b.name);
-      if (sortBy === "name-desc") return b.name.localeCompare(a.name);
+      const codeA = String(a?.code ?? "");
+      const codeB = String(b?.code ?? "");
+      const nameA = String(a?.name ?? "");
+      const nameB = String(b?.name ?? "");
+
+      if (sortBy === "code-asc") return codeA.localeCompare(codeB, undefined, { numeric: true });
+      if (sortBy === "code-desc") return codeB.localeCompare(codeA, undefined, { numeric: true });
+      if (sortBy === "name-asc") return nameA.localeCompare(nameB);
+      if (sortBy === "name-desc") return nameB.localeCompare(nameA);
       return 0;
     });
   }, [products, searchQuery, activeIssueFilter, sortBy]);
@@ -413,14 +455,14 @@ function EncarteApp() {
   // Slug da campanha para nomenclatura de arquivos (ex: "encarte-validade-curta-01.png")
   const campaignSlug = useMemo(() => {
     return (
-      (campaign.title || "encarte")
+      String(campaign?.title || "encarte")
         .toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "") || "detona-precos"
     );
-  }, [campaign.title]);
+  }, [campaign?.title]);
 
   // Upload de Template 9:16 direto na etapa de campanha
   const handleTemplate916UploadInPage = (file: File) => {

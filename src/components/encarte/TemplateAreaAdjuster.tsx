@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState } from "react";
 import type { TemplateProductArea } from "@/types/encarte";
 import { DEFAULT_TEMPLATE_9_16_AREA } from "@/types/encarte";
 import { Button } from "@/components/ui/button";
@@ -25,17 +25,35 @@ export const TemplateAreaAdjuster: React.FC<TemplateAreaAdjusterProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number; origX: number; origY: number; origW: number; origH: number }>({
+
+  // Garantir que todos os valores de área existam com valores numéricos seguros
+  const safeArea: TemplateProductArea = {
+    x: typeof area?.x === "number" && !isNaN(area.x) ? area.x : DEFAULT_TEMPLATE_9_16_AREA.x,
+    y: typeof area?.y === "number" && !isNaN(area.y) ? area.y : DEFAULT_TEMPLATE_9_16_AREA.y,
+    width: typeof area?.width === "number" && !isNaN(area.width) ? area.width : DEFAULT_TEMPLATE_9_16_AREA.width,
+    height: typeof area?.height === "number" && !isNaN(area.height) ? area.height : DEFAULT_TEMPLATE_9_16_AREA.height,
+    canvasWidth: area?.canvasWidth || DEFAULT_TEMPLATE_9_16_AREA.canvasWidth,
+    canvasHeight: area?.canvasHeight || DEFAULT_TEMPLATE_9_16_AREA.canvasHeight,
+  };
+
+  const [dragStart, setDragStart] = useState<{
+    x: number;
+    y: number;
+    origX: number;
+    origY: number;
+    origW: number;
+    origH: number;
+  }>({
     x: 0,
     y: 0,
-    origX: 0,
-    origY: 0,
-    origW: 0,
-    origH: 0,
+    origX: safeArea.x,
+    origY: safeArea.y,
+    origW: safeArea.width,
+    origH: safeArea.height,
   });
 
-  const canvasW = area.canvasWidth || 1080;
-  const canvasH = area.canvasHeight || 1920;
+  const canvasW = safeArea.canvasWidth || 1080;
+  const canvasH = safeArea.canvasHeight || 1920;
 
   // Dimensões do preview em tela (proporção 9:16)
   const previewWidth = 270;
@@ -46,10 +64,10 @@ export const TemplateAreaAdjuster: React.FC<TemplateAreaAdjusterProps> = ({
   const scaleY = previewHeight / canvasH;
 
   // Coordenadas calculadas no preview
-  const rectLeft = area.x * scaleX;
-  const rectTop = area.y * scaleY;
-  const rectW = area.width * scaleX;
-  const rectH = area.height * scaleY;
+  const rectLeft = safeArea.x * scaleX;
+  const rectTop = safeArea.y * scaleY;
+  const rectW = safeArea.width * scaleX;
+  const rectH = safeArea.height * scaleY;
 
   // Iniciar Arraste de Posição
   const handlePointerDownMove = (e: React.PointerEvent) => {
@@ -58,12 +76,16 @@ export const TemplateAreaAdjuster: React.FC<TemplateAreaAdjusterProps> = ({
     setDragStart({
       x: e.clientX,
       y: e.clientY,
-      origX: area.x,
-      origY: area.y,
-      origW: area.width,
-      origH: area.height,
+      origX: safeArea.x,
+      origY: safeArea.y,
+      origW: safeArea.width,
+      origH: safeArea.height,
     });
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    try {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
   };
 
   // Iniciar Redimensionamento pelo Canto
@@ -73,12 +95,16 @@ export const TemplateAreaAdjuster: React.FC<TemplateAreaAdjusterProps> = ({
     setDragStart({
       x: e.clientX,
       y: e.clientY,
-      origX: area.x,
-      origY: area.y,
-      origW: area.width,
-      origH: area.height,
+      origX: safeArea.x,
+      origY: safeArea.y,
+      origW: safeArea.width,
+      origH: safeArea.height,
     });
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    try {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -88,18 +114,30 @@ export const TemplateAreaAdjuster: React.FC<TemplateAreaAdjusterProps> = ({
     const dy = (e.clientY - dragStart.y) / scaleY;
 
     if (isDragging) {
-      const newX = Math.max(0, Math.min(canvasW - area.width, Math.round(dragStart.origX + dx)));
-      const newY = Math.max(0, Math.min(canvasH - area.height, Math.round(dragStart.origY + dy)));
+      const newX = Math.max(
+        0,
+        Math.min(canvasW - safeArea.width, Math.round(dragStart.origX + dx))
+      );
+      const newY = Math.max(
+        0,
+        Math.min(canvasH - safeArea.height, Math.round(dragStart.origY + dy))
+      );
       onChange({
-        ...area,
+        ...safeArea,
         x: newX,
         y: newY,
       });
     } else if (isResizing) {
-      const newW = Math.max(200, Math.min(canvasW - area.x, Math.round(dragStart.origW + dx)));
-      const newH = Math.max(200, Math.min(canvasH - area.y, Math.round(dragStart.origH + dy)));
+      const newW = Math.max(
+        200,
+        Math.min(canvasW - safeArea.x, Math.round(dragStart.origW + dx))
+      );
+      const newH = Math.max(
+        200,
+        Math.min(canvasH - safeArea.y, Math.round(dragStart.origH + dy))
+      );
       onChange({
-        ...area,
+        ...safeArea,
         width: newW,
         height: newH,
       });
@@ -177,12 +215,12 @@ export const TemplateAreaAdjuster: React.FC<TemplateAreaAdjusterProps> = ({
                 <Move className="h-3 w-3" /> ÁREA BRANCA DOS PRODUTOS
               </span>
               <span>
-                {area.width} × {area.height}px
+                {safeArea.width} × {safeArea.height}px
               </span>
             </div>
 
             <div className="text-[9px] text-center text-yellow-300 font-bold bg-black/60 rounded px-1 pointer-events-none">
-              X: {area.x} · Y: {area.y}
+              X: {safeArea.x} · Y: {safeArea.y}
             </div>
 
             {/* Alça de redimensionamento no canto inferior direito */}
@@ -212,9 +250,9 @@ export const TemplateAreaAdjuster: React.FC<TemplateAreaAdjusterProps> = ({
               <Label className="text-xs text-neutral-300">Posição X (px)</Label>
               <Input
                 type="number"
-                value={area.x}
+                value={safeArea.x}
                 onChange={(e) =>
-                  onChange({ ...area, x: Number(e.target.value) || 0 })
+                  onChange({ ...safeArea, x: Number(e.target.value) || 0 })
                 }
                 className="bg-neutral-800 border-neutral-700 text-white font-mono text-sm"
               />
@@ -223,9 +261,9 @@ export const TemplateAreaAdjuster: React.FC<TemplateAreaAdjusterProps> = ({
               <Label className="text-xs text-neutral-300">Posição Y (px)</Label>
               <Input
                 type="number"
-                value={area.y}
+                value={safeArea.y}
                 onChange={(e) =>
-                  onChange({ ...area, y: Number(e.target.value) || 0 })
+                  onChange({ ...safeArea, y: Number(e.target.value) || 0 })
                 }
                 className="bg-neutral-800 border-neutral-700 text-white font-mono text-sm"
               />
@@ -234,9 +272,9 @@ export const TemplateAreaAdjuster: React.FC<TemplateAreaAdjusterProps> = ({
               <Label className="text-xs text-neutral-300">Largura (px)</Label>
               <Input
                 type="number"
-                value={area.width}
+                value={safeArea.width}
                 onChange={(e) =>
-                  onChange({ ...area, width: Number(e.target.value) || 100 })
+                  onChange({ ...safeArea, width: Number(e.target.value) || 100 })
                 }
                 className="bg-neutral-800 border-neutral-700 text-white font-mono text-sm"
               />
@@ -245,9 +283,9 @@ export const TemplateAreaAdjuster: React.FC<TemplateAreaAdjusterProps> = ({
               <Label className="text-xs text-neutral-300">Altura (px)</Label>
               <Input
                 type="number"
-                value={area.height}
+                value={safeArea.height}
                 onChange={(e) =>
-                  onChange({ ...area, height: Number(e.target.value) || 100 })
+                  onChange({ ...safeArea, height: Number(e.target.value) || 100 })
                 }
                 className="bg-neutral-800 border-neutral-700 text-white font-mono text-sm"
               />

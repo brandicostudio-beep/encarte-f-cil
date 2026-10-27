@@ -25,18 +25,23 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
   domId,
 }) => {
   const isLastPage = pageNumber === totalPages;
-  const count = products.length;
-  const perPage = campaign.productsPerPage || 12;
+  const count = (products || []).length;
+  const perPage = campaign?.productsPerPage || 12;
 
-  const area = campaign.template916Area || DEFAULT_TEMPLATE_9_16_AREA;
-  const canvasWidth = area.canvasWidth || 1080;
-  const canvasHeight = area.canvasHeight || 1920;
+  const area = campaign?.template916Area || DEFAULT_TEMPLATE_9_16_AREA;
+  const canvasWidth = area?.canvasWidth || 1080;
+  const canvasHeight = area?.canvasHeight || 1920;
+
+  const safeX = typeof area?.x === "number" ? area.x : DEFAULT_TEMPLATE_9_16_AREA.x;
+  const safeY = typeof area?.y === "number" ? area.y : DEFAULT_TEMPLATE_9_16_AREA.y;
+  const safeW = typeof area?.width === "number" ? area.width : DEFAULT_TEMPLATE_9_16_AREA.width;
+  const safeH = typeof area?.height === "number" ? area.height : DEFAULT_TEMPLATE_9_16_AREA.height;
 
   // Coordenadas percentuais para garantir escala perfeita em qualquer resolução
-  const leftPct = (area.x / canvasWidth) * 100;
-  const topPct = (area.y / canvasHeight) * 100;
-  const widthPct = (area.width / canvasWidth) * 100;
-  const heightPct = (area.height / canvasHeight) * 100;
+  const leftPct = (safeX / canvasWidth) * 100;
+  const topPct = (safeY / canvasHeight) * 100;
+  const widthPct = (safeW / canvasWidth) * 100;
+  const heightPct = (safeH / canvasHeight) * 100;
 
   // Determinar número de colunas padrão da grade
   const isThreeCols = perPage === 12 || perPage === 9;

@@ -36,11 +36,24 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: ErrorComponentProps) {
-  console.error(error);
+  console.error("TanStack Root Error:", error);
   const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
+
+  const handleClearAndReset = () => {
+    try {
+      localStorage.removeItem("encarte-products-v2");
+      localStorage.removeItem("encarte-campaign-v2");
+      localStorage.removeItem("encarte-store-v2");
+    } catch {
+      /* ignore */
+    }
+    window.location.href = "/";
+  };
+
+  const errorMessage = error instanceof Error ? error.message : String(error || "");
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -49,8 +62,15 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
           This page didn't load
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          Something went wrong on our end. You can try refreshing or reset saved data.
         </p>
+
+        {errorMessage && (
+          <div className="mt-3 p-2 rounded bg-muted/60 border text-[11px] font-mono text-muted-foreground text-left max-h-24 overflow-auto">
+            {errorMessage}
+          </div>
+        )}
+
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
@@ -60,6 +80,12 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             Try again
+          </button>
+          <button
+            onClick={handleClearAndReset}
+            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+          >
+            Resetar Dados Salvos
           </button>
           <a
             href="/"

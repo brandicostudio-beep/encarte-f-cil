@@ -21,10 +21,10 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
   store,
   layoutMode = "grid",
 }) => {
-  const isExpired = isDateExpired(product.validity);
+  const isExpired = isDateExpired(product?.validity || "");
 
   // Formatação do preço em reais e centavos destacados
-  const rawPrice = product.price ? product.price.trim() : "";
+  const rawPrice = product?.price ? String(product.price).trim() : "";
   let priceReais = "";
   let priceCents = "";
   if (rawPrice) {
@@ -35,15 +35,17 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
 
   // Linha unificada: "CÓDIGO · EMBALAGEM · GRAMATURA"
   const detailsParts: string[] = [];
-  if (product.code) detailsParts.push(product.code);
-  if (product.packaging) {
-    detailsParts.push(product.packaging);
+  if (product?.code) detailsParts.push(String(product.code));
+  if (product?.packaging) {
+    detailsParts.push(String(product.packaging));
   }
   if (
-    product.packagingWeight &&
-    !product.packaging?.toUpperCase().includes(product.packagingWeight.toUpperCase())
+    product?.packagingWeight &&
+    !String(product?.packaging || "")
+      .toUpperCase()
+      .includes(String(product.packagingWeight).toUpperCase())
   ) {
-    detailsParts.push(product.packagingWeight);
+    detailsParts.push(String(product.packagingWeight));
   }
   const codeAndPackaging = detailsParts.join(" · ");
 
