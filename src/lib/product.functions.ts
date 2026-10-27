@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { parseProductHtml, parseCategoryHtml } from "./parse-product";
+import { parseProductHtml, parseCategoryHtml, getThumbnailFallbackUrl } from "./parse-product";
 import type { EncarteProduct } from "@/types/encarte";
 
 const UA =
@@ -20,6 +20,19 @@ async function toDataUrl(url: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+async function pMap<T, R>(items: T[], fn: (item: T) => Promise<R>, concurrency = 12): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let idx = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (idx < items.length) {
+      const current = idx++;
+      results[current] = await fn(items[current]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 export const extractProduct = createServerFn({ method: "POST" })
@@ -89,15 +102,42 @@ export const extractCategoryProducts = createServerFn({ method: "POST" })
       };
     }
 
-    // Converter as imagens dos primeiros 24 produtos para Data URL se possível, para evitar problemas de CORS no canvas/PDF
-    const products: EncarteProduct[] = await Promise.all(
-      rawProducts.slice(0, 48).map(async (prod) => {
+    // Processar produtos com concorrência controlada:
+    // 1. Converter imagens para Data URL para evitar bloqueios de CORS no canvas/PDF
+    // 2. Aplicar fallback por código (ex.: Cescom agilecdn) se não houver foto válida no card
+    // 3. Deixar com imagem vazia se não houver foto válida após o fallback
+    const products: EncarteProduct[] = await pMap(
+      rawProducts,
+      async (prod) => {
+        let finalImage = "";
+
+        // 1. Se já tem imagem resolvida do card, validar e converter para Data URL
         if (prod.image && prod.image.startsWith("http")) {
           const dataUrl = await toDataUrl(prod.image);
-          if (dataUrl) return { ...prod, image: dataUrl };
+          if (dataUrl) {
+            finalImage = dataUrl;
+          }
         }
-        return prod;
-      }),
+
+        // 2. Fallback de imagem: se não houver foto válida no card (ou se falhou a conversão),
+        // tentar montar a URL da miniatura pelo código e validar que é imagem válida antes de usar
+        if (!finalImage && prod.code) {
+          const fallbackUrl = getThumbnailFallbackUrl(prod.code, u.toString());
+          if (fallbackUrl) {
+            const dataUrl = await toDataUrl(fallbackUrl);
+            if (dataUrl) {
+              finalImage = dataUrl;
+            }
+          }
+        }
+
+        // 3. Sem foto válida após o fallback: deixar com imagem vazia ("sem foto")
+        return {
+          ...prod,
+          image: finalImage,
+        };
+      },
+      12,
     );
 
     return {

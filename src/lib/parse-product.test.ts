@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { parseProductHtml, formatPrice, parseCategoryHtml } from "./parse-product";
+import { readFileSync } from "fs";
+import { join } from "path";
+import {
+  parseProductHtml,
+  formatPrice,
+  parseCategoryHtml,
+  getThumbnailFallbackUrl,
+} from "./parse-product";
 import { parseSpreadsheetPrices, isDateExpired } from "./encarte-helpers";
 
 describe("parseProductHtml", () => {
@@ -69,6 +76,83 @@ describe("parseCategoryHtml", () => {
     expect(prods[0]?.name).toBe("MOLHO DE TOMATE 300G");
     expect(prods[0]?.validity).toBe("15/12/2026");
     expect(prods[0]?.stock).toBe("150 UND");
+  });
+});
+
+describe("parseCategoryHtml with Cescom fixture", () => {
+  const fixturePath = join(__dirname, "../test/fixtures/cescom-category.html");
+  const fixtureHtml = readFileSync(fixturePath, "utf-8");
+
+  it("extracts all products from the fixture matching the page cards count", () => {
+    const prods = parseCategoryHtml(fixtureHtml, "https://www.cescom.com.br");
+    expect(prods.length).toBe(24);
+  });
+
+  it("never extracts badge/banner image ('banners/' or 'VALIDADE PRÓXIMA') as product photo", () => {
+    const prods = parseCategoryHtml(fixtureHtml, "https://www.cescom.com.br");
+    for (const p of prods) {
+      expect(p.image).not.toContain("banners/");
+      expect(p.image).not.toContain("agrupar");
+      expect(p.image).toMatch(/\.(jpg|jpeg|png|webp)/i);
+      expect(p.image).toContain("cescom.agilecdn.com.br");
+    }
+  });
+
+  it("extracts real product photo and details for 23396 (FRALDA PREMIUM MEGA XXG PERSONAL)", () => {
+    const prods = parseCategoryHtml(fixtureHtml, "https://www.cescom.com.br");
+    const p = prods.find((item) => item.code === "23396");
+    expect(p).toBeDefined();
+    expect(p?.name).toBe("FRALDA PREMIUM MEGA XXG PERSONAL");
+    expect(p?.validity).toBe("26/11/2026");
+    expect(p?.image).toContain("23396_thumb_1.jpg");
+    expect(p?.price).toBe(""); // Preço manual e vazio
+  });
+
+  it("extracts real product photo and details for 19559 (SEQUILHOS LEITE CONDENSADO BOMBISCOITO)", () => {
+    const prods = parseCategoryHtml(fixtureHtml, "https://www.cescom.com.br");
+    const p = prods.find((item) => item.code === "19559");
+    expect(p).toBeDefined();
+    expect(p?.name).toBe("SEQUILHOS LEITE CONDENSADO BOMBISCOITO");
+    expect(p?.validity).toBe("25/12/2026");
+    expect(p?.image).toContain("19559_thumb_1.jpg");
+    expect(p?.price).toBe(""); // Preço manual e vazio
+  });
+
+  it("invalidates image if assigned to multiple distinct products (duplicate prevention)", () => {
+    const htmlWithDuplicateImages = `
+      <div class="product-item">
+        <h3 class="product-title">Produto A</h3>
+        <span class="sku">Cód: 101</span>
+        <img src="https://loja.com/foto-generica.jpg" />
+      </div>
+      <div class="product-item">
+        <h3 class="product-title">Produto B</h3>
+        <span class="sku">Cód: 102</span>
+        <img src="https://loja.com/foto-generica.jpg" />
+      </div>
+      <div class="product-item">
+        <h3 class="product-title">Produto C</h3>
+        <span class="sku">Cód: 103</span>
+        <img src="https://loja.com/foto-unica.jpg" />
+      </div>
+    `;
+    const prods = parseCategoryHtml(htmlWithDuplicateImages, "https://loja.com");
+    expect(prods).toHaveLength(3);
+    // Produto A e B tinham a mesma foto genérica -> deve ter sido invalidada (vazia) para acionar fallback
+    expect(prods.find((p) => p.code === "101")?.image).toBe("");
+    expect(prods.find((p) => p.code === "102")?.image).toBe("");
+    // Produto C tinha foto única -> mantida
+    expect(prods.find((p) => p.code === "103")?.image).toBe("https://loja.com/foto-unica.jpg");
+  });
+
+  it("generates correct Cescom fallback thumbnail URL by code", () => {
+    expect(getThumbnailFallbackUrl("23396", "https://www.cescom.com.br")).toBe(
+      "https://cescom.agilecdn.com.br/23396_thumb_1.jpg",
+    );
+    expect(getThumbnailFallbackUrl("19559")).toBe(
+      "https://cescom.agilecdn.com.br/19559_thumb_1.jpg",
+    );
+    expect(getThumbnailFallbackUrl("", "https://www.cescom.com.br")).toBeNull();
   });
 });
 
