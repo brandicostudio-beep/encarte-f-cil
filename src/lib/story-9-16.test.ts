@@ -632,7 +632,7 @@ describe("Modo de Encarte 9:16 (1080 × 1920 px) com Template PNG", () => {
       expect(html).toContain("PRODUTO DE TESTE 3");
     });
 
-    it("Rodapé institucional na área preta de ~58 px renderizado em todas as páginas com dados da loja", () => {
+    it("Área inferior do Story 9:16: telefone, contato, nome da loja e endereço não são exibidos sobre o template", () => {
       const products = createMockProducts(2);
       const campaign: CampaignConfig = {
         ...DEFAULT_CAMPAIGN,
@@ -640,24 +640,33 @@ describe("Modo de Encarte 9:16 (1080 × 1920 px) com Template PNG", () => {
         productsPerPage: 10,
       };
 
+      const customStore: StoreConfig = {
+        name: "SUPERMERCADO TESTE",
+        logo: "",
+        phone: "(11) 99999-8888",
+        address: "Av. Principal, 1200 - Centro",
+        legalNotice: "",
+        primaryColor: "#dc2626",
+        accentColor: "#facc15",
+        darkColor: "#0a0a0a",
+      };
+
       const html = renderToString(
         React.createElement(StoryPage916, {
           pageNumber: 1,
           totalPages: 1,
           products,
-          store: DEFAULT_STORE,
+          store: customStore,
           campaign,
           domId: "story-page-footer",
         })
       );
 
-      // Rodapé institucional presente com dados do store
-      expect(html).toContain('data-testid="story-footer"');
-      expect(html).toContain("h-[58px]");
-      expect(html).toContain("text-white");
-      expect(html).toContain(DEFAULT_STORE.legalNotice);
-      expect(html).toContain(DEFAULT_STORE.phone);
-      expect(html).toContain(DEFAULT_STORE.address);
+      // Rodapé não renderiza telefone, endereço, contato nem nome da loja
+      expect(html).not.toContain("(11) 99999-8888");
+      expect(html).not.toContain("Av. Principal, 1200 - Centro");
+      expect(html).not.toContain("SUPERMERCADO TESTE");
+      expect(html).not.toContain("Preços válidos enquanto durarem os estoques");
     });
 
     it("Resolução de exportação suporta 1080x1920 (pixelRatio = 1) e 2160x3840 (pixelRatio = 2)", () => {

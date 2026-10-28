@@ -156,12 +156,23 @@ function EncarteApp() {
             ...DEFAULT_STORE,
             ...prev,
             ...parsed,
-            name: parsed.name || parsed.nome || DEFAULT_STORE.name,
-            logo: parsed.logo || parsed.logotipo || DEFAULT_STORE.logo,
-            address: parsed.address || parsed.endereco || DEFAULT_STORE.address,
-            phone: parsed.phone || parsed.telefone || DEFAULT_STORE.phone,
+            name:
+              parsed.name === "SUPERMERCADO BOM PREÇO"
+                ? ""
+                : parsed.name || parsed.nome || "",
+            logo: parsed.logo || parsed.logotipo || "",
+            address:
+              parsed.address === "Av. Principal, 1200 - Centro"
+                ? ""
+                : parsed.address || parsed.endereco || "",
+            phone:
+              parsed.phone === "(11) 99999-8888"
+                ? ""
+                : parsed.phone || parsed.telefone || "",
             legalNotice:
-              parsed.legalNotice || parsed.notaLegal || DEFAULT_STORE.legalNotice,
+              parsed.legalNotice?.includes("Ofertas válidas enquanto durarem os estoques")
+                ? ""
+                : parsed.legalNotice || parsed.notaLegal || "",
             primaryColor:
               parsed.primaryColor || parsed.corPrimaria || DEFAULT_STORE.primaryColor,
             accentColor:

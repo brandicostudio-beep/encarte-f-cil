@@ -488,34 +488,33 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="store-name">Nome da Loja</Label>
+                <Label htmlFor="store-name">Nome da Loja (Opcional)</Label>
                 <Input
                   id="store-name"
                   value={storeForm.name}
                   onChange={(e) => setStoreForm({ ...storeForm, name: e.target.value })}
-                  placeholder="Ex: Supermercado Popular"
-                  required
+                  placeholder="Opcional"
                 />
               </div>
 
               <div>
-                <Label htmlFor="store-phone">Telefone / WhatsApp</Label>
+                <Label htmlFor="store-phone">Telefone / WhatsApp (Opcional)</Label>
                 <Input
                   id="store-phone"
                   value={storeForm.phone}
                   onChange={(e) => setStoreForm({ ...storeForm, phone: e.target.value })}
-                  placeholder="Ex: (11) 99999-8888"
+                  placeholder="Opcional"
                 />
               </div>
             </div>
 
             <div>
-              <Label htmlFor="store-address">Endereço Completo</Label>
+              <Label htmlFor="store-address">Endereço Completo (Opcional)</Label>
               <Input
                 id="store-address"
                 value={storeForm.address}
                 onChange={(e) => setStoreForm({ ...storeForm, address: e.target.value })}
-                placeholder="Ex: Av. Brasil, 1500 - Centro"
+                placeholder="Opcional"
               />
             </div>
 
@@ -629,7 +628,7 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
 
             {/* Nota Legal */}
             <div>
-              <Label htmlFor="legal-notice">Nota Legal do Rodapé</Label>
+              <Label htmlFor="legal-notice">Nota Legal do Rodapé (Opcional)</Label>
               <Textarea
                 id="legal-notice"
                 rows={2}
@@ -637,7 +636,7 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
                 onChange={(e) =>
                   setStoreForm({ ...storeForm, legalNotice: e.target.value })
                 }
-                placeholder="Ex: Ofertas válidas enquanto durarem os estoques..."
+                placeholder="Opcional: deixe em branco se não quiser exibir texto no rodapé"
                 className="text-xs"
               />
             </div>

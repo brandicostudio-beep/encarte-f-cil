@@ -284,26 +284,21 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
         )}
       </div>
 
-      {/* 3. RODAPÉ INSTITUCIONAL (Área preta de ~58 px abaixo do painel branco, y = 1862 a 1920 px) */}
+      {/* 3. ÁREA INFERIOR: Telefone, contato, nome da loja e endereço não são exibidos */}
       <footer
         data-testid="story-footer"
-        className="absolute left-0 right-0 bottom-0 h-[58px] z-20 flex items-center justify-between px-10 text-white select-none pointer-events-none"
+        className="absolute left-0 right-0 bottom-0 h-[58px] z-20 flex items-center justify-center px-10 text-white select-none pointer-events-none"
         style={{
           boxSizing: "border-box",
         }}
       >
-        <div className="flex-1 min-w-0 pr-4">
-          <p className="font-sans text-[15px] font-semibold text-neutral-200 tracking-wide truncate uppercase">
-            {store?.legalNotice || "Preços válidos enquanto durarem os estoques. Imagens meramente ilustrativas."}
-          </p>
-        </div>
-        {(store?.phone || store?.address) && (
-          <div className="shrink-0 flex items-center gap-3 text-[15px] font-bold text-white uppercase tracking-wider">
-            {store.phone && <span>{store.phone}</span>}
-            {store.phone && store.address && <span className="text-neutral-500">•</span>}
-            {store.address && <span className="truncate max-w-[450px]">{store.address}</span>}
+        {store?.legalNotice ? (
+          <div className="flex-1 min-w-0 text-center">
+            <p className="font-sans text-[15px] font-semibold text-neutral-200 tracking-wide truncate uppercase">
+              {store.legalNotice}
+            </p>
           </div>
-        )}
+        ) : null}
       </footer>
     </div>
   );

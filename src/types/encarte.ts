@@ -83,11 +83,11 @@ export interface CampaignConfig {
 }
 
 export const DEFAULT_STORE: StoreConfig = {
-  name: "SUPERMERCADO BOM PREÇO",
+  name: "",
   logo: "",
-  address: "Av. Principal, 1200 - Centro",
-  phone: "(11) 99999-8888",
-  legalNotice: "Ofertas válidas enquanto durarem os estoques. Imagens meramente ilustrativas. Proibida venda de bebidas para menores de 18 anos.",
+  address: "",
+  phone: "",
+  legalNotice: "",
   primaryColor: "#dc2626",
   accentColor: "#facc15",
   darkColor: "#0a0a0a",
