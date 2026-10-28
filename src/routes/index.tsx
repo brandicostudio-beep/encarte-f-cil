@@ -1062,7 +1062,13 @@ function EncarteApp() {
       />
 
       {/* 3. CONTEÚDO PRINCIPAL DO EDITOR */}
-      <div className="mx-auto max-w-7xl px-4 py-6 space-y-6">
+      <div
+        className={
+          currentStep === "edicao_final"
+            ? "w-full max-w-[1920px] mx-auto px-2 sm:px-4 py-2"
+            : "mx-auto max-w-7xl px-4 py-6 space-y-6"
+        }
+      >
         {/* ETAPA 1: ESCOLHA DA ORIGEM (Quando na etapa de origem ou sem produtos) */}
         {currentStep === "origem" && (
           <SourceSelector

@@ -87,7 +87,42 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [activeElement, setActiveElement] = useState<TargetElement>("pill");
   const [scope, setScope] = useState<ChangeScope>("product");
-  const [zoom, setZoom] = useState<number>(0.42);
+  const [zoom, setZoom] = useState<number>(0.35);
+
+  const mainRef = useRef<HTMLElement>(null);
+
+  // Auto-ajuste de zoom para caber exatamente na tela sem barras de rolagem
+  const handleAutoFit = useCallback(() => {
+    if (!mainRef.current) return;
+    const clientWidth = mainRef.current.clientWidth;
+    const clientHeight = mainRef.current.clientHeight;
+
+    // Espaço disponível com margem de segurança de 32px
+    const availableW = Math.max(160, clientWidth - 32);
+    const availableH = Math.max(160, clientHeight - 32);
+
+    const fitZoomW = availableW / 1080;
+    const fitZoomH = availableH / 1920;
+
+    // Zoom que cabe perfeitamente na largura e altura
+    const bestZoom = Math.min(fitZoomW, fitZoomH);
+    const clamped = Math.max(0.18, Math.min(0.85, Number(bestZoom.toFixed(2))));
+    setZoom(clamped);
+  }, []);
+
+  // Executa auto-ajuste ao carregar e ao redimensionar a janela
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleAutoFit();
+    }, 60);
+
+    const onResize = () => handleAutoFit();
+    window.addEventListener("resize", onResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [handleAutoFit]);
 
   // Histórico de Desfazer/Refazer
   const [history, setHistory] = useState<HistoryState[]>([]);
@@ -425,9 +460,9 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setZoom(0.42)}
-              className="h-8 px-2 text-[11px] text-neutral-600 font-medium"
-              title="Ajustar zoom à tela"
+              onClick={handleAutoFit}
+              className="h-8 px-2 text-[11px] text-neutral-600 font-medium hover:text-neutral-900"
+              title="Ajustar zoom automaticamente à tela"
             >
               Ajustar
             </Button>
@@ -451,7 +486,7 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
         {/* ================================================================= */}
         <aside
           data-testid="thumbnails-sidebar"
-          className="w-56 bg-white border-r flex flex-col shrink-0 overflow-hidden"
+          className="w-44 lg:w-52 bg-white border-r flex flex-col shrink-0 overflow-hidden"
         >
           <div className="p-3 border-b bg-neutral-50/70 flex items-center justify-between">
             <span className="text-xs font-bold text-neutral-800 uppercase tracking-wider">
@@ -536,7 +571,8 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
         {/* ================================================================= */}
         <main
           data-testid="interactive-canvas"
-          className="flex-1 bg-neutral-900 flex flex-col items-center justify-center relative overflow-auto p-6"
+          ref={mainRef}
+          className="flex-1 min-w-0 bg-neutral-900 flex flex-col items-center justify-center relative overflow-auto p-4 sm:p-6"
         >
           {/* Alerta de Fontes Menores que o Mínimo */}
           {fontWarnings.length > 0 && (
@@ -548,39 +584,36 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
             </div>
           )}
 
-          {/* Dica de Teclado no rodapé do canvas */}
-          <div className="absolute bottom-3 left-6 right-6 flex items-center justify-between text-[11px] text-neutral-400 select-none pointer-events-none z-10">
-            <span>
-              💡 Clique em um produto para selecioná-lo. Use as setas do teclado para mover sutilmente dentro do box.
-            </span>
-            <span>
-              Desfazer: <kbd className="bg-neutral-800 px-1 rounded text-white">Ctrl+Z</kbd> · Refazer:{" "}
-              <kbd className="bg-neutral-800 px-1 rounded text-white">Ctrl+Y</kbd>
-            </span>
-          </div>
-
-          {/* Canvas com StoryPage916 escalada proporcionalmente */}
+          {/* Canvas com StoryPage916 escalada proporcionalmente sem estourar dimensões de layout */}
           <div
+            className="relative shrink-0 select-none my-auto transition-[width,height] duration-75"
             style={{
-              transform: `scale(${zoom})`,
-              transformOrigin: "center center",
-              width: "1080px",
-              height: "1920px",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.7)",
+              width: `${Math.round(1080 * zoom)}px`,
+              height: `${Math.round(1920 * zoom)}px`,
             }}
-            className="shrink-0 transition-transform duration-100"
           >
-            <StoryPage916
-              pageNumber={activePage}
-              totalPages={totalPages}
-              products={pageProducts}
-              store={store}
-              campaign={campaign}
-              domId={`story-page-editor-${activePage}`}
-              selectedProductId={selectedProductId}
-              onSelectProduct={(id) => setSelectedProductId(id)}
-              isInteractive={true}
-            />
+            <div
+              style={{
+                width: "1080px",
+                height: "1920px",
+                transform: `scale(${zoom})`,
+                transformOrigin: "top left",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.7)",
+              }}
+              className="absolute top-0 left-0"
+            >
+              <StoryPage916
+                pageNumber={activePage}
+                totalPages={totalPages}
+                products={pageProducts}
+                store={store}
+                campaign={campaign}
+                domId={`story-page-editor-${activePage}`}
+                selectedProductId={selectedProductId}
+                onSelectProduct={(id) => setSelectedProductId(id)}
+                isInteractive={true}
+              />
+            </div>
           </div>
         </main>
 
@@ -589,7 +622,7 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
         {/* ================================================================= */}
         <aside
           data-testid="properties-panel"
-          className="w-96 bg-white border-l flex flex-col shrink-0 overflow-hidden"
+          className="w-80 lg:w-96 bg-white border-l flex flex-col shrink-0 overflow-hidden"
         >
           {selectedProduct ? (
             <div className="flex-1 flex flex-col overflow-y-auto">
@@ -1103,6 +1136,21 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
           )}
         </aside>
       </div>
+
+      {/* BARRA DE STATUS / ATALHOS INFERIOR (FORA DO CANVAS, NUNCA SOBREPÕE OS PRODUTOS) */}
+      <footer className="h-8 bg-neutral-900 border-t border-neutral-800 px-4 flex items-center justify-between text-[11px] text-neutral-400 shrink-0 z-20 select-none">
+        <span className="flex items-center gap-1.5 truncate">
+          <span className="text-amber-400">💡</span> Clique em um produto para selecioná-lo. Use as setas do teclado para mover sutilmente dentro do box.
+        </span>
+        <div className="flex items-center gap-3 shrink-0">
+          <span>
+            Desfazer: <kbd className="bg-neutral-800 px-1.5 py-0.5 rounded text-white font-mono text-[10px] border border-neutral-700">Ctrl+Z</kbd>
+          </span>
+          <span>
+            Refazer: <kbd className="bg-neutral-800 px-1.5 py-0.5 rounded text-white font-mono text-[10px] border border-neutral-700">Ctrl+Y</kbd>
+          </span>
+        </div>
+      </footer>
     </div>
   );
 };
