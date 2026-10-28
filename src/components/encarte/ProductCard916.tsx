@@ -9,7 +9,7 @@ import type {
 import { isDateExpired } from "@/lib/encarte-helpers";
 import { BADGE_LABELS } from "@/types/encarte";
 import { deriveSaleUnit } from "@/lib/parse-product";
-import { Sparkles } from "lucide-react";
+
 
 interface ProductCard916Props {
   product: EncarteProduct;
@@ -224,7 +224,7 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
         data-testid={`product-box-${product.id || index}`}
         onClick={() => onSelect?.()}
         className={`relative w-full max-w-[840px] h-[950px] mx-auto rounded-[8px] border border-[#D9D9D9] p-8 flex flex-col justify-between text-neutral-900 select-none shadow-none transition-all ${
-          isSelected ? "ring-4 ring-blue-500 shadow-lg ring-offset-2 z-20" : ""
+          isSelected && isInteractive ? "ring-4 ring-blue-500 shadow-lg ring-offset-2 z-20" : ""
         } ${isInteractive ? "cursor-pointer hover:ring-2 hover:ring-blue-300" : ""}`}
         style={{
           boxSizing: "border-box",
@@ -235,16 +235,6 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
           transform: boxOffsetX || boxOffsetY ? `translate(${boxOffsetX}px, ${boxOffsetY}px)` : undefined,
         }}
       >
-        {/* Indicador de Personalizado */}
-        {isCustomized && (
-          <div
-            className="absolute top-2 right-2 z-30 bg-purple-600 text-white rounded-full p-1 shadow-xs flex items-center justify-center"
-            title="Produto com personalização visual aplicada"
-          >
-            <Sparkles className="h-4 w-4" />
-          </div>
-        )}
-
         {/* Selo Promocional se houver */}
         {showBadge && product.badge && product.badge !== "nenhum" && (
           <div className="absolute top-4 left-4 z-20 bg-gradient-to-r from-[#FFD400] to-[#FACC15] text-black font-bold text-xl px-5 py-1.5 rounded-lg border-2 border-black tracking-wider uppercase transform -rotate-2">
@@ -384,7 +374,7 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
       data-testid={`product-box-${product.id || index}`}
       onClick={() => onSelect?.()}
       className={`relative w-full h-full rounded-[8px] border border-[#D9D9D9] p-[12px] flex flex-col justify-between select-none shadow-none transition-all ${
-        isSelected ? "ring-4 ring-blue-500 shadow-lg ring-offset-2 z-20" : ""
+        isSelected && isInteractive ? "ring-4 ring-blue-500 shadow-lg ring-offset-2 z-20" : ""
       } ${isInteractive ? "cursor-pointer hover:ring-2 hover:ring-blue-300" : ""}`}
       style={{
         boxSizing: "border-box",
@@ -395,16 +385,6 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
         transform: boxOffsetX || boxOffsetY ? `translate(${boxOffsetX}px, ${boxOffsetY}px)` : undefined,
       }}
     >
-      {/* Indicador de Personalizado */}
-      {isCustomized && (
-        <div
-          className="absolute top-1.5 right-1.5 z-30 bg-purple-600 text-white rounded-full p-0.5 shadow-xs flex items-center justify-center"
-          title="Produto com personalização visual aplicada"
-        >
-          <Sparkles className="h-3 w-3" />
-        </div>
-      )}
-
       {/* Selo Promocional se houver */}
       {showBadge && product.badge && product.badge !== "nenhum" && (
         <div className="absolute top-1 left-1 z-10 bg-gradient-to-r from-[#FFD400] to-[#FACC15] text-black font-bold text-[11px] px-2 py-0.5 rounded shadow-2xs border border-black/20 uppercase tracking-wider transform -rotate-2">
