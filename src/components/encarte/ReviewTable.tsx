@@ -1,7 +1,7 @@
 import React, { useRef } from "react";
 import type { EncarteProduct } from "@/types/encarte";
 import { isDateExpired } from "@/lib/encarte-helpers";
-import { formatPrice } from "@/lib/parse-product";
+import { formatPrice, deriveSaleUnit } from "@/lib/parse-product";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,6 +12,7 @@ import {
   Trash2,
   Package,
   Layers,
+  Tag,
 } from "lucide-react";
 
 interface ReviewTableProps {
@@ -115,6 +116,7 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
               const hasPrice = Boolean(p?.price && String(p.price).trim() !== "");
               const hasPhoto = Boolean(p?.image && String(p.image).trim() !== "");
               const hasPackaging = Boolean(p?.packaging && String(p.packaging).trim() !== "");
+              const unitCheck = deriveSaleUnit(p?.packaging, p?.unit);
 
               // Diagnóstico de pendências com cor E texto explícito (Acessibilidade)
               const issues: { type: string; label: string; className: string }[] = [];
@@ -137,6 +139,13 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                   type: "packaging",
                   label: "Sem embalagem",
                   className: "bg-orange-100 text-orange-900 border-orange-300",
+                });
+              }
+              if (!unitCheck.hasUnitWord) {
+                issues.push({
+                  type: "unit",
+                  label: "Sem unidade",
+                  className: "bg-blue-100 text-blue-900 border-blue-300 font-semibold",
                 });
               }
               if (isExpired) {
@@ -275,6 +284,9 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                           {iss.type === "packaging" && (
                             <Package className="h-3 w-3" />
                           )}
+                          {iss.type === "unit" && (
+                            <Tag className="h-3 w-3" />
+                          )}
                           {iss.type === "expired" && (
                             <CalendarX className="h-3 w-3" />
                           )}
@@ -339,12 +351,18 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                         onChange={(e) => onPriceChange(p.id, e.target.value)}
                         onBlur={(e) => handlePriceBlur(p.id, e.target.value)}
                         onKeyDown={(e) => handlePriceKeyDown(e, idx)}
-                        className={`w-full min-h-[44px] pl-8 pr-2 text-xs font-mono font-bold rounded-lg border transition-colors focus:outline-hidden focus:ring-2 ${
+                        className={`w-full min-h-[44px] pl-8 pr-12 text-xs font-mono font-bold rounded-lg border transition-colors focus:outline-hidden focus:ring-2 ${
                           !hasPrice
                             ? "bg-amber-50/80 border-amber-400 text-amber-950 placeholder:text-amber-500 focus:ring-amber-500"
                             : "bg-white border-neutral-300 text-neutral-900 focus:ring-red-600 focus:border-red-600"
                         }`}
                       />
+                      <span
+                        className="absolute right-2 top-1/2 -translate-y-1/2 font-mono font-bold text-[10px] text-neutral-600 uppercase pointer-events-none bg-neutral-100 px-1.5 py-0.5 rounded border border-neutral-200"
+                        title={`Unidade de venda: ${unitCheck.unit}`}
+                      >
+                        {unitCheck.unit}
+                      </span>
                     </div>
                   </td>
 

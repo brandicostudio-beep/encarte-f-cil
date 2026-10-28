@@ -4,6 +4,7 @@ import { BADGE_LABELS } from "@/types/encarte";
 import { DESIGN_TOKENS } from "@/lib/design-tokens";
 import { Package } from "lucide-react";
 import { calculateOpticalScale } from "@/lib/image-normalizer";
+import { deriveSaleUnit } from "@/lib/parse-product";
 
 interface ProductCardA4Props {
   product: EncarteProduct;
@@ -22,6 +23,9 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
 
   // Preço formatado com segurança para qualquer formato (string ou número)
   const [reais, centavos] = String(product?.price || "0,00").replace(".", ",").split(",");
+
+  // Unidade de venda derivada da embalagem
+  const saleUnit = deriveSaleUnit(product?.packaging, product?.unit).unit;
 
   // Cores institucionais
   const primaryColor = store?.primaryColor || DESIGN_TOKENS.colors.primary;
@@ -146,7 +150,7 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
               ,{centavos || "00"}
             </span>
             <span className="text-base font-black text-white uppercase ml-1 tracking-wider">
-              {product.unit || "UND"}
+              {saleUnit}
             </span>
           </div>
         </div>
@@ -265,7 +269,7 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
                 ,{centavos || "00"}
               </span>
               <span className="text-[7.5pt] font-black text-white uppercase ml-0.5">
-                {product.unit || "UND"}
+                {saleUnit}
               </span>
             </div>
           </div>
@@ -390,7 +394,7 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
               ,{centavos || "00"}
             </span>
             <span className="text-[9.5pt] font-black text-white uppercase ml-0.5 tracking-wider">
-              {product.unit || "UND"}
+              {saleUnit}
             </span>
           </div>
         </div>

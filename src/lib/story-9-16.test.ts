@@ -3,6 +3,7 @@ import React from "react";
 import { renderToString } from "react-dom/server";
 import { StoryPage916 } from "@/components/encarte/StoryPage916";
 import { ProductCard916 } from "@/components/encarte/ProductCard916";
+import { deriveSaleUnit } from "@/lib/parse-product";
 import {
   DEFAULT_STORE,
   DEFAULT_CAMPAIGN,
@@ -680,6 +681,138 @@ describe("Modo de Encarte 9:16 (1080 × 1920 px) com Template PNG", () => {
 
       expect(getPixelRatio(standardResCampaign)).toBe(1);
       expect(getPixelRatio(highResCampaign)).toBe(2);
+    });
+
+    it("Unidade de venda ao lado do preço derivada da embalagem (PCT, CX, UND, etc.) e lista de pendências", () => {
+      // 1. "PACOTE" -> "PCT"
+      const p1: EncarteProduct = {
+        id: "p-pack",
+        code: "111",
+        name: "BISCOITO RECHEADO",
+        packaging: "PACOTE 1X24 UNID",
+        validity: "01/01/2027",
+        price: "4,50",
+        unit: "",
+        badge: "nenhum",
+        image: "https://example.com/img.png",
+        included: true,
+      };
+      const html1 = renderToString(React.createElement(ProductCard916, { product: p1, index: 0, store: DEFAULT_STORE }));
+      expect(html1).toContain("PCT");
+
+      // 2. "CAIXA" -> "CX"
+      const p2: EncarteProduct = {
+        ...p1,
+        packaging: "CAIXA 30X120 GR",
+      };
+      const html2 = renderToString(React.createElement(ProductCard916, { product: p2, index: 0, store: DEFAULT_STORE }));
+      expect(html2).toContain("CX");
+
+      // 3. "UNIDADE" -> "UND"
+      const p3: EncarteProduct = {
+        ...p1,
+        packaging: "UNIDADE 1X110 ML",
+      };
+      const html3 = renderToString(React.createElement(ProductCard916, { product: p3, index: 0, store: DEFAULT_STORE }));
+      expect(html3).toContain("UND");
+
+      // 4. Sem palavra de unidade ("23 GR") -> usa "UND" e flag hasUnitWord: false para pendências
+      const p4: EncarteProduct = {
+        ...p1,
+        packaging: "23 GR",
+      };
+      const derivation = deriveSaleUnit(p4.packaging);
+      expect(derivation.unit).toBe("UND");
+      expect(derivation.hasUnitWord).toBe(false); // Entra na lista de pendências!
+      const html4 = renderToString(React.createElement(ProductCard916, { product: p4, index: 0, store: DEFAULT_STORE }));
+      expect(html4).toContain("UND");
+    });
+
+    it("Box branco por produto com borda 1 px #D9D9D9, rounded-8px, padding 12px e painel cinza claro #F2F2F2", () => {
+      const tenProducts = Array.from({ length: 10 }, (_, i) => ({
+        id: `p-box-${i + 1}`,
+        code: String(20000 + i + 1),
+        name: `PRODUTO BOX ${i + 1}`,
+        packaging: "UNIDADE 1X100 GR",
+        validity: "10/10/2027",
+        price: "9,99",
+        unit: "UND",
+        badge: "nenhum" as const,
+        image: "https://example.com/img.png",
+        included: true,
+      }));
+
+      const campaign: CampaignConfig = {
+        ...DEFAULT_CAMPAIGN,
+        format: "story_9_16",
+        productsPerPage: 10,
+      };
+
+      const html = renderToString(
+        React.createElement(StoryPage916, {
+          pageNumber: 1,
+          totalPages: 1,
+          products: tenProducts,
+          store: DEFAULT_STORE,
+          campaign,
+          domId: "story-page-10-boxes",
+        })
+      );
+
+      // Painel com fundo cinza claro #F2F2F2 e margem interna de 24 px
+      expect(html).toContain("bg-[#F2F2F2]");
+      expect(html).toContain("p-[24px]");
+
+      // Boxes brancos com borda 1 px #D9D9D9, cantos 8 px, padding 12 px e sem sombra
+      expect(html).toContain("border-[#D9D9D9]");
+      expect(html).toContain("rounded-[8px]");
+      expect(html).toContain("p-[12px]");
+      expect(html).toContain("shadow-none");
+
+      // Espaço entre boxes de 12 px
+      expect(html).toContain("row-gap:12px");
+      expect(html).toContain("column-gap:12px");
+
+      // Fio separador entre código/embalagem e nome
+      expect(html).toContain("h-[1px]");
+
+      // Todos os 10 boxes presentes
+      for (let i = 1; i <= 10; i++) {
+        expect(html).toContain(`data-testid="product-box-p-box-${i}"`);
+      }
+    });
+
+    it("Última página com 1 produto gera Box Hero centralizado e ampliado com borda e proporção", () => {
+      const singleProduct: EncarteProduct = {
+        id: "p-hero-last",
+        code: "88888",
+        name: "PRODUTO HERO SOZINHO",
+        packaging: "FARDO 6X1L",
+        validity: "25/12/2027",
+        price: "49,90",
+        unit: "FD",
+        badge: "imperdivel",
+        image: "https://example.com/hero.png",
+        included: true,
+      };
+
+      const html = renderToString(
+        React.createElement(StoryPage916, {
+          pageNumber: 2,
+          totalPages: 2,
+          products: [singleProduct],
+          store: DEFAULT_STORE,
+          campaign: { ...DEFAULT_CAMPAIGN, productsPerPage: 10 },
+          domId: "story-page-hero",
+        })
+      );
+
+      // Deve renderizar o box hero com a borda e cantos arredondados de 8px
+      expect(html).toContain('data-testid="product-box-p-hero-last"');
+      expect(html).toContain("border-[#D9D9D9]");
+      expect(html).toContain("rounded-[8px]");
+      expect(html).toContain("PRODUTO HERO SOZINHO");
+      expect(html).toContain("FD");
     });
   });
 });

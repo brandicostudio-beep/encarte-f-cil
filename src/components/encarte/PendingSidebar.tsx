@@ -1,6 +1,7 @@
 import React from "react";
 import type { EncarteProduct } from "@/types/encarte";
 import { isDateExpired } from "@/lib/encarte-helpers";
+import { deriveSaleUnit } from "@/lib/parse-product";
 import {
   DollarSign,
   ImageOff,
@@ -11,6 +12,7 @@ import {
   FileSpreadsheet,
   Package,
   Layers,
+  Tag,
 } from "lucide-react";
 
 export type IssueFilter =
@@ -19,6 +21,7 @@ export type IssueFilter =
   | "missing_photo"
   | "ambiguous_photo"
   | "missing_packaging"
+  | "missing_unit"
   | "expired"
   | "excluded";
 
@@ -43,6 +46,7 @@ export const PendingSidebar: React.FC<PendingSidebarProps> = ({
   const missingPhoto = safeProducts.filter((p) => !p?.image || String(p.image).trim() === "");
   const ambiguousPhoto = safeProducts.filter((p) => Boolean(p?.alternativePhotos && p.alternativePhotos.length > 0));
   const missingPackaging = safeProducts.filter((p) => !p?.packaging || String(p.packaging).trim() === "");
+  const missingUnit = safeProducts.filter((p) => !deriveSaleUnit(p?.packaging, p?.unit).hasUnitWord);
   const expired = safeProducts.filter((p) => isDateExpired(p?.validity || ""));
   const excluded = safeProducts.filter((p) => !p?.included);
 
@@ -208,6 +212,35 @@ export const PendingSidebar: React.FC<PendingSidebarProps> = ({
             }`}
           >
             {missingPackaging.length}
+          </span>
+        </button>
+
+        {/* 5. Sem Unidade de Venda Identificada */}
+        <button
+          type="button"
+          onClick={() => onFilterChange("missing_unit")}
+          className={`w-full min-h-[44px] px-3 py-2 rounded-lg flex items-center justify-between text-xs transition-colors border text-left focus-visible:ring-2 focus-visible:ring-blue-600 ${
+            activeFilter === "missing_unit"
+              ? "bg-blue-600 text-white font-bold border-blue-600 shadow-xs"
+              : missingUnit.length > 0
+              ? "bg-blue-50 text-blue-900 hover:bg-blue-100 border-blue-300 font-semibold"
+              : "bg-neutral-50 text-neutral-400 border-neutral-200"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Tag className="h-4 w-4 text-blue-500" />
+            <span>Sem unidade</span>
+          </span>
+          <span
+            className={`font-mono font-bold px-1.5 py-0.5 rounded text-[11px] ${
+              missingUnit.length > 0
+                ? activeFilter === "missing_unit"
+                  ? "bg-white/20 text-white"
+                  : "bg-blue-200 text-blue-900"
+                : "bg-neutral-200 text-neutral-600"
+            }`}
+          >
+            {missingUnit.length}
           </span>
         </button>
 

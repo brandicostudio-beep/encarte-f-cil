@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import type { EncarteProduct, StoreConfig, ProductsPerPageOption } from "@/types/encarte";
 import { isDateExpired } from "@/lib/encarte-helpers";
 import { BADGE_LABELS } from "@/types/encarte";
+import { deriveSaleUnit } from "@/lib/parse-product";
 
 interface ProductCard916Props {
   product: EncarteProduct;
@@ -97,7 +98,8 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
     rsFontSize = isCompact ? 30 : 34;
   }
 
-  const unitLabel = (product?.unit || "UND").trim().toUpperCase();
+  // 4. Unidade de venda derivada da primeira palavra da embalagem (ex: CX, PCT, UND, FD)
+  const unitLabel = deriveSaleUnit(product?.packaging, product?.unit).unit;
 
   // 4. Validade e Estoque: se vazio, a faixa some e o espaço é redistribuído
   const validityText =
@@ -126,11 +128,10 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
       : 1.0;
   const safePhotoScale = Math.min(1.0, userScale);
 
-  // Dimensões dinâmicas do bloco da foto e altura do nome para acomodar 8 ou 10 por página
-  const photoSizePx = isCompact ? 135 : 165;
-  const nameBoxHeight = isCompact ? "h-[50px] min-h-[50px]" : "h-[62px] min-h-[62px]";
-  const headerSpacePx = isCompact ? 8 : 12;
-  const pricePillHeight = isCompact ? "h-[54px]" : "h-[62px]";
+  // Dimensões dinâmicas do bloco da foto e altura do nome para acomodar 8 ou 10 por página com padding interno de 12 px
+  const photoSizePx = isCompact ? 115 : 160;
+  const nameBoxHeight = isCompact ? "h-[48px] min-h-[48px]" : "h-[60px] min-h-[60px]";
+  const pricePillHeight = isCompact ? "h-[48px]" : "h-[58px]";
 
   // =========================================================================
   // MODO HERO: 1 Produto sozinho na última página (centralizado e ampliado)
@@ -138,7 +139,11 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
   // =========================================================================
   if (layoutMode === "hero") {
     return (
-      <div className="relative w-full max-w-[840px] h-[950px] mx-auto bg-white flex flex-col justify-between p-8 text-neutral-900 select-none">
+      <div
+        data-testid={`product-box-${product.id || index}`}
+        className="relative w-full max-w-[840px] h-[950px] mx-auto bg-white border border-[#D9D9D9] rounded-[8px] p-8 flex flex-col justify-between text-neutral-900 select-none shadow-none"
+        style={{ boxSizing: "border-box" }}
+      >
         {/* Selo Promocional se houver */}
         {product.badge && product.badge !== "nenhum" && (
           <div className="absolute top-4 left-4 z-20 bg-gradient-to-r from-[#FFD400] to-[#FACC15] text-black font-black text-xl px-5 py-1.5 rounded-lg border-2 border-black tracking-wider uppercase transform -rotate-2">
@@ -146,21 +151,22 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
           </div>
         )}
 
-        {/* Topo: Código e Embalagem + Espaço + Nome + Fio fino separador */}
+        {/* Topo: Código e Embalagem + Fio fino separador + Nome */}
         <div className="w-full text-center shrink-0">
           {headerLine && (
             <div className="font-sans font-black text-[38px] text-black uppercase tracking-wide leading-tight">
               {headerLine}
             </div>
           )}
-          <div className="h-[14px]" />
+
+          {/* Fio fino separador do cabeçalho */}
+          <div className="w-full my-3 flex items-center justify-center">
+            <div className="w-full h-[1.5px] bg-[#D9D9D9]" />
+          </div>
+
           <h2 className="font-sans font-black text-[52px] text-black uppercase tracking-tight leading-[1.1] max-w-[800px] mx-auto min-h-[110px] flex items-center justify-center">
             {nameText}
           </h2>
-          {/* Fio fino separador do cabeçalho */}
-          <div className="w-full my-4 flex items-center justify-center">
-            <div className="w-full h-[2px] bg-neutral-300" />
-          </div>
         </div>
 
         {/* Corpo: Duas Colunas (Foto à Esquerda e Preço/Validade/Estoque à Direita) */}
@@ -238,7 +244,8 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
   // =========================================================================
   return (
     <div
-      className="relative w-full h-full bg-white flex flex-col justify-between p-2 select-none"
+      data-testid={`product-box-${product.id || index}`}
+      className="relative w-full h-full bg-white border border-[#D9D9D9] rounded-[8px] p-[12px] flex flex-col justify-between select-none shadow-none"
       style={{
         boxSizing: "border-box",
       }}
@@ -255,7 +262,7 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
         {headerLine ? (
           <div
             style={{ fontSize: `${headerFontSize}px` }}
-            className="font-sans font-black text-black uppercase tracking-wide leading-tight truncate px-1"
+            className="font-sans font-black text-black uppercase tracking-wide leading-tight truncate px-0.5"
             title={headerLine}
           >
             {headerLine}
@@ -265,11 +272,13 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
         )}
       </div>
 
-      {/* Espaço de 12 a 16 px entre o cabeçalho e o nome */}
-      <div style={{ height: `${headerSpacePx}px` }} className="shrink-0" />
+      {/* Fio fino separador (1 px, cinza claro #D9D9D9) entre o código/embalagem e o nome */}
+      <div className={`w-full ${isCompact ? "my-1" : "my-1.5"} flex items-center justify-center shrink-0`}>
+        <div className="w-full h-[1px] bg-[#D9D9D9]" />
+      </div>
 
       {/* 2. NOME DO PRODUTO: Centralizado, caixa alta, negrito, até 2 linhas, altura padronizada em todos os cards */}
-      <div className={`w-full ${nameBoxHeight} flex items-center justify-center shrink-0 px-1`}>
+      <div className={`w-full ${nameBoxHeight} flex items-center justify-center shrink-0 px-0.5`}>
         <h3
           style={{
             fontSize: `${nameFontSize}px`,
@@ -282,13 +291,8 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
         </h3>
       </div>
 
-      {/* Espaço de 12 a 16 px entre o nome e o corpo + Fio fino separador (1.5 px, cinza médio) */}
-      <div className={`w-full ${isCompact ? "my-1" : "my-2"} flex items-center justify-center shrink-0`}>
-        <div className="w-full h-[1.5px] bg-neutral-300" />
-      </div>
-
       {/* 3. CORPO DO CARD: Duas Colunas com Alturas Alinhadas */}
-      <div className="w-full flex-1 flex items-center justify-between gap-3 min-h-[120px]">
+      <div className="w-full flex-1 flex items-center justify-between gap-2.5 min-h-[105px] pt-1">
         {/* Coluna Esquerda: Área quadrada fixa para foto do produto (~165×165 px, sem corte, fundo branco puro) */}
         <div
           style={{ width: `${photoSizePx}px`, minWidth: `${photoSizePx}px`, height: `${photoSizePx}px` }}

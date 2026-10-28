@@ -21,7 +21,7 @@ import {
   isDateExpired,
   getSampleProducts,
 } from "@/lib/encarte-helpers";
-import { formatPrice } from "@/lib/parse-product";
+import { formatPrice, deriveSaleUnit } from "@/lib/parse-product";
 import { DESIGN_TOKENS } from "@/lib/design-tokens";
 import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
 
@@ -541,6 +541,8 @@ function EncarteApp() {
       result = result.filter((p) => Boolean(p?.alternativePhotos && p.alternativePhotos.length > 0));
     } else if (activeIssueFilter === "missing_packaging") {
       result = result.filter((p) => !p?.packaging || String(p.packaging).trim() === "");
+    } else if (activeIssueFilter === "missing_unit") {
+      result = result.filter((p) => !deriveSaleUnit(p?.packaging, p?.unit).hasUnitWord);
     } else if (activeIssueFilter === "expired") {
       result = result.filter((p) => isDateExpired(p?.validity || ""));
     } else if (activeIssueFilter === "excluded") {

@@ -45,6 +45,103 @@ export function formatPrice(raw: string | number | undefined | null): string {
   return n.toFixed(2).replace(".", ",");
 }
 
+export interface DerivedSaleUnit {
+  unit: string;
+  hasUnitWord: boolean;
+}
+
+/**
+ * Deriva a unidade de venda a partir da primeira palavra da embalagem do produto.
+ * Mapeamento pela primeira palavra da embalagem:
+ * - UNIDADE ou UNID → UND
+ * - CAIXA ou CX → CX
+ * - PACOTE ou PCT → PCT
+ * - Outras palavras (ex.: FARDO, BALDE, SACHÊ, BANDEJA, POTE, GARRAFA, LATA): usa a própria palavra abreviada em caixa alta.
+ * Exemplos:
+ * - "CAIXA 30X120 GR" → CX
+ * - "PACOTE 1X24 UNID" → PCT
+ * - "UNIDADE 1X110 ML" → UND
+ * - "UNIDADE 1X1,01 KG" → UND
+ * Se a embalagem não tiver palavra de unidade (ex.: "23 GR", "500G", "1X24"):
+ * - Retorna unit: "UND" e hasUnitWord: false (para inclusão automática na lista de pendências).
+ * Se explicitUnit for fornecido e editado pelo usuário, respeita a escolha manual.
+ */
+export function deriveSaleUnit(
+  packaging?: string | null,
+  explicitUnit?: string | null
+): DerivedSaleUnit {
+  const cleanPack = (packaging || "").trim();
+  const manualUnit = (explicitUnit || "").trim().toUpperCase();
+
+  if (!cleanPack) {
+    return {
+      unit: manualUnit || "UND",
+      hasUnitWord: false,
+    };
+  }
+
+  // Remove parênteses, colchetes ou caracteres iniciais, ex: "(PACOTE 1) 1X24 UNID" -> "PACOTE"
+  const stripped = cleanPack.replace(/^[([{\s]+/, "").trim();
+  const firstWord = stripped.split(/[\s\-_/()[\]{}!?:;,.]+/)[0]?.toUpperCase() || "";
+
+  // Se a primeira palavra começar com dígito (ex.: "23", "23GR", "1X24", "500G", "1,01"),
+  // a embalagem NÃO possui palavra de unidade identificada
+  if (!firstWord || /^\d/.test(firstWord)) {
+    return {
+      unit: manualUnit && manualUnit !== "UND" ? manualUnit : "UND",
+      hasUnitWord: false,
+    };
+  }
+
+  // Mapeamentos específicos por regra:
+  if (/^UNID(ADE)?$|^UN$|^UND$/.test(firstWord)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "UND", hasUnitWord: true };
+  }
+  if (/^CAIXA$|^CXA?$|^CX$/.test(firstWord)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "CX", hasUnitWord: true };
+  }
+  if (/^PACOTE$|^PCTE?$|^PC$|^PCT$/.test(firstWord)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "PCT", hasUnitWord: true };
+  }
+
+  // Abreviações padrão para outras palavras de embalagem:
+  if (/^FARDO$|^FD$/.test(firstWord)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "FD", hasUnitWord: true };
+  }
+  if (/^BALDE$|^BLD$/.test(firstWord)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "BLD", hasUnitWord: true };
+  }
+  if (/^SACH[EÊ]$|^SCH$/.test(firstWord)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "SCH", hasUnitWord: true };
+  }
+  if (/^BANDEJA$|^BDJ$/.test(firstWord)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "BDJ", hasUnitWord: true };
+  }
+  if (/^POTE$|^PT$/.test(firstWord)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "PT", hasUnitWord: true };
+  }
+  if (/^GARRAFA$|^GF$|^GRF$/.test(firstWord)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "GF", hasUnitWord: true };
+  }
+  if (/^LATA$|^LT$/.test(firstWord)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "LT", hasUnitWord: true };
+  }
+  if (/^DISPLAY$|^DISP$|^DP$/.test(firstWord)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "DSP", hasUnitWord: true };
+  }
+
+  // Caso seja uma palavra descritiva qualquer (ex: "VIDRO" -> "VDR", "TUBO" -> "TUBO"):
+  if (manualUnit && manualUnit !== "UND") {
+    return { unit: manualUnit, hasUnitWord: true };
+  }
+
+  const abbreviated = firstWord.length <= 4 ? firstWord : firstWord.slice(0, 3);
+  return {
+    unit: abbreviated,
+    hasUnitWord: true,
+  };
+}
+
 export interface ParsedPackaging {
   tipo: PackagingType;
   quantidade: string;
@@ -384,7 +481,7 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
       packagingWeight: raw.packagingWeight,
       validity,
       price: raw.price ? formatPrice(raw.price) : "", // Regra de negócio: preço manual e vazio no início
-      unit: packaging.toLowerCase().includes("kg") ? "KG" : "UND",
+      unit: deriveSaleUnit(packaging).unit,
       stock: raw.stock ? `${raw.stock} UND` : "",
       badge: "nenhum",
       image: resolvedImg,

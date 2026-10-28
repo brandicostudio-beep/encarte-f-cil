@@ -27,12 +27,13 @@ interface StoryPage916Props {
 export function checkPageTextFit(products: EncarteProduct[]): { fitsTen: boolean; reason?: string } {
   for (const p of products) {
     const name = (p.name || "").trim();
-    // Em 480 px de largura de texto a 30 px font, 2 linhas comportam ~60 a 65 caracteres.
+    // Em box de 476 px de largura com padding de 12 px (largura útil ~452 px):
+    // A 30 px font, 2 linhas comportam até ~50 caracteres.
     // Acima disso, demandaria 3 linhas ou fonte menor que 30 px.
-    if (name.length > 65) {
+    if (name.length > 50) {
       return {
         fitsTen: false,
-        reason: `Produto "${name.slice(0, 24)}..." possui nome longo que requer mais espaço para manter a fonte mínima de 30 px.`,
+        reason: `Produto "${name.slice(0, 24)}..." possui nome longo (${name.length} caracteres). Layout ajustado para 8 produtos (2×4) para manter a fonte mínima de 30 px sem cortes.`,
       };
     }
   }
@@ -85,27 +86,27 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
   const gridStyles = {
     10: {
       gapX: "12px",
-      gapY: "5px",
-      cardWidthStyle: "calc((100% - 12px) / 2)",
-      rowHeightStyle: "calc((100% - 20px) / 5)",
+      gapY: "12px",
+      cardWidthStyle: "calc((100% - 12px) / 2)", // exatamente ~476 px
+      rowHeightStyle: "calc((100% - 48px) / 5)", // exatamente ~221 px
     },
     8: {
       gapX: "12px",
-      gapY: "8px",
-      cardWidthStyle: "calc((100% - 12px) / 2)",
-      rowHeightStyle: "calc((100% - 24px) / 4)",
+      gapY: "12px",
+      cardWidthStyle: "calc((100% - 12px) / 2)", // exatamente ~476 px
+      rowHeightStyle: "calc((100% - 36px) / 4)", // exatamente ~280 px
     },
     6: {
       gapX: "12px",
-      gapY: "10px",
-      cardWidthStyle: "calc((100% - 12px) / 2)",
-      rowHeightStyle: "calc((100% - 20px) / 3)",
+      gapY: "12px",
+      cardWidthStyle: "calc((100% - 12px) / 2)", // exatamente ~476 px
+      rowHeightStyle: "calc((100% - 24px) / 3)", // exatamente ~376 px
     },
     9: {
       gapX: "12px",
-      gapY: "8px",
+      gapY: "12px",
       cardWidthStyle: "calc((100% - 24px) / 3)",
-      rowHeightStyle: "calc((100% - 16px) / 3)",
+      rowHeightStyle: "calc((100% - 24px) / 3)",
     },
     12: {
       gapX: "10px",
@@ -115,9 +116,9 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
     },
   }[effectivePerPage] || {
     gapX: "12px",
-    gapY: "5px",
+    gapY: "12px",
     cardWidthStyle: "calc((100% - 12px) / 2)",
-    rowHeightStyle: "calc((100% - 20px) / 5)",
+    rowHeightStyle: "calc((100% - 48px) / 5)",
   };
 
   // Particiona a lista de produtos em linhas
@@ -148,10 +149,10 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
         crossOrigin="anonymous"
       />
 
-      {/* 2. ÁREA BRANCA DOS PRODUTOS (x 46 a 1057 e y 661 a 1862) com margem interna de 24 px */}
+      {/* 2. ÁREA DOS PRODUTOS (x 46 a 1057 e y 661 a 1862) com margem interna de 24 px e fundo cinza claro #F2F2F2 */}
       <div
         data-testid="product-white-area"
-        className="absolute rounded-[36px] overflow-hidden flex flex-col justify-center z-10 bg-white p-[24px]"
+        className="absolute rounded-[36px] overflow-hidden flex flex-col justify-center z-10 bg-[#F2F2F2] p-[24px]"
         style={{
           left: `${leftPct}%`,
           top: `${topPct}%`,

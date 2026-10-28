@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { EncarteProduct, BadgeType } from "@/types/encarte";
 import { BADGE_LABELS } from "@/types/encarte";
-import { formatPrice, parsePackaging } from "@/lib/parse-product";
+import { formatPrice, parsePackaging, deriveSaleUnit } from "@/lib/parse-product";
 import { Package, Upload, Trash2, Scissors, ZoomIn, ZoomOut, RotateCcw, Layers } from "lucide-react";
 import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
 
@@ -30,7 +30,14 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
   onSave,
 }) => {
   const [form, setForm] = useState<EncarteProduct | null>(() =>
-    product ? { ...product } : null
+    product
+      ? {
+          ...product,
+          unit: product.unit
+            ? product.unit.trim().toUpperCase()
+            : deriveSaleUnit(product.packaging).unit,
+        }
+      : null
   );
   const [isTrimming, setIsTrimming] = useState(false);
   const [prevProduct, setPrevProduct] = useState<EncarteProduct | null>(product);
@@ -39,12 +46,26 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
   // mantendo rigorosamente a mesma contagem e ordem de hooks em todas as renderizações
   if (product !== prevProduct) {
     setPrevProduct(product);
-    setForm(product ? { ...product } : null);
+    setForm(
+      product
+        ? {
+            ...product,
+            unit: product.unit
+              ? product.unit.trim().toUpperCase()
+              : deriveSaleUnit(product.packaging).unit,
+          }
+        : null
+    );
   }
 
   useEffect(() => {
     if (product) {
-      setForm({ ...product });
+      setForm({
+        ...product,
+        unit: product.unit
+          ? product.unit.trim().toUpperCase()
+          : deriveSaleUnit(product.packaging).unit,
+      });
     }
   }, [product]);
 
@@ -146,7 +167,15 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               <Input
                 id="packaging"
                 value={form.packaging || ""}
-                onChange={(e) => setForm({ ...form, packaging: e.target.value })}
+                onChange={(e) => {
+                  const newPack = e.target.value;
+                  const suggested = deriveSaleUnit(newPack).unit;
+                  setForm({
+                    ...form,
+                    packaging: newPack,
+                    unit: form.unit && form.unit !== "UND" ? form.unit : suggested,
+                  });
+                }}
                 placeholder="Ex: 1X10 GR ou 500G"
               />
             </div>
@@ -179,13 +208,16 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               />
             </div>
             <div>
-              <Label htmlFor="unit">Unidade</Label>
+              <Label htmlFor="unit">Unidade de Venda</Label>
               <Input
                 id="unit"
                 value={form.unit || ""}
                 onChange={(e) => setForm({ ...form, unit: e.target.value.toUpperCase() })}
-                placeholder="UND ou KG"
+                placeholder="Ex: UND, CX, PCT"
               />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Sugerido pela embalagem ({deriveSaleUnit(form.packaging).unit}). Pode ser corrigido manualmente.
+              </p>
             </div>
           </div>
 
