@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { getClientSession, clearClientSession } from "@/lib/auth-constants";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { extractCategoryProducts } from "@/lib/product.functions";
@@ -75,6 +76,7 @@ import {
   Scale,
   Trash2,
   AlertCircle,
+  LogOut,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -94,7 +96,44 @@ export const Route = createFileRoute("/")({
 type SortOption = "code-asc" | "code-desc" | "name-asc" | "name-desc";
 
 function EncarteApp() {
+  const navigate = useNavigate();
   const extractCategory = useServerFn(extractCategoryProducts);
+
+  // Verificação de Acesso Restrito Interno
+  const [isAuthVerified, setIsAuthVerified] = useState<boolean>(false);
+
+  useEffect(() => {
+    const session = getClientSession();
+    if (!session) {
+      setIsAuthVerified(false);
+      navigate({
+        to: "/acesso",
+        search: { redirect: window.location.pathname + window.location.search },
+      });
+      return;
+    }
+    setIsAuthVerified(true);
+
+    // Verificação periódica de expiração de sessão (ex: 12 horas)
+    const checkTimer = setInterval(() => {
+      const active = getClientSession();
+      if (!active) {
+        setIsAuthVerified(false);
+        navigate({
+          to: "/acesso",
+          search: { redirect: window.location.pathname + window.location.search },
+        });
+      }
+    }, 15 * 1000);
+
+    return () => clearInterval(checkTimer);
+  }, [navigate]);
+
+  const handleLogout = () => {
+    // Encerra a sessão sem apagar os produtos e configurações salvas do encarte
+    clearClientSession();
+    navigate({ to: "/acesso" });
+  };
 
   // FLUXO DE ETAPAS (Origem, Dados, Preços, Campanha, Exportar)
   const [currentStep, setCurrentStep] = useState<EditorStep>("origem");
@@ -938,6 +977,23 @@ function EncarteApp() {
 
   const handleExportZip = () => confirmOrExecuteExport(executeExportZipAllPages);
 
+  // Proteção rígida: quem não entrar não vê nenhuma tela do sistema
+  if (!isAuthVerified) {
+    return (
+      <div
+        data-testid="auth-loading-screen"
+        className="min-h-screen bg-[#0D0D0D] flex items-center justify-center select-none"
+      >
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-3 border-[#FFD400] border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs text-neutral-400 font-semibold tracking-wide">
+            Verificando acesso restrito...
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-neutral-100/90 font-sans text-neutral-900 pb-20">
       {/* 1. TOPO: Barra da Aplicação */}
@@ -977,6 +1033,18 @@ function EncarteApp() {
             >
               <Store className="h-4 w-4 mr-1.5 text-[#FFD400]" />
               Configurar Loja & Cores
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="min-h-[44px] bg-neutral-900 text-neutral-300 border-neutral-700 hover:bg-neutral-800 hover:text-red-400 text-xs font-semibold"
+              title="Encerrar sessão de acesso"
+              data-testid="logout-button"
+            >
+              <LogOut className="h-4 w-4 mr-1.5 text-neutral-400" />
+              Sair
             </Button>
           </div>
         </div>
