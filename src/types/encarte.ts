@@ -23,7 +23,7 @@ export interface EncarteProduct {
   imageScale?: number;     // Escala / zoom óptico da foto (padrão: 1.0)
   included: boolean;       // Marcado para entrar no encarte
   productUrl?: string;     // URL da página do produto (se disponível)
-  photoSource?: "drive" | "zip" | "upload" | "link" | "sample"; // Origem da foto
+  photoSource?: "drive" | "zip" | "upload" | "link" | "sample" | "folder"; // Origem da foto
   photoOriginName?: string; // Nome do arquivo de foto
   alternativePhotos?: {
     id: string;
@@ -31,7 +31,7 @@ export interface EncarteProduct {
     dataUrl?: string;
     fileId?: string;
     isPrimary?: boolean;
-    source?: "drive" | "zip" | "upload";
+    source?: "drive" | "zip" | "upload" | "folder";
   }[];
 }
 
@@ -79,6 +79,7 @@ export interface CampaignConfig {
   template916Image: string; // PNG/JPG do template completo
   template916Area: TemplateProductArea;
   exportResolution916?: "1080x1920" | "2160x3840";
+  blockExportWithoutPhoto?: boolean; // Padrão: false (se marcado, bloqueia exportação se houver produto sem foto)
 }
 
 export const DEFAULT_STORE: StoreConfig = {
@@ -103,6 +104,7 @@ export const DEFAULT_CAMPAIGN: CampaignConfig = {
   template916Image: "/templates/template-detona-precos-9-16.png",
   template916Area: DEFAULT_TEMPLATE_9_16_AREA,
   exportResolution916: "1080x1920",
+  blockExportWithoutPhoto: false,
 };
 
 export const BADGE_LABELS: Record<BadgeType, string> = {

@@ -461,6 +461,22 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
                 />
               </div>
             </div>
+
+            <div className="flex items-center space-x-2 pt-2 border-t mt-2">
+              <Checkbox
+                id="modal-block-export-photo"
+                checked={campForm.blockExportWithoutPhoto || false}
+                onCheckedChange={(checked) =>
+                  setCampForm((prev) => ({
+                    ...prev,
+                    blockExportWithoutPhoto: Boolean(checked),
+                  }))
+                }
+              />
+              <Label htmlFor="modal-block-export-photo" className="text-xs cursor-pointer font-medium text-neutral-800">
+                Bloquear exportação se houver produto sem foto (por padrão desmarcado: exibe "SEM FOTO")
+              </Label>
+            </div>
           </div>
 
           {/* Seção 3: Dados da Loja */}

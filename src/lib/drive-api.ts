@@ -141,6 +141,8 @@ export function parsePhotoCodeAndSuffix(
 
       if (cleanBase.toLowerCase().startsWith(c.toLowerCase())) {
         const remainder = cleanBase.slice(c.length);
+        const delim = remainder.match(/^([-_ ]|\()/);
+        if (!delim) continue;
         const numericMatch = remainder.match(/^[-_ ]?\(?(\d+)\)?$/);
         if (numericMatch) {
           const num = parseInt(numericMatch[1] ?? "0", 10);
@@ -153,7 +155,7 @@ export function parsePhotoCodeAndSuffix(
 
   // 2. Extração heurística para arquivos sem knownCodes prévios:
   // "24657-1" -> code: "24657", num: 1
-  const heuristicMatch = cleanBase.match(/^([a-zA-Z0-9]+)(?:[-_ ]?\(?(\d+)\)?|[-_ ](.+))?$/);
+  const heuristicMatch = cleanBase.match(/^([a-zA-Z0-9]+)(?:(?:[-_ ]|\()(\d+)\)?|[-_ ](.+))?$/);
   if (heuristicMatch) {
     const code = heuristicMatch[1] ?? "";
     if (heuristicMatch[2]) {

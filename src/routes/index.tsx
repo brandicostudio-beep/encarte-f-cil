@@ -125,6 +125,7 @@ function EncarteApp() {
   const [addManualOpen, setAddManualOpen] = useState(false);
   const [expiredWarningOpen, setExpiredWarningOpen] = useState(false);
   const [unpricedModalOpen, setUnpricedModalOpen] = useState(false);
+  const [missingPhotoModalOpen, setMissingPhotoModalOpen] = useState(false);
   const [pendingExportAction, setPendingExportAction] = useState<
     (() => void) | null
   >(null);
@@ -374,6 +375,16 @@ function EncarteApp() {
     }
   };
 
+  // Atualizar fotos dos produtos da campanha via Pasta do Computador ou Banco de Fotos
+  const handleUpdateProductsPhotos = (
+    updated: EncarteProduct[],
+    unmatched: string[]
+  ) => {
+    setUnmatchedPhotos(unmatched);
+    updateProductsState(updated);
+    setSavedNotice("Fotos da pasta do computador atualizadas com sucesso!");
+  };
+
   // Carregar dados de demonstração (16 produtos com codes, fotos e validade)
   const handleLoadSample = () => {
     const samples = getSampleProducts();
@@ -508,6 +519,12 @@ function EncarteApp() {
   // Produtos incluídos sem preço cadastrado (bloqueiam a exportação)
   const unpricedIncluded = useMemo(
     () => (products || []).filter((p) => p && p.included && (!p.price || String(p.price).trim() === "")),
+    [products]
+  );
+
+  // Produtos incluídos sem foto (bloqueiam a exportação se campaign.blockExportWithoutPhoto estiver ativo)
+  const missingPhotoIncluded = useMemo(
+    () => (products || []).filter((p) => p && p.included && (!p.image || String(p.image).trim() === "")),
     [products]
   );
 
@@ -662,8 +679,18 @@ function EncarteApp() {
     return true;
   };
 
+  // Validação opcional: bloqueia exportação se houver produto sem foto e a opção estiver ativada
+  const checkMissingPhotoBeforeExport = (): boolean => {
+    if (campaign?.blockExportWithoutPhoto && missingPhotoIncluded.length > 0) {
+      setMissingPhotoModalOpen(true);
+      return false;
+    }
+    return true;
+  };
+
   const handleExportPdf = () => {
     if (!checkUnpricedBeforeExport()) return;
+    if (!checkMissingPhotoBeforeExport()) return;
     if (flyerProducts.length === 0) {
       alert("Nenhum produto com preço está marcado para entrar no encarte.");
       return;
@@ -716,6 +743,7 @@ function EncarteApp() {
 
   const handleExportPng = () => {
     if (!checkUnpricedBeforeExport()) return;
+    if (!checkMissingPhotoBeforeExport()) return;
     if (flyerProducts.length === 0) {
       alert("Nenhum produto com preço está marcado para entrar no encarte.");
       return;
@@ -780,6 +808,7 @@ function EncarteApp() {
 
   const handleExportZip = () => {
     if (!checkUnpricedBeforeExport()) return;
+    if (!checkMissingPhotoBeforeExport()) return;
     if (flyerProducts.length === 0) {
       alert("Nenhum produto com preço está marcado para entrar no encarte.");
       return;
@@ -844,7 +873,9 @@ function EncarteApp() {
             onExtractCategoryUrl={handleExtractCategoryUrl}
             onLoadSample={handleLoadSample}
             hasExistingProducts={products.length > 0}
+            existingProducts={products}
             onReset={handleResetEncarte}
+            onUpdateExistingProductsPhotos={handleUpdateProductsPhotos}
           />
         )}
 
@@ -1225,6 +1256,31 @@ function EncarteApp() {
                       )}
                     </div>
                   )}
+
+                  {/* Opção de Bloqueio de Exportação por Foto Pendente */}
+                  <div className="rounded-lg border p-4 bg-white shadow-2xs space-y-2">
+                    <div className="text-xs font-bold text-neutral-900">
+                      Regras de Exportação e Validação:
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="block-export-photo-toggle"
+                        checked={campaign.blockExportWithoutPhoto || false}
+                        onCheckedChange={(checked) =>
+                          saveCampaignConfig({
+                            ...campaign,
+                            blockExportWithoutPhoto: Boolean(checked),
+                          })
+                        }
+                      />
+                      <Label
+                        htmlFor="block-export-photo-toggle"
+                        className="text-xs cursor-pointer text-neutral-800 font-medium"
+                      >
+                        Bloquear exportação se houver produto sem foto (por padrão desmarcado: itens sem foto exibem o quadro "SEM FOTO")
+                      </Label>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1844,6 +1900,72 @@ function EncarteApp() {
               }}
             >
               Preencher Preços Agora
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 7. Bloqueio de Exportação por Foto Vazia (Opcional, ativo via checkbox) */}
+      <Dialog open={missingPhotoModalOpen} onOpenChange={setMissingPhotoModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-amber-700 font-bold flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+              Exportação Bloqueada: Fotos Pendentes
+            </DialogTitle>
+            <DialogDescription className="text-xs text-neutral-600 pt-1">
+              Existem <strong>{missingPhotoIncluded.length} produto(s)</strong> no encarte sem foto. Como a opção de bloquear exportação sem foto está ativada, adicione fotos aos produtos ou desmarque essa opção para exportar com o quadro padrão "SEM FOTO".
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 rounded-lg border bg-neutral-50 text-xs">
+            {missingPhotoIncluded.map((p) => (
+              <div
+                key={p.id}
+                className="flex items-center justify-between p-1.5 bg-white rounded border border-neutral-200"
+              >
+                <div className="min-w-0 pr-2">
+                  <span className="font-mono font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1 rounded text-[11px] mr-1.5">
+                    {p.code}
+                  </span>
+                  <span className="font-bold text-neutral-900 uppercase truncate">
+                    {p.name}
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold text-neutral-600 bg-neutral-100 border border-neutral-300 px-1.5 py-0.5 rounded shrink-0">
+                  Sem foto
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setMissingPhotoModalOpen(false);
+                setCurrentStep("precos");
+                setActiveIssueFilter("missing_photo");
+              }}
+            >
+              Revisar Fotos
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
+              onClick={() => {
+                setMissingPhotoModalOpen(false);
+                saveCampaignConfig({ ...campaign, blockExportWithoutPhoto: false });
+                if (pendingExportAction) {
+                  pendingExportAction();
+                  setPendingExportAction(null);
+                }
+              }}
+            >
+              Desmarcar Bloqueio e Exportar
             </Button>
           </DialogFooter>
         </DialogContent>
