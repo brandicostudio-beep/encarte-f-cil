@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +29,11 @@ import {
   type LocalFolderLoadProgress,
   type LocalFolderCrossingResult,
 } from "@/lib/local-folder-service";
+import {
+  generateWindowsSearchBatches,
+  copyQueryToClipboard,
+  type WindowsSearchExtension,
+} from "@/lib/windows-search-helper";
 import { DriveConnectorCard } from "./DriveConnectorCard";
 import type { EncarteProduct } from "@/types/encarte";
 import { DropzoneUpload } from "./DropzoneUpload";
@@ -52,6 +57,11 @@ import {
   ChevronDown,
   ChevronUp,
   XCircle,
+  Search,
+  Copy,
+  Check,
+  Terminal,
+  FileArchive,
 } from "lucide-react";
 
 interface SourceSelectorProps {
@@ -95,7 +105,20 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
   const [loadedPhotos, setLoadedPhotos] = useState<LoadedPhoto[]>([]);
   const [photoBankSummary, setPhotoBankSummary] = useState<string | null>(null);
   const [unmatchedPhotoNames, setUnmatchedPhotoNames] = useState<string[]>([]);
-  const [photoBankSource, setPhotoBankSource] = useState<"folder" | "upload" | "drive">("folder");
+  const [photoBankSource, setPhotoBankSource] = useState<"folder" | "upload" | "windows_search" | "drive">("folder");
+
+  // Estados do Gerador de Busca para o Windows Explorer (AQS)
+  const [searchExtension, setSearchExtension] = useState<WindowsSearchExtension>("png");
+  const [searchBatchSize, setSearchBatchSize] = useState<number>(30);
+  const [copiedBatchIndex, setCopiedBatchIndex] = useState<number | null>(null);
+  const [batchExpectedCounts, setBatchExpectedCounts] = useState<{ [batchIndex: number]: number }>({});
+  const [zipDiscrepancyWarning, setZipDiscrepancyWarning] = useState<string | null>(null);
+  const [zipCrossingSummary, setZipCrossingSummary] = useState<{
+    matchedCount: number;
+    missingProducts: { code: string; name: string }[];
+    unmatchedFiles: string[];
+  } | null>(null);
+  const [missingZipPhotosExpanded, setMissingZipPhotosExpanded] = useState<boolean>(true);
 
   // Estados da Pasta do Computador (showDirectoryPicker)
   const [isFsSupported, setIsFsSupported] = useState(true);
@@ -142,6 +165,29 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
       setPendingProducts(existingProducts);
     }
   }, [existingProducts]);
+
+  // Lista atual de produtos e códigos únicos da campanha para geração de busca do Windows
+  const currentProductsList = pendingProducts.length > 0 ? pendingProducts : existingProducts;
+  const currentProductCodes = useMemo(() => {
+    return currentProductsList.map((p) => p.code);
+  }, [currentProductsList]);
+
+  const windowsSearchResult = useMemo(() => {
+    return generateWindowsSearchBatches(currentProductCodes, {
+      extension: searchExtension,
+      batchSize: searchBatchSize,
+    });
+  }, [currentProductCodes, searchExtension, searchBatchSize]);
+
+  const handleCopyBatchQuery = async (batchIndex: number, query: string) => {
+    const ok = await copyQueryToClipboard(query);
+    if (ok) {
+      setCopiedBatchIndex(batchIndex);
+      setTimeout(() => {
+        setCopiedBatchIndex((prev) => (prev === batchIndex ? null : prev));
+      }, 2000);
+    }
+  };
 
   // Escaneia a pasta selecionada e cruza com os produtos atuais
   const scanAndCrossFolder = async (handle: any, autoLoadPhotos = true) => {
@@ -432,21 +478,59 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
     if (!files || files.length === 0) return;
 
     setProcessingPhotos(true);
+    setZipDiscrepancyWarning(null);
     try {
-      const knownCodes = pendingProducts.map((p) => p.code);
+      const prodsToCross = pendingProducts.length > 0 ? pendingProducts : existingProducts;
+      const knownCodes = prodsToCross.map((p) => p.code);
       const photos = await processPhotoBankUpload(files, knownCodes);
       setLoadedPhotos(photos);
 
-      if (pendingProducts.length > 0) {
-        const matchResult = matchPhotosWithProducts(photos, pendingProducts, "upload");
+      if (prodsToCross.length > 0) {
+        const matchResult = matchPhotosWithProducts(photos, prodsToCross, "upload");
         setPendingProducts(matchResult.updatedProducts);
         setUnmatchedPhotoNames(matchResult.unmatchedPhotos);
-        setPhotoBankSummary(
-          `${photos.length} fotos recebidas · ${matchResult.matchedCount} associadas · ${matchResult.unmatchedPhotos.length} sem produto`
+
+        const matchedCodesSet = new Set(
+          matchResult.updatedProducts.filter((p) => p.image).map((p) => p.code.toLowerCase().trim())
         );
+        const missingProducts = prodsToCross
+          .filter((p) => !matchedCodesSet.has(p.code.toLowerCase().trim()))
+          .map((p) => ({ code: p.code, name: p.name }));
+
+        setZipCrossingSummary({
+          matchedCount: matchResult.matchedCount,
+          missingProducts,
+          unmatchedFiles: matchResult.unmatchedPhotos,
+        });
+
+        // Conferência com o campo "Quantos arquivos apareceram?" anotado nos lotes da busca
+        const enteredValues = Object.values(batchExpectedCounts).filter(
+          (c) => typeof c === "number" && !isNaN(c) && c > 0
+        );
+        if (enteredValues.length > 0) {
+          const totalEntered = enteredValues.reduce((acc, curr) => acc + curr, 0);
+          if (totalEntered !== photos.length) {
+            setZipDiscrepancyWarning(
+              `Atenção na conferência: Você anotou ${totalEntered} arquivo(s) na pesquisa do Windows, mas o ZIP enviado contém ${photos.length} foto(s). Verifique se todos os resultados encontrados foram selecionados com Ctrl+A ao compactar.`
+            );
+          }
+        }
+
+        setPhotoBankSummary(
+          `Upload / ZIP: ${photos.length} fotos recebidas · ${matchResult.matchedCount} associadas · ${matchResult.unmatchedPhotos.length} sem produto`
+        );
+
+        if (onUpdateExistingProductsPhotos && matchResult.updatedProducts.length > 0) {
+          onUpdateExistingProductsPhotos(matchResult.updatedProducts, matchResult.unmatchedPhotos);
+        }
       } else {
         setPhotoBankSummary(`${photos.length} fotos recebidas no banco de fotos`);
         setUnmatchedPhotoNames(photos.map((p) => p.filename));
+        setZipCrossingSummary({
+          matchedCount: 0,
+          missingProducts: [],
+          unmatchedFiles: photos.map((p) => p.filename),
+        });
       }
     } catch (err) {
       console.error("Erro no processamento do banco de fotos:", err);
@@ -957,7 +1041,7 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
             </div>
           </div>
 
-          {/* Abas de Escolha da Origem das Fotos (Pasta do computador, Computador / .ZIP, Link do Google Drive) */}
+          {/* Abas de Escolha da Origem das Fotos (Pasta do computador, Gerar busca para o Windows, Computador / .ZIP, Link do Google Drive) */}
           <div className="inline-flex rounded-lg border bg-neutral-200/60 p-1 self-start sm:self-auto flex-wrap gap-1">
             <button
               type="button"
@@ -970,6 +1054,19 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
             >
               <Folder className="h-3.5 w-3.5 text-amber-600" />
               Pasta do computador
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPhotoBankSource("windows_search")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all min-h-[36px] ${
+                photoBankSource === "windows_search"
+                  ? "bg-white text-purple-950 shadow-xs ring-1 ring-purple-400"
+                  : "text-neutral-600 hover:text-neutral-900"
+              }`}
+            >
+              <Search className="h-3.5 w-3.5 text-purple-600" />
+              Gerar busca para o Windows
             </button>
 
             <button
@@ -1280,18 +1377,468 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
           </div>
         )}
 
-        {/* MODO 2: UPLOAD LOCAL / DRAG & DROP / ZIP */}
+        {/* MODO 2: GERAR BUSCA PARA O WINDOWS EXPLORER (AQS) */}
+        {photoBankSource === "windows_search" && (
+          <div className="space-y-5 bg-white p-5 rounded-xl border border-neutral-200 shadow-xs">
+            {/* Cabeçalho do Recurso */}
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 font-bold text-sm text-neutral-900">
+                  <Terminal className="h-4 w-4 text-purple-600" />
+                  Gerador de Busca para o Windows Explorer (AQS)
+                </div>
+                <p className="text-xs text-neutral-600 leading-relaxed max-w-2xl">
+                  Gere consultas de busca com os códigos dos produtos da campanha para colar na pesquisa do Windows Explorer. Você seleciona apenas as fotos encontradas, compacta em um ZIP leve e sobe no sistema, sem precisar ler nem subir a pasta inteira de 6.000 fotos.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPhotoBankSource("upload")}
+                  className="text-xs font-bold border-neutral-300 text-neutral-700 min-h-[36px]"
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1 text-red-600" />
+                  Ir para Envio do ZIP
+                </Button>
+              </div>
+            </div>
+
+            {/* Verificação: Se não houver produtos carregados ainda */}
+            {currentProductCodes.length === 0 ? (
+              <div className="p-6 rounded-xl border-2 border-dashed border-neutral-200 bg-neutral-50 text-center space-y-3">
+                <div className="p-3 bg-neutral-200 rounded-full w-12 h-12 mx-auto flex items-center justify-center text-neutral-600">
+                  <Search className="h-6 w-6" />
+                </div>
+                <div className="max-w-md mx-auto space-y-1">
+                  <div className="font-bold text-sm text-neutral-900">
+                    Nenhum produto carregado na campanha ainda
+                  </div>
+                  <p className="text-xs text-neutral-500">
+                    Faça o upload da planilha (.xlsx ou .csv) na etapa de origem acima para gerar automaticamente a consulta de busca com os códigos dos produtos.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={onLoadSample}
+                  className="text-xs font-bold text-amber-800 bg-amber-50 border-amber-300 hover:bg-amber-100"
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1 text-amber-600" />
+                  Carregar demonstração para testar
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Painel de Controles: Extensão e Tamanho do Lote */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl bg-neutral-50 border border-neutral-200">
+                  {/* Seletor de Extensão */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-neutral-900">
+                      Extensão das Fotos:
+                    </Label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setSearchExtension("png")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all min-h-[36px] border ${
+                          searchExtension === "png"
+                            ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                            : "bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100"
+                        }`}
+                      >
+                        .png
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSearchExtension("jpg")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all min-h-[36px] border ${
+                          searchExtension === "jpg"
+                            ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                            : "bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100"
+                        }`}
+                      >
+                        .jpg
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSearchExtension("ambas")}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all min-h-[36px] border ${
+                          searchExtension === "ambas"
+                            ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                            : "bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100"
+                        }`}
+                      >
+                        ambas (.png e .jpg)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Ajuste do Tamanho do Lote */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="batch-size" className="text-xs font-bold text-neutral-900">
+                        Códigos por Lote (padrão 30):
+                      </Label>
+                      <span className="text-[11px] font-mono font-semibold text-neutral-500">
+                        Total: {windowsSearchResult.totalCodes} códigos únicos · {windowsSearchResult.batches.length} lote(s)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="batch-size"
+                        type="number"
+                        min={5}
+                        max={100}
+                        value={searchBatchSize}
+                        onChange={(e) => setSearchBatchSize(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="text-xs min-h-[36px] w-28 font-mono"
+                      />
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setSearchBatchSize(20)}
+                          className="h-8 text-xs font-semibold px-2"
+                        >
+                          20
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setSearchBatchSize(30)}
+                          className="h-8 text-xs font-semibold px-2"
+                        >
+                          30
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setSearchBatchSize(50)}
+                          className="h-8 text-xs font-semibold px-2"
+                        >
+                          50
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Exemplo de Formato e Instruções */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  {/* Formato conferido */}
+                  <div className="p-3.5 rounded-lg bg-neutral-900 text-neutral-200 space-y-1.5 font-mono text-[11px]">
+                    <div className="text-neutral-400 font-sans text-xs font-bold flex items-center justify-between">
+                      <span>Exemplo do formato gerado:</span>
+                      <span className="text-purple-400 text-[10px] font-mono uppercase">AQS Windows</span>
+                    </div>
+                    <div className="text-emerald-400 break-all select-all py-1">
+                      NOME:="14512.png" OR NOME:="221.png" OR NOME:="44.png"
+                    </div>
+                    <div className="text-neutral-400 text-[10.5px] font-sans">
+                      Zeros à esquerda mantidos · Aspas internas removidas · Sem quebras de linha
+                    </div>
+                  </div>
+
+                  {/* Instruções passo a passo em português */}
+                  <div className="p-3.5 rounded-lg bg-purple-50/70 border border-purple-200 text-purple-950 space-y-1.5">
+                    <div className="font-bold text-purple-900 flex items-center gap-1.5">
+                      <span>Passo a passo no Windows Explorer:</span>
+                    </div>
+                    <ol className="list-decimal list-inside space-y-1 text-[11.5px] leading-relaxed text-neutral-800 pl-0.5">
+                      <li>Abra a pasta de fotos no <strong>Explorador de Arquivos</strong>.</li>
+                      <li>Cole a consulta na <strong>caixa de pesquisa</strong> e pressione <strong>Enter</strong>.</li>
+                      <li>Selecione todos os resultados com <strong>Ctrl+A</strong>.</li>
+                      <li>Clique com o botão direito e escolha <strong>Enviar para &gt; Pasta compactada</strong>.</li>
+                      <li>Envie o ZIP na aba <strong>Computador / .ZIP</strong>.</li>
+                    </ol>
+                  </div>
+                </div>
+
+                {/* Alerta de Limite Seguro (>50 códigos ou >2000 chars) */}
+                {windowsSearchResult.hasSafeLimitWarning && (
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-950 space-y-1">
+                    <div className="flex items-center gap-2 font-bold text-amber-900">
+                      <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                      Aviso de tamanho da consulta
+                    </div>
+                    <p className="leading-relaxed text-[11.5px]">
+                      Um ou mais lotes excedem o tamanho seguro recomendado (mais de 50 códigos ou mais de 2.000 caracteres). O Windows Explorer pode truncar consultas muito extensas. Recomendamos manter o lote em 30 códigos.
+                    </p>
+                  </div>
+                )}
+
+                {/* Lista de Lotes para Cópia */}
+                <div className="space-y-3 pt-1">
+                  <div className="text-xs font-bold text-neutral-900 flex items-center justify-between">
+                    <span>Lotes de Consulta para Pesquisa ({windowsSearchResult.batches.length}):</span>
+                    <span className="text-[11px] font-normal text-neutral-500">
+                      Copie cada lote e pesquise na pasta do computador
+                    </span>
+                  </div>
+
+                  {windowsSearchResult.batches.map((batch) => {
+                    const isCopied = copiedBatchIndex === batch.batchIndex;
+                    return (
+                      <div
+                        key={batch.batchIndex}
+                        className="p-4 rounded-xl border border-neutral-200 bg-white shadow-xs space-y-3"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs text-neutral-900">
+                              Lote {batch.batchIndex} de {batch.totalBatches} · {batch.codesCount} códigos
+                            </span>
+                            <span className="text-[11px] font-mono text-neutral-500">
+                              ({batch.charCount} caracteres)
+                            </span>
+                            {batch.isAboveSafeLimit && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                                Lote grande
+                              </span>
+                            )}
+                          </div>
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => handleCopyBatchQuery(batch.batchIndex, batch.query)}
+                            className={`min-h-[36px] text-xs font-bold transition-all shadow-xs ${
+                              isCopied
+                                ? "bg-green-600 hover:bg-green-700 text-white"
+                                : "bg-purple-600 hover:bg-purple-700 text-white"
+                            }`}
+                          >
+                            {isCopied ? (
+                              <>
+                                <Check className="h-3.5 w-3.5 mr-1" />
+                                Copiado!
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3.5 w-3.5 mr-1" />
+                                Copiar consulta
+                              </>
+                            )}
+                          </Button>
+                        </div>
+
+                        {/* Texto da Consulta em Caixa de Leitura */}
+                        <div className="relative">
+                          <textarea
+                            readOnly
+                            rows={3}
+                            value={batch.query}
+                            className="w-full font-mono text-xs p-3 rounded-lg border border-neutral-200 bg-neutral-50 text-neutral-800 resize-none focus:outline-none focus:ring-1 focus:ring-purple-500 select-all leading-relaxed"
+                            onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                          />
+                        </div>
+
+                        {/* Campo de anotação de contagem de arquivos encontrados */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-neutral-100 text-xs">
+                          <div className="flex items-center gap-2">
+                            <Label
+                              htmlFor={`batch-count-${batch.batchIndex}`}
+                              className="text-xs font-semibold text-neutral-700 shrink-0"
+                            >
+                              Quantos arquivos apareceram?
+                            </Label>
+                            <Input
+                              id={`batch-count-${batch.batchIndex}`}
+                              type="number"
+                              min={0}
+                              placeholder="Ex: 30"
+                              value={batchExpectedCounts[batch.batchIndex] ?? ""}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setBatchExpectedCounts((prev) => ({
+                                  ...prev,
+                                  [batch.batchIndex]: isNaN(val) ? 0 : val,
+                                }));
+                              }}
+                              className="w-24 h-8 text-xs font-mono"
+                            />
+                          </div>
+                          <span className="text-[11px] text-neutral-500">
+                            Preencha para conferir se todos os arquivos foram incluídos no ZIP.
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Botão de Finalização / Redirecionamento para o ZIP */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-purple-200 bg-purple-50/70">
+                  <div className="flex items-center gap-2">
+                    <FileArchive className="h-5 w-5 text-purple-700 shrink-0" />
+                    <div className="text-xs">
+                      <div className="font-bold text-neutral-900">
+                        Após pesquisar e criar a pasta compactada (.zip):
+                      </div>
+                      <div className="text-neutral-600">
+                        Avance para a aba de upload para enviar o ZIP e associar as fotos aos produtos.
+                      </div>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={() => setPhotoBankSource("upload")}
+                    className="min-h-[40px] px-5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs shrink-0 shadow-xs"
+                  >
+                    Enviar ZIP na aba Computador / .ZIP
+                    <ArrowRight className="h-4 w-4 ml-1.5" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* MODO 3: UPLOAD LOCAL / DRAG & DROP / ZIP */}
         {photoBankSource === "upload" && (
-          <DropzoneUpload
-            type="photos"
-            accept="image/*, .zip"
-            multiple={true}
-            title="Arraste as fotos dos produtos ou o arquivo .zip aqui"
-            subtitle="Associação automática pelo código no nome do arquivo (ex: 24657.jpg). Quando houver mais de uma foto do mesmo código, a primeira em ordem alfabética é selecionada."
-            isProcessing={processingPhotos}
-            summaryText={photoBankSummary}
-            onFilesSelected={handlePhotoBankFiles}
-          />
+          <div className="space-y-4">
+            {/* Banner de atalho para gerar consulta de busca para o Windows */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-purple-200 bg-purple-50/60 text-xs">
+              <div className="flex items-center gap-2.5">
+                <Search className="h-5 w-5 text-purple-600 shrink-0" />
+                <div>
+                  <div className="font-bold text-neutral-900">
+                    Sua pasta no Windows tem muitas fotos (ex: 6.000 arquivos)?
+                  </div>
+                  <p className="text-neutral-600 text-[11.5px]">
+                    Gere uma consulta de pesquisa automática pelos códigos da campanha, copie e filtre no Windows Explorer para criar um .ZIP leve apenas com as fotos necessárias.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setPhotoBankSource("windows_search")}
+                className="text-xs font-bold border-purple-300 text-purple-900 hover:bg-purple-100 shrink-0 min-h-[36px]"
+              >
+                <Search className="h-3.5 w-3.5 mr-1 text-purple-600" />
+                Gerar busca para o Windows
+              </Button>
+            </div>
+
+            <DropzoneUpload
+              type="photos"
+              accept="image/*, .zip"
+              multiple={true}
+              title="Arraste as fotos dos produtos ou o arquivo .zip aqui"
+              subtitle="Associação automática pelo código no nome do arquivo (ex: 24657.jpg). Quando houver mais de uma foto do mesmo código, a primeira em ordem alfabética é selecionada."
+              isProcessing={processingPhotos}
+              summaryText={photoBankSummary}
+              onFilesSelected={handlePhotoBankFiles}
+            />
+
+            {/* Aviso de Discrepância entre os lotes anotados e o total do ZIP */}
+            {zipDiscrepancyWarning && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-950 space-y-1.5 shadow-xs">
+                <div className="flex items-center gap-2 font-bold text-amber-900 text-sm">
+                  <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                  Aviso de Discrepância no ZIP
+                </div>
+                <p className="leading-relaxed">{zipDiscrepancyWarning}</p>
+              </div>
+            )}
+
+            {/* Resumo da Conferência do ZIP / Upload */}
+            {zipCrossingSummary && (
+              <div className="space-y-3 bg-white p-4 rounded-xl border border-neutral-200 shadow-xs">
+                <div className="text-xs font-bold text-neutral-900 flex items-center justify-between">
+                  <span>Conferência dos arquivos recebidos:</span>
+                  {loadedPhotos.length > 0 && (
+                    <span className="font-mono text-[11px] text-neutral-500">
+                      Total no ZIP/Upload: {loadedPhotos.length} fotos
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="p-3 rounded-lg border border-green-200 bg-green-50/70 text-green-900">
+                    <div className="text-lg font-black font-mono">
+                      {zipCrossingSummary.matchedCount}
+                    </div>
+                    <div className="text-xs font-semibold">
+                      produtos com foto encontrada
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/70 text-amber-900">
+                    <div className="text-lg font-black font-mono">
+                      {zipCrossingSummary.missingProducts.length}
+                    </div>
+                    <div className="text-xs font-semibold">
+                      produtos sem foto
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg border border-neutral-200 bg-neutral-50 text-neutral-800">
+                    <div className="text-lg font-black font-mono">
+                      {zipCrossingSummary.unmatchedFiles.length}
+                    </div>
+                    <div className="text-xs font-semibold">
+                      arquivos não usados na campanha
+                    </div>
+                  </div>
+                </div>
+
+                {/* Lista de produtos sem foto para revisão */}
+                {zipCrossingSummary.missingProducts.length > 0 && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 space-y-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setMissingZipPhotosExpanded(!missingZipPhotosExpanded)}
+                      className="w-full flex items-center justify-between font-bold text-amber-950 text-left cursor-pointer"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                        Produtos da campanha sem foto ({zipCrossingSummary.missingProducts.length}):
+                      </span>
+                      {missingZipPhotosExpanded ? (
+                        <ChevronUp className="h-4 w-4 text-amber-800" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-amber-800" />
+                      )}
+                    </button>
+
+                    {missingZipPhotosExpanded && (
+                      <div className="max-h-36 overflow-y-auto space-y-1 pt-1 pr-1">
+                        {zipCrossingSummary.missingProducts.map((p, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between p-1.5 bg-white rounded border border-amber-200 text-[11px]"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-mono font-bold px-1 rounded bg-amber-100 text-amber-900 shrink-0">
+                                {p.code}
+                              </span>
+                              <span className="truncate uppercase font-medium text-neutral-800">
+                                {p.name}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-amber-800 font-semibold shrink-0">
+                              sem foto
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {/* MODO 2: IMPORTAÇÃO POR LINK DO GOOGLE DRIVE */}
