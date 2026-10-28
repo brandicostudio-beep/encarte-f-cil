@@ -94,4 +94,26 @@ describe("Novo Encarte e Zerar Dados (ResetEncarte)", () => {
     expect(initialStep).toBe("origem");
     expect(hasLegacyProductsInStorage).toBe(true);
   });
+
+  it("Componentes Checkbox e Label renderizam sem erros de referência na etapa de campanha", () => {
+    const { Checkbox } = require("@/components/ui/checkbox");
+    const { Label } = require("@/components/ui/label");
+
+    expect(() => {
+      renderToString(
+        React.createElement("div", null, [
+          React.createElement(Checkbox, {
+            key: "check",
+            id: "test-check",
+            checked: true,
+          }),
+          React.createElement(
+            Label,
+            { key: "lbl", htmlFor: "test-check" },
+            "Rótulo de teste"
+          ),
+        ])
+      );
+    }).not.toThrow();
+  });
 });
