@@ -29,17 +29,24 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
   onOpenChange,
   onSave,
 }) => {
-  const [form, setForm] = useState<EncarteProduct | null>(null);
+  const [form, setForm] = useState<EncarteProduct | null>(() =>
+    product ? { ...product } : null
+  );
+  const [isTrimming, setIsTrimming] = useState(false);
+  const [prevProduct, setPrevProduct] = useState<EncarteProduct | null>(product);
+
+  // Sincroniza o formulário de imediato quando o produto selecionado muda,
+  // mantendo rigorosamente a mesma contagem e ordem de hooks em todas as renderizações
+  if (product !== prevProduct) {
+    setPrevProduct(product);
+    setForm(product ? { ...product } : null);
+  }
 
   useEffect(() => {
     if (product) {
       setForm({ ...product });
     }
   }, [product]);
-
-  if (!form) return null;
-
-  const [isTrimming, setIsTrimming] = useState(false);
 
   const handleFile = (file: File) => {
     const reader = new FileReader();
@@ -78,19 +85,24 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form) return;
-    const parsedPack = parsePackaging(form.packaging);
+    const parsedPack = parsePackaging(form.packaging || "");
     onSave({
       ...form,
-      packaging: form.packaging.trim(),
+      packaging: (form.packaging || "").trim(),
       packagingType: parsedPack?.tipo,
       packagingQuantity: parsedPack?.quantidade,
       packagingUnit: parsedPack?.unidadeMedida,
       packagingWeight: parsedPack?.gramatura,
-      price: formatPrice(form.price),
+      price: formatPrice(form.price || ""),
       imageScale: typeof form.imageScale === "number" ? form.imageScale : 1.0,
     });
     onOpenChange(false);
   };
+
+  // Retorno condicional executado com segurança somente APÓS a declaração de todos os hooks
+  if (!open || !form) {
+    return null;
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -124,7 +136,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               <Label htmlFor="code">Código / SKU</Label>
               <Input
                 id="code"
-                value={form.code}
+                value={form.code || ""}
                 onChange={(e) => setForm({ ...form, code: e.target.value })}
                 placeholder="Ex: 24657"
               />
@@ -133,7 +145,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               <Label htmlFor="packaging">Embalagem</Label>
               <Input
                 id="packaging"
-                value={form.packaging}
+                value={form.packaging || ""}
                 onChange={(e) => setForm({ ...form, packaging: e.target.value })}
                 placeholder="Ex: 1X10 GR ou 500G"
               />
@@ -145,7 +157,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
             <Label htmlFor="name">Nome do Produto (em caixa-alta)</Label>
             <Input
               id="name"
-              value={form.name}
+              value={form.name || ""}
               onChange={(e) => setForm({ ...form, name: e.target.value.toUpperCase() })}
               placeholder="Ex: BISCOITO RECHEADO CHOCOLATE"
               required
@@ -161,7 +173,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               <Label htmlFor="price">Preço de Venda (R$)</Label>
               <Input
                 id="price"
-                value={form.price}
+                value={form.price || ""}
                 onChange={(e) => setForm({ ...form, price: e.target.value })}
                 placeholder="Ex: 4,99"
               />
@@ -170,7 +182,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               <Label htmlFor="unit">Unidade</Label>
               <Input
                 id="unit"
-                value={form.unit}
+                value={form.unit || ""}
                 onChange={(e) => setForm({ ...form, unit: e.target.value.toUpperCase() })}
                 placeholder="UND ou KG"
               />
@@ -183,7 +195,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               <Label htmlFor="validity">Data de Validade</Label>
               <Input
                 id="validity"
-                value={form.validity}
+                value={form.validity || ""}
                 onChange={(e) => setForm({ ...form, validity: e.target.value })}
                 placeholder="dd/mm/aaaa"
               />
@@ -270,7 +282,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               <div className="flex-1 space-y-2">
                 <Input
                   placeholder="URL direta da imagem"
-                  value={form.image.startsWith("data:") ? "" : form.image}
+                  value={form.image && form.image.startsWith("data:") ? "" : form.image || ""}
                   onChange={(e) => setForm({ ...form, image: e.target.value })}
                   className="text-xs"
                 />
