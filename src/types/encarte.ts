@@ -19,16 +19,47 @@ export interface ProductCustomStyle {
   headerColor?: string;       // Cor do cabeçalho código/embalagem (ex: #000000)
 
   // Tipografia & Alinhamento
-  nameFontSize?: number;      // Tamanho da fonte do nome em px (min: 24, max: 54)
-  nameFontWeight?: "normal" | "semibold" | "bold"; // normal=400, semibold=600, bold=700
-  nameAlign?: "left" | "center" | "right";
+  fontFamily?: string;        // Família da fonte do elemento (ex: Inter, Arial, Roboto)
+  nameFontSize?: number;      // Tamanho da fonte do nome em px (min: 24, max: 64)
+  nameFontWeight?: string;    // light, regular, medium, semibold, bold, extrabold, black
+  nameAlign?: "left" | "center" | "right" | "justify";
+  nameLineHeight?: number;    // Altura da linha (ex: 1.1)
+  nameLetterSpacing?: number; // Espaçamento entre letras (ex: 0)
+  nameTextTransform?: "uppercase" | "lowercase" | "capitalize" | "none";
 
   headerFontSize?: number;    // Tamanho da fonte do código/embalagem em px (min: 20, max: 40)
-  headerFontWeight?: "normal" | "semibold" | "bold";
-  headerAlign?: "left" | "center" | "right";
+  headerFontWeight?: string;
+  headerAlign?: "left" | "center" | "right" | "justify";
+  headerLineHeight?: number;
+  headerLetterSpacing?: number;
+  headerTextTransform?: "uppercase" | "lowercase" | "capitalize" | "none";
 
-  priceFontSize?: number;     // Tamanho da fonte do valor em px (min: 30, max: 64)
-  priceFontWeight?: "normal" | "semibold" | "bold";
+  priceFontSize?: number;     // Tamanho da fonte do valor em px (min: 30, max: 72)
+  priceFontWeight?: string;
+  priceCurrencyFontSize?: number;
+  priceCurrencyFontWeight?: string;
+  priceUnitFontSize?: number;
+  priceUnitFontWeight?: string;
+  pillBorderRadius?: number;  // Raio dos cantos da pílula
+  pillPaddingX?: number;
+  pillPaddingY?: number;
+
+  // Box do Produto
+  boxBorderWidth?: number;    // Espessura da borda do box (ex: 1px)
+  boxBorderRadius?: number;   // Raio dos cantos do box (ex: 8px)
+  boxPadding?: number;        // Padding interno do box
+  boxShadow?: boolean;        // Sombra leve no box
+  showSeparator?: boolean;    // Fio fino separador
+  separatorColor?: string;    // Cor do fio separador
+  separatorWidth?: number;    // Espessura do fio separador
+
+  // Barras de Validade e Estoque
+  validityHeight?: number;
+  validityBorderRadius?: number;
+  validityFontWeight?: string;
+  stockHeight?: number;
+  stockBorderRadius?: number;
+  stockFontWeight?: string;
 
   // Visibilidade dos Elementos
   showCode?: boolean;         // Padrão: true
@@ -38,13 +69,37 @@ export interface ProductCustomStyle {
   showBadge?: boolean;        // Padrão: true
 
   // Foto do Produto
-  imageScale?: number;        // Escala / zoom da foto (0.5 a 1.3)
-  imageOffsetX?: number;      // Ajuste de posição X (-25 a 25 px)
-  imageOffsetY?: number;      // Ajuste de posição Y (-25 a 25 px)
+  imageScale?: number;        // Escala / zoom da foto (0.5 a 1.5)
+  imageOffsetX?: number;      // Ajuste de posição X (-60 a 60 px)
+  imageOffsetY?: number;      // Ajuste de posição Y (-60 a 60 px)
+  imageWidth?: number;        // Largura customizada da área da foto
+  imageHeight?: number;       // Altura customizada da área da foto
+  imageFit?: "contain" | "cover" | "center"; // Modo de encaixe
+  imageOpacity?: number;      // Opacidade da imagem (0 a 1)
+  imageRotation?: number;     // Rotação da imagem em graus (ex: 0 a 360)
+  imageBorderRadius?: number; // Borda arredondada na foto
+  imageBorderColor?: string;
+  imageBorderWidth?: number;
+  imageBgColor?: string;
+  imageShadow?: boolean;
 
-  // Deslocamento do Box
-  boxOffsetX?: number;        // Deslocamento fino dentro do box (-20 a 20 px)
+  // Posição e Deslocamentos Individuais (estilo Illustrator)
+  nameOffsetX?: number;
+  nameOffsetY?: number;
+  nameWidth?: number;
+  headerOffsetX?: number;
+  headerOffsetY?: number;
+  priceOffsetX?: number;
+  priceOffsetY?: number;
+  validityOffsetX?: number;
+  validityOffsetY?: number;
+  stockOffsetX?: number;
+  stockOffsetY?: number;
+  boxOffsetX?: number;        // Deslocamento fino dentro do box (-40 a 40 px)
   boxOffsetY?: number;
+
+  // Bloqueio de elemento contra edição/movimento acidental
+  isLocked?: boolean;
 
   // Marcação se foi personalizado
   isCustomized?: boolean;
@@ -61,14 +116,25 @@ export interface CampaignGlobalStyle {
   boxBgColor?: string;
   nameColor?: string;
   headerColor?: string;
+  fontFamily?: string;
   nameFontSize?: number;
-  nameFontWeight?: "normal" | "semibold" | "bold";
-  nameAlign?: "left" | "center" | "right";
+  nameFontWeight?: string;
+  nameAlign?: "left" | "center" | "right" | "justify";
+  nameLineHeight?: number;
+  nameLetterSpacing?: number;
+  nameTextTransform?: "uppercase" | "lowercase" | "capitalize" | "none";
   headerFontSize?: number;
-  headerFontWeight?: "normal" | "semibold" | "bold";
-  headerAlign?: "left" | "center" | "right";
+  headerFontWeight?: string;
+  headerAlign?: "left" | "center" | "right" | "justify";
   priceFontSize?: number;
-  priceFontWeight?: "normal" | "semibold" | "bold";
+  priceFontWeight?: string;
+  priceCurrencyFontSize?: number;
+  priceUnitFontSize?: number;
+  pillBorderRadius?: number;
+  boxBorderWidth?: number;
+  boxBorderRadius?: number;
+  showSeparator?: boolean;
+  separatorColor?: string;
   showCode?: boolean;
   showName?: boolean;
   showValidity?: boolean;

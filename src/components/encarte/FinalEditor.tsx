@@ -7,32 +7,44 @@ import type {
   CampaignGlobalStyle,
 } from "@/types/encarte";
 import { StoryPage916 } from "./StoryPage916";
+import { CanvasRulers } from "./editor/CanvasRulers";
+import { TransformBoundingBox } from "./editor/TransformBoundingBox";
+import { LayersPanel } from "./editor/LayersPanel";
+import { PropertiesPanel } from "./editor/PropertiesPanel";
+import { PreflightModal } from "./editor/PreflightModal";
+import { ShortcutsHelpModal } from "./editor/ShortcutsHelpModal";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Undo2,
   Redo2,
   ZoomIn,
   ZoomOut,
-  RotateCcw,
   Sparkles,
   ChevronLeft,
   ChevronRight,
   Move,
-  Type,
-  Palette,
-  Eye,
-  EyeOff,
-  AlertTriangle,
-  ArrowUp,
-  ArrowDown,
   Layers,
-  Check,
   Smartphone,
   Maximize2,
-  Image as ImageIcon,
+  Grid,
+  Ruler,
+  Magnet,
+  Keyboard,
+  MousePointer,
+  Hand,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
+import {
+  SelectedTarget,
+  TargetElementType,
+  BoundingBox,
+  GuideLine,
+  SmartGuide,
+  ChangeScope,
+  PreflightIssue,
+} from "@/types/editor";
 
 interface FinalEditorProps {
   products: EncarteProduct[];
@@ -43,31 +55,6 @@ interface FinalEditorProps {
   onProceedToExport: () => void;
   onBackToCampaign: () => void;
 }
-
-// Paleta oficial de cores do template
-const TEMPLATE_PALETTE = [
-  { name: "Vermelho Detona", hex: "#E30613" },
-  { name: "Amarelo Ouro", hex: "#FFE600" },
-  { name: "Amarelo Suave", hex: "#FFD400" },
-  { name: "Preto Absoluto", hex: "#000000" },
-  { name: "Branco Puro", hex: "#FFFFFF" },
-  { name: "Cinza Claro", hex: "#D9D9D9" },
-  { name: "Cinza Painel", hex: "#F2F2F2" },
-  { name: "Azul Oferta", hex: "#0284C7" },
-  { name: "Verde Preço", hex: "#16A34A" },
-  { name: "Laranja", hex: "#EA580C" },
-];
-
-type TargetElement =
-  | "pill"
-  | "name"
-  | "header"
-  | "validity"
-  | "stock"
-  | "box"
-  | "image";
-
-type ChangeScope = "product" | "page" | "all";
 
 interface HistoryState {
   products: EncarteProduct[];
@@ -83,63 +70,87 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
   onProceedToExport,
   onBackToCampaign,
 }) => {
+  // Navigation & Page state
   const [activePage, setActivePage] = useState<number>(1);
+  const [leftTab, setLeftTab] = useState<"pages" | "layers">("pages");
+
+  // Selection state
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-  const [activeElement, setActiveElement] = useState<TargetElement>("pill");
+  const [selectedElement, setSelectedElement] = useState<TargetElementType | null>(null);
+  const [selectedTargets, setSelectedTargets] = useState<SelectedTarget[]>([]);
+
+  // Editor tools: 'select' (V), 'hand' (H), 'zoom' (Z)
+  const [activeTool, setActiveTool] = useState<"select" | "hand" | "zoom">("select");
+
+  // Scope: 'product' | 'page' | 'all'
   const [scope, setScope] = useState<ChangeScope>("product");
+
+  // Zoom & Pan state
   const [zoom, setZoom] = useState<number>(0.35);
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
 
+  // Rulers, Guides & Grid
+  const [showRulers, setShowRulers] = useState(true);
+  const [showGrid, setShowGrid] = useState(false);
+  const [gridSpacing, setGridSpacing] = useState(50);
+  const [snapToGuides, setSnapToGuides] = useState(true);
+  const [guides, setGuides] = useState<GuideLine[]>([
+    { id: "g-center-x", orientation: "vertical", position: 540 },
+    { id: "g-safe-left", orientation: "vertical", position: 46 },
+    { id: "g-safe-right", orientation: "vertical", position: 1034 },
+  ]);
+  const [smartGuides, setSmartGuides] = useState<SmartGuide[]>([]);
+
+  // Modals
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [showPreflightModal, setShowPreflightModal] = useState(false);
+
+  // Refs
   const mainRef = useRef<HTMLElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const dragStartRef = useRef<{ x: number; y: number; panX: number; panY: number }>({
+    x: 0,
+    y: 0,
+    panX: 0,
+    panY: 0,
+  });
 
-  // Auto-ajuste de zoom para caber exatamente na tela sem barras de rolagem
-  const handleAutoFit = useCallback(() => {
-    if (!mainRef.current) return;
-    const clientWidth = mainRef.current.clientWidth;
-    const clientHeight = mainRef.current.clientHeight;
+  // Marquee selection ref
+  const [marqueeBox, setMarqueeBox] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const isMarqueeRef = useRef(false);
+  const marqueeOriginRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-    // Espaço disponível com margem de segurança de 32px
-    const availableW = Math.max(160, clientWidth - 32);
-    const availableH = Math.max(160, clientHeight - 32);
-
-    const fitZoomW = availableW / 1080;
-    const fitZoomH = availableH / 1920;
-
-    // Zoom que cabe perfeitamente na largura e altura
-    const bestZoom = Math.min(fitZoomW, fitZoomH);
-    const clamped = Math.max(0.18, Math.min(0.85, Number(bestZoom.toFixed(2))));
-    setZoom(clamped);
-  }, []);
-
-  // Executa auto-ajuste ao carregar e ao redimensionar a janela
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      handleAutoFit();
-    }, 60);
-
-    const onResize = () => handleAutoFit();
-    window.addEventListener("resize", onResize);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("resize", onResize);
-    };
-  }, [handleAutoFit]);
-
-  // Histórico de Desfazer/Refazer
+  // History stack (up to 100 states)
   const [history, setHistory] = useState<HistoryState[]>([]);
   const [future, setFuture] = useState<HistoryState[]>([]);
 
-  // Registra alteração com histórico
+  // Record change
   const recordChange = useCallback(
     (newProducts: EncarteProduct[], newCampaign: CampaignConfig) => {
-      setHistory((prev) => [...prev.slice(-29), { products, campaign }]);
+      setHistory((prev) => [...prev.slice(-99), { products, campaign }]);
       setFuture([]);
       onUpdateProducts(newProducts);
       onUpdateCampaign(newCampaign);
+
+      // Auto-save to localStorage
+      try {
+        localStorage.setItem("encarte-products-v2", JSON.stringify(newProducts));
+        localStorage.setItem("encarte-campaign-v2", JSON.stringify(newCampaign));
+      } catch {
+        // Ignore quota
+      }
     },
     [products, campaign, onUpdateProducts, onUpdateCampaign]
   );
 
-  // Desfazer (Ctrl+Z)
+  // Undo (Ctrl+Z)
   const handleUndo = useCallback(() => {
     if (history.length === 0) return;
     const previous = history[history.length - 1];
@@ -149,7 +160,7 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
     onUpdateCampaign(previous.campaign);
   }, [history, products, campaign, onUpdateProducts, onUpdateCampaign]);
 
-  // Refazer (Ctrl+Y)
+  // Redo (Ctrl+Y / Ctrl+Shift+Z)
   const handleRedo = useCallback(() => {
     if (future.length === 0) return;
     const next = future[0];
@@ -159,7 +170,7 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
     onUpdateCampaign(next.campaign);
   }, [future, products, campaign, onUpdateProducts, onUpdateCampaign]);
 
-  // Produtos incluídos no encarte
+  // Flyer products
   const flyerProducts = useMemo(
     () => (products || []).filter((p) => p && p.included),
     [products]
@@ -168,107 +179,106 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
   const perPage = campaign?.productsPerPage || 10;
   const totalPages = Math.max(1, Math.ceil(flyerProducts.length / perPage));
 
-  // Garante activePage válida
   useEffect(() => {
     if (activePage > totalPages) {
       setActivePage(totalPages);
     }
   }, [activePage, totalPages]);
 
-  // Produtos da página ativa
+  // Products on current page
   const pageProducts = useMemo(() => {
     const start = (activePage - 1) * perPage;
     return flyerProducts.slice(start, start + perPage);
   }, [flyerProducts, activePage, perPage]);
 
-  // Produto atualmente selecionado
+  // Selected product
   const selectedProduct = useMemo(
     () => products.find((p) => p.id === selectedProductId) || null,
     [products, selectedProductId]
   );
 
-  // Estilo customizado do produto selecionado
   const currentCustom = selectedProduct?.customStyle || {};
-  const currentPageStyle = campaign.pageStyles?.[activePage] || {};
   const currentGlobalStyle = campaign.globalStyle || {};
 
-  // Seletor automático do primeiro produto da página se nada selecionado
+  // Auto-select first product if none selected
   useEffect(() => {
     if (!selectedProductId && pageProducts.length > 0) {
       setSelectedProductId(pageProducts[0].id);
+      setSelectedElement("box");
     }
   }, [pageProducts, selectedProductId]);
 
-  // Atualiza campo do produto selecionado (ex: nome, preço, etc.)
-  const updateProductData = (field: keyof EncarteProduct, value: any) => {
-    if (!selectedProductId) return;
-    const updated = products.map((p) =>
-      p.id === selectedProductId ? { ...p, [field]: value } : p
-    );
+  // Auto-fit zoom to available canvas space
+  const handleAutoFit = useCallback(() => {
+    if (!mainRef.current) return;
+    const clientWidth = mainRef.current.clientWidth - (showRulers ? 24 : 0);
+    const clientHeight = mainRef.current.clientHeight - (showRulers ? 24 : 0);
+
+    const availableW = Math.max(160, clientWidth - 48);
+    const availableH = Math.max(160, clientHeight - 48);
+
+    const fitZoomW = availableW / 1080;
+    const fitZoomH = availableH / 1920;
+
+    const bestZoom = Math.min(fitZoomW, fitZoomH);
+    const clamped = Math.max(0.18, Math.min(0.9, Number(bestZoom.toFixed(2))));
+    setZoom(clamped);
+    setPanOffset({ x: 0, y: 0 });
+  }, [showRulers]);
+
+  useEffect(() => {
+    const timer = setTimeout(handleAutoFit, 60);
+    const onResize = () => handleAutoFit();
+    window.addEventListener("resize", onResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [handleAutoFit]);
+
+  // Update product custom styles with scope
+  const updateCustomStyle = useCallback(
+    (updates: Partial<ProductCustomStyle>) => {
+      if (scope === "product" && selectedProductId) {
+        const updated = products.map((p) => {
+          if (p.id === selectedProductId) {
+            const nextCustom: ProductCustomStyle = {
+              ...(p.customStyle || {}),
+              ...updates,
+              isCustomized: true,
+            };
+            return { ...p, customStyle: nextCustom };
+          }
+          return p;
+        });
+        recordChange(updated, campaign);
+      } else if (scope === "page") {
+        const nextPageStyles = {
+          ...(campaign.pageStyles || {}),
+          [activePage]: {
+            ...(campaign.pageStyles?.[activePage] || {}),
+            ...updates,
+          },
+        };
+        recordChange(products, { ...campaign, pageStyles: nextPageStyles });
+      } else if (scope === "all") {
+        const nextGlobalStyle: CampaignGlobalStyle = {
+          ...(campaign.globalStyle || {}),
+          ...updates,
+        };
+        recordChange(products, { ...campaign, globalStyle: nextGlobalStyle });
+      }
+    },
+    [scope, selectedProductId, products, campaign, activePage, recordChange]
+  );
+
+  // Update direct product data fields
+  const handleUpdateProductData = (productId: string, updates: Partial<EncarteProduct>) => {
+    const updated = products.map((p) => (p.id === productId ? { ...p, ...updates } : p));
     recordChange(updated, campaign);
   };
 
-  // Atualiza estilo customizado conforme o escopo selecionado
-  const updateCustomStyle = (updates: Partial<ProductCustomStyle>) => {
-    if (scope === "product" && selectedProductId) {
-      const updated = products.map((p) => {
-        if (p.id === selectedProductId) {
-          const nextCustom: ProductCustomStyle = {
-            ...(p.customStyle || {}),
-            ...updates,
-            isCustomized: true,
-          };
-          return { ...p, customStyle: nextCustom };
-        }
-        return p;
-      });
-      recordChange(updated, campaign);
-    } else if (scope === "page") {
-      const nextPageStyles = {
-        ...(campaign.pageStyles || {}),
-        [activePage]: {
-          ...(campaign.pageStyles?.[activePage] || {}),
-          ...updates,
-        },
-      };
-      recordChange(products, { ...campaign, pageStyles: nextPageStyles });
-    } else if (scope === "all") {
-      const nextGlobalStyle: CampaignGlobalStyle = {
-        ...(campaign.globalStyle || {}),
-        ...updates,
-      };
-      recordChange(products, { ...campaign, globalStyle: nextGlobalStyle });
-    }
-  };
-
-  // Aplicar estilo do produto atual a todas as páginas
-  const handleApplyToAllPages = () => {
-    if (!selectedProduct?.customStyle) return;
-    const nextGlobalStyle: CampaignGlobalStyle = {
-      ...(campaign.globalStyle || {}),
-      pillBgColor: selectedProduct.customStyle.pillBgColor,
-      pillTextColor: selectedProduct.customStyle.pillTextColor,
-      validityBgColor: selectedProduct.customStyle.validityBgColor,
-      validityTextColor: selectedProduct.customStyle.validityTextColor,
-      stockBgColor: selectedProduct.customStyle.stockBgColor,
-      stockTextColor: selectedProduct.customStyle.stockTextColor,
-      boxBorderColor: selectedProduct.customStyle.boxBorderColor,
-      boxBgColor: selectedProduct.customStyle.boxBgColor,
-      nameColor: selectedProduct.customStyle.nameColor,
-      nameFontSize: selectedProduct.customStyle.nameFontSize,
-      nameFontWeight: selectedProduct.customStyle.nameFontWeight,
-      nameAlign: selectedProduct.customStyle.nameAlign,
-      headerColor: selectedProduct.customStyle.headerColor,
-      headerFontSize: selectedProduct.customStyle.headerFontSize,
-      headerFontWeight: selectedProduct.customStyle.headerFontWeight,
-      headerAlign: selectedProduct.customStyle.headerAlign,
-      priceFontSize: selectedProduct.customStyle.priceFontSize,
-      priceFontWeight: selectedProduct.customStyle.priceFontWeight,
-    };
-    recordChange(products, { ...campaign, globalStyle: nextGlobalStyle });
-  };
-
-  // Restaurar padrão do produto selecionado
+  // Reset product styling
   const handleResetProduct = () => {
     if (!selectedProductId) return;
     const updated = products.map((p) => {
@@ -281,28 +291,12 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
     recordChange(updated, campaign);
   };
 
-  // Mover produto na ordem (reordenar)
-  const handleReorderProduct = (direction: "up" | "down") => {
-    if (!selectedProductId) return;
-    const currentIndex = products.findIndex((p) => p.id === selectedProductId);
-    if (currentIndex === -1) return;
-
-    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= products.length) return;
-
-    const newProducts = [...products];
-    const [moved] = newProducts.splice(currentIndex, 1);
-    newProducts.splice(targetIndex, 0, moved);
-    recordChange(newProducts, campaign);
-  };
-
-  // Mover produto entre páginas (ex: pág 1 -> pág 2)
+  // Move product between pages
   const handleMoveToPage = (targetPage: number) => {
     if (!selectedProductId || targetPage < 1 || targetPage > totalPages || targetPage === activePage) return;
     const currentIdx = products.findIndex((p) => p.id === selectedProductId);
     if (currentIdx === -1) return;
 
-    // Acha o índice do primeiro produto da página alvo
     const targetStart = (targetPage - 1) * perPage;
     const targetProductAtStart = flyerProducts[targetStart];
     const targetIndexInAll = targetProductAtStart
@@ -317,15 +311,167 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
     setActivePage(targetPage);
   };
 
-  // Atalhos de teclado: Ctrl+Z, Ctrl+Y e setas para microajuste do box
+  // Reorder product in list
+  const handleReorderProduct = (fromIndex: number, toIndex: number) => {
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= pageProducts.length || toIndex >= pageProducts.length) return;
+    const p1 = pageProducts[fromIndex];
+    const p2 = pageProducts[toIndex];
+    if (!p1 || !p2) return;
+
+    const idx1 = products.findIndex((p) => p.id === p1.id);
+    const idx2 = products.findIndex((p) => p.id === p2.id);
+    if (idx1 === -1 || idx2 === -1) return;
+
+    const newProducts = [...products];
+    const [moved] = newProducts.splice(idx1, 1);
+    newProducts.splice(idx2, 0, moved);
+    recordChange(newProducts, campaign);
+  };
+
+  // Toggle lock state
+  const handleToggleLock = (productId: string, isLocked: boolean) => {
+    const updated = products.map((p) => {
+      if (p.id === productId) {
+        return {
+          ...p,
+          customStyle: {
+            ...(p.customStyle || {}),
+            isLocked,
+          },
+        };
+      }
+      return p;
+    });
+    recordChange(updated, campaign);
+  };
+
+  // Toggle element visibility
+  const handleToggleVisibility = (
+    productId: string,
+    element: TargetElementType,
+    isVisible: boolean
+  ) => {
+    const updated = products.map((p) => {
+      if (p.id === productId) {
+        const nextStyle = { ...(p.customStyle || {}) };
+        if (element === "name") nextStyle.showName = isVisible;
+        if (element === "header") nextStyle.showCode = isVisible;
+        if (element === "validity") nextStyle.showValidity = isVisible;
+        if (element === "stock") nextStyle.showStock = isVisible;
+        return { ...p, customStyle: nextStyle };
+      }
+      return p;
+    });
+    recordChange(updated, campaign);
+  };
+
+  // Calculate bounding box for active target in 1080x1920 coordinates
+  const currentBoundingBox = useMemo<BoundingBox | null>(() => {
+    if (!selectedProductId) return null;
+    if (typeof document === "undefined") return null;
+
+    // Find card DOM element
+    const cardEl = document.getElementById(`product-card-${selectedProductId}`);
+    const storyPageEl = document.getElementById(`story-page-editor-${activePage}`);
+    if (!cardEl || !storyPageEl) return null;
+
+    let targetEl: HTMLElement | null = cardEl;
+    if (selectedElement && selectedElement !== "box") {
+      const sub = cardEl.querySelector(`[data-element-type="${selectedElement}"]`) as HTMLElement;
+      if (sub) targetEl = sub;
+    }
+
+    const pageRect = storyPageEl.getBoundingClientRect();
+    const targetRect = targetEl.getBoundingClientRect();
+
+    if (pageRect.width === 0 || pageRect.height === 0) return null;
+
+    const scaleX = 1080 / pageRect.width;
+    const scaleY = 1920 / pageRect.height;
+
+    const x = Math.round((targetRect.left - pageRect.left) * scaleX);
+    const y = Math.round((targetRect.top - pageRect.top) * scaleY);
+    const width = Math.round(targetRect.width * scaleX);
+    const height = Math.round(targetRect.height * scaleY);
+
+    return {
+      x,
+      y,
+      width: Math.max(20, width),
+      height: Math.max(16, height),
+      rotation: currentCustom.photoRotation || 0,
+    };
+  }, [selectedProductId, selectedElement, activePage, currentCustom, zoom, panOffset]);
+
+  // Handle bounding box transformation
+  const handleTransformBox = (newBox: BoundingBox) => {
+    if (!selectedProductId) return;
+
+    if (selectedElement === "image") {
+      updateCustomStyle({
+        photoWidth: Math.round(newBox.width),
+        photoHeight: Math.round(newBox.height),
+        photoRotation: newBox.rotation,
+      });
+    } else if (selectedElement === "price") {
+      updateCustomStyle({
+        pillRadius: Math.min(9999, Math.round(newBox.height / 2)),
+      });
+    } else if (selectedElement === "name") {
+      const scale = newBox.height / (currentBoundingBox?.height || 50);
+      const currentSize = currentCustom.nameFontSize || 30;
+      updateCustomStyle({
+        nameFontSize: Math.max(12, Math.min(60, Math.round(currentSize * scale))),
+      });
+    } else {
+      // Moving the box
+      if (currentBoundingBox) {
+        const dx = newBox.x - currentBoundingBox.x;
+        const dy = newBox.y - currentBoundingBox.y;
+        updateCustomStyle({
+          boxOffsetX: (currentCustom.boxOffsetX || 0) + dx,
+          boxOffsetY: (currentCustom.boxOffsetY || 0) + dy,
+        });
+      }
+    }
+  };
+
+  // Keyboard navigation & shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignora se estiver digitando em input/textarea
       const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select") {
         return;
       }
 
+      // Help modal: ?
+      if (e.key === "?" || (e.shiftKey && e.key === "/")) {
+        e.preventDefault();
+        setShowShortcutsModal(true);
+        return;
+      }
+
+      // Tools: V, H, Z
+      if (e.key.toLowerCase() === "v" && !e.ctrlKey && !e.metaKey) {
+        setActiveTool("select");
+      } else if (e.key.toLowerCase() === "h" && !e.ctrlKey && !e.metaKey) {
+        setActiveTool("hand");
+      } else if (e.key.toLowerCase() === "z" && !e.ctrlKey && !e.metaKey) {
+        setActiveTool("zoom");
+      } else if (e.key.toLowerCase() === "g" && !e.ctrlKey && !e.metaKey) {
+        setShowGrid((v) => !v);
+      } else if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey) {
+        setShowRulers((v) => !v);
+      } else if (e.key.toLowerCase() === "u" && !e.ctrlKey && !e.metaKey) {
+        setSnapToGuides((v) => !v);
+      }
+
+      // Space key for temporary hand pan
+      if (e.code === "Space" && !isSpacePressed) {
+        setIsSpacePressed(true);
+      }
+
+      // Undo / Redo
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         if (e.shiftKey) {
@@ -336,32 +482,228 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
         e.preventDefault();
         handleRedo();
-      } else if (selectedProductId) {
-        // Setas do teclado para mover sutilmente a posição dentro do box
+      }
+
+      // Fit to screen: Ctrl+0
+      else if ((e.ctrlKey || e.metaKey) && e.key === "0") {
+        e.preventDefault();
+        handleAutoFit();
+      }
+      // 100% zoom: Ctrl+1
+      else if ((e.ctrlKey || e.metaKey) && e.key === "1") {
+        e.preventDefault();
+        setZoom(1.0);
+        setPanOffset({ x: 0, y: 0 });
+      }
+      // Select all: Ctrl+A
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        const allTargets: SelectedTarget[] = pageProducts.map((p) => ({
+          productId: p.id,
+          element: "box",
+        }));
+        setSelectedTargets(allTargets);
+      }
+      // Deselect all: Ctrl+D or Esc
+      else if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") || e.key === "Escape") {
+        e.preventDefault();
+        setSelectedTargets([]);
+        setSelectedElement(null);
+      }
+      // Arrow keys (1px or 10px with Shift)
+      else if (selectedProductId && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 1;
         const currentOffsetX = currentCustom.boxOffsetX || 0;
         const currentOffsetY = currentCustom.boxOffsetY || 0;
 
         if (e.key === "ArrowLeft") {
-          e.preventDefault();
-          updateCustomStyle({ boxOffsetX: Math.max(-25, currentOffsetX - 2) });
+          updateCustomStyle({ boxOffsetX: currentOffsetX - step });
         } else if (e.key === "ArrowRight") {
-          e.preventDefault();
-          updateCustomStyle({ boxOffsetX: Math.min(25, currentOffsetX + 2) });
+          updateCustomStyle({ boxOffsetX: currentOffsetX + step });
         } else if (e.key === "ArrowUp") {
-          e.preventDefault();
-          updateCustomStyle({ boxOffsetY: Math.max(-25, currentOffsetY - 2) });
+          updateCustomStyle({ boxOffsetY: currentOffsetY - step });
         } else if (e.key === "ArrowDown") {
-          e.preventDefault();
-          updateCustomStyle({ boxOffsetY: Math.min(25, currentOffsetY + 2) });
+          updateCustomStyle({ boxOffsetY: currentOffsetY + step });
         }
+      }
+      // Tab / Shift+Tab to cycle elements
+      else if (e.key === "Tab") {
+        e.preventDefault();
+        if (pageProducts.length === 0) return;
+        const currentIndex = pageProducts.findIndex((p) => p.id === selectedProductId);
+        const nextIndex = e.shiftKey
+          ? (currentIndex - 1 + pageProducts.length) % pageProducts.length
+          : (currentIndex + 1) % pageProducts.length;
+        setSelectedProductId(pageProducts[nextIndex].id);
+        setSelectedElement("box");
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        setIsSpacePressed(false);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleUndo, handleRedo, selectedProductId, currentCustom, updateCustomStyle]);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [
+    handleUndo,
+    handleRedo,
+    handleAutoFit,
+    isSpacePressed,
+    pageProducts,
+    selectedProductId,
+    currentCustom,
+    updateCustomStyle,
+  ]);
 
-  // Alerta de fontes abaixo do mínimo legível
+  // Mouse wheel zoom centered on cursor
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 0.05 : -0.05;
+      setZoom((prev) => Math.max(0.15, Math.min(2.5, Number((prev + delta).toFixed(2)))));
+    } else if (isSpacePressed || activeTool === "hand") {
+      // Pan with wheel
+      setPanOffset((prev) => ({
+        x: prev.x - e.deltaX,
+        y: prev.y - e.deltaY,
+      }));
+    }
+  };
+
+  // Pan mouse down
+  const handleMouseDownCanvas = (e: React.MouseEvent) => {
+    if (isSpacePressed || activeTool === "hand" || e.button === 1) {
+      e.preventDefault();
+      setIsPanning(true);
+      dragStartRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        panX: panOffset.x,
+        panY: panOffset.y,
+      };
+    } else if (activeTool === "select" && e.target === e.currentTarget) {
+      // Clicked on empty canvas space -> Marquee selection
+      isMarqueeRef.current = true;
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const startX = e.clientX - rect.left;
+      const startY = e.clientY - rect.top;
+      marqueeOriginRef.current = { x: startX, y: startY };
+      setMarqueeBox({ x: startX, y: startY, width: 0, height: 0 });
+    }
+  };
+
+  const handleMouseMoveCanvas = (e: React.MouseEvent) => {
+    if (isPanning) {
+      const dx = e.clientX - dragStartRef.current.x;
+      const dy = e.clientY - dragStartRef.current.y;
+      setPanOffset({
+        x: dragStartRef.current.panX + dx,
+        y: dragStartRef.current.panY + dy,
+      });
+    } else if (isMarqueeRef.current) {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const currentX = e.clientX - rect.left;
+      const currentY = e.clientY - rect.top;
+
+      const x = Math.min(marqueeOriginRef.current.x, currentX);
+      const y = Math.min(marqueeOriginRef.current.y, currentY);
+      const width = Math.abs(currentX - marqueeOriginRef.current.x);
+      const height = Math.abs(currentY - marqueeOriginRef.current.y);
+
+      setMarqueeBox({ x, y, width, height });
+    }
+  };
+
+  const handleMouseUpCanvas = () => {
+    if (isPanning) {
+      setIsPanning(false);
+    }
+    if (isMarqueeRef.current) {
+      isMarqueeRef.current = false;
+      setMarqueeBox(null);
+    }
+  };
+
+  // Selection target handler
+  const handleSelectTarget = (target: SelectedTarget, multiSelect?: boolean) => {
+    setSelectedProductId(target.productId);
+    setSelectedElement(target.element);
+
+    if (multiSelect) {
+      setSelectedTargets((prev) => {
+        const exists = prev.some(
+          (t) => t.productId === target.productId && t.element === target.element
+        );
+        if (exists) {
+          return prev.filter(
+            (t) => !(t.productId === target.productId && t.element === target.element)
+          );
+        }
+        return [...prev, target];
+      });
+    } else {
+      setSelectedTargets([target]);
+    }
+  };
+
+  // Pre-flight check generator
+  const preflightIssues = useMemo<PreflightIssue[]>(() => {
+    const issues: PreflightIssue[] = [];
+
+    products.forEach((p, index) => {
+      if (!p.included) return;
+      const pageNum = Math.floor(index / perPage) + 1;
+
+      // 1. Missing Photo
+      if (!p.image || String(p.image).trim() === "") {
+        issues.push({
+          id: `missing-photo-${p.id}`,
+          type: "missing_photo",
+          title: "Produto sem foto",
+          description: `"${p.name || p.code || "Item"}" está sem imagem cadastrada.`,
+          page: pageNum,
+          productId: p.id,
+        });
+      }
+
+      // 2. Empty or Zero Price
+      if (!p.price || String(p.price).trim() === "" || p.price === "0" || p.price === "0,00") {
+        issues.push({
+          id: `empty-price-${p.id}`,
+          type: "empty_price",
+          title: "Preço zerado ou vazio",
+          description: `"${p.name || p.code || "Item"}" está sem preço definido.`,
+          page: pageNum,
+          productId: p.id,
+        });
+      }
+
+      // 3. Font Below Min Legibility
+      const cs = p.customStyle || {};
+      if (typeof cs.nameFontSize === "number" && cs.nameFontSize < 20) {
+        issues.push({
+          id: `font-min-${p.id}`,
+          type: "font_below_min",
+          title: "Fonte abaixo do tamanho mínimo",
+          description: `Nome de "${p.name}" está com ${cs.nameFontSize}px (mínimo recomendado: 24px).`,
+          page: pageNum,
+          productId: p.id,
+        });
+      }
+    });
+
+    return issues;
+  }, [products, perPage]);
+
+  // Font warnings for current page
   const fontWarnings = useMemo(() => {
     const warnings: string[] = [];
     pageProducts.forEach((p) => {
@@ -377,45 +719,135 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
     return warnings;
   }, [pageProducts]);
 
+  // Proceed button click
+  const handleProceedClick = () => {
+    if (preflightIssues.length > 0) {
+      setShowPreflightModal(true);
+    } else {
+      onProceedToExport();
+    }
+  };
+
+  const handleFixIssue = (issue: PreflightIssue) => {
+    setActivePage(issue.page);
+    if (issue.productId) {
+      setSelectedProductId(issue.productId);
+      setSelectedElement("box");
+    }
+  };
+
   return (
     <div
       data-testid="final-editor-container"
-      className="flex flex-col h-[calc(100vh-140px)] min-h-[640px] bg-neutral-100 rounded-xl border border-neutral-200 overflow-hidden shadow-xs"
+      className="flex flex-col h-[calc(100vh-140px)] min-h-[640px] bg-neutral-900 rounded-xl border border-border overflow-hidden shadow-2xl select-none"
     >
-      {/* BARRA SUPERIOR DA EDIÇÃO FINAL */}
-      <header className="h-14 bg-white border-b px-4 flex items-center justify-between shrink-0 z-20">
+      {/* 1. TOP HEADER & TOOLBAR */}
+      <header className="h-13 bg-card border-b border-border px-4 flex items-center justify-between shrink-0 z-30">
+        {/* Left: Back & Title */}
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
             size="sm"
             onClick={onBackToCampaign}
-            className="text-xs font-semibold text-neutral-700"
+            className="text-xs font-semibold"
           >
             <ChevronLeft className="h-4 w-4 mr-1" />
-            Voltar para Campanha
+            Voltar
           </Button>
-          <div className="h-4 w-px bg-neutral-200" />
+
+          <div className="h-4 w-px bg-border" />
+
           <div className="flex items-center gap-2">
-            <span className="font-bold text-sm text-neutral-900 flex items-center gap-1.5">
-              <Sparkles className="h-4 w-4 text-purple-600" />
-              Edição Final & Diagramação
+            <span className="font-bold text-sm text-foreground flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Edição Visual
             </span>
-            <span className="text-xs text-neutral-500">
-              (Página {activePage} de {totalPages} · {flyerProducts.length} itens)
-            </span>
+            <Badge variant="outline" className="text-[11px] font-mono">
+              Página {activePage} de {totalPages} · {flyerProducts.length} itens
+            </Badge>
           </div>
         </div>
 
-        {/* CONTROLES DE HISTÓRICO (DESFAZER / REFAZER) E ZOOM */}
+        {/* Center: Tools (V, H, Z, Grid, Rulers, Guides) */}
+        <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg border border-border">
+          <Button
+            variant={activeTool === "select" ? "default" : "ghost"}
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => setActiveTool("select")}
+            title="Ferramenta de Seleção (V)"
+          >
+            <MousePointer className="h-3.5 w-3.5 mr-1" />
+            Seleção
+          </Button>
+
+          <Button
+            variant={activeTool === "hand" || isSpacePressed ? "default" : "ghost"}
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => setActiveTool("hand")}
+            title="Ferramenta de Mão / Pan (H ou segurar Espaço)"
+          >
+            <Hand className="h-3.5 w-3.5 mr-1" />
+            Mão
+          </Button>
+
+          <div className="h-4 w-px bg-border mx-0.5" />
+
+          <Button
+            variant={showRulers ? "secondary" : "ghost"}
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setShowRulers(!showRulers)}
+            title="Mostrar / Ocultar Réguas (R)"
+          >
+            <Ruler className="h-3.5 w-3.5" />
+          </Button>
+
+          <Button
+            variant={showGrid ? "secondary" : "ghost"}
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setShowGrid(!showGrid)}
+            title="Mostrar / Ocultar Grade (G)"
+          >
+            <Grid className="h-3.5 w-3.5" />
+          </Button>
+
+          <Button
+            variant={snapToGuides ? "secondary" : "ghost"}
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setSnapToGuides(!snapToGuides)}
+            title="Guias Inteligentes / Snap (U)"
+          >
+            <Magnet className="h-3.5 w-3.5" />
+          </Button>
+
+          <div className="h-4 w-px bg-border mx-0.5" />
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setShowShortcutsModal(true)}
+            title="Atalhos de Teclado (?)"
+          >
+            <Keyboard className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+
+        {/* Right: History (Undo/Redo), Zoom, and Export Button */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center border rounded-lg bg-neutral-50 p-0.5">
+          {/* Undo / Redo */}
+          <div className="flex items-center border border-border rounded-lg bg-card p-0.5">
             <Button
               variant="ghost"
               size="sm"
               onClick={handleUndo}
               disabled={history.length === 0}
-              className="h-8 px-2.5 text-xs text-neutral-700 disabled:opacity-40"
-              title="Desfazer alteração (Ctrl+Z)"
+              className="h-7 px-2 text-xs disabled:opacity-30"
+              title="Desfazer (Ctrl+Z)"
               data-testid="undo-button"
             >
               <Undo2 className="h-3.5 w-3.5 mr-1" />
@@ -426,8 +858,8 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
               size="sm"
               onClick={handleRedo}
               disabled={future.length === 0}
-              className="h-8 px-2.5 text-xs text-neutral-700 disabled:opacity-40"
-              title="Refazer alteração (Ctrl+Y)"
+              className="h-7 px-2 text-xs disabled:opacity-30"
+              title="Refazer (Ctrl+Y)"
               data-testid="redo-button"
             >
               <Redo2 className="h-3.5 w-3.5 mr-1" />
@@ -435,24 +867,25 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
             </Button>
           </div>
 
-          <div className="flex items-center border rounded-lg bg-neutral-50 p-0.5">
+          {/* Zoom controls */}
+          <div className="flex items-center border border-border rounded-lg bg-card p-0.5">
             <Button
               variant="ghost"
-              size="sm"
-              onClick={() => setZoom((z) => Math.max(0.25, Number((z - 0.05).toFixed(2))))}
-              className="h-8 w-8 p-0"
+              size="icon"
+              onClick={() => setZoom((z) => Math.max(0.15, Number((z - 0.05).toFixed(2))))}
+              className="h-7 w-7 p-0"
               title="Diminuir zoom"
             >
               <ZoomOut className="h-3.5 w-3.5" />
             </Button>
-            <span className="text-xs font-semibold px-2 text-neutral-700 select-none">
+            <span className="text-xs font-semibold px-2 font-mono select-none">
               {Math.round(zoom * 100)}%
             </span>
             <Button
               variant="ghost"
-              size="sm"
-              onClick={() => setZoom((z) => Math.min(0.9, Number((z + 0.05).toFixed(2))))}
-              className="h-8 w-8 p-0"
+              size="icon"
+              onClick={() => setZoom((z) => Math.min(2.5, Number((z + 0.05).toFixed(2))))}
+              className="h-7 w-7 p-0"
               title="Aumentar zoom"
             >
               <ZoomIn className="h-3.5 w-3.5" />
@@ -461,16 +894,17 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
               variant="ghost"
               size="sm"
               onClick={handleAutoFit}
-              className="h-8 px-2 text-[11px] text-neutral-600 font-medium hover:text-neutral-900"
-              title="Ajustar zoom automaticamente à tela"
+              className="h-7 px-2 text-[11px] font-medium"
+              title="Ajustar à tela (Ctrl+0)"
             >
               Ajustar
             </Button>
           </div>
 
+          {/* Proceed button */}
           <Button
-            onClick={onProceedToExport}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs"
+            onClick={handleProceedClick}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs shadow-md"
             data-testid="proceed-export-button"
           >
             Avançar para Exportação
@@ -479,104 +913,150 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
         </div>
       </header>
 
-      {/* ÁREA PRINCIPAL EM 3 COLUNAS */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* 2. THREE-COLUMN WORKSPACE */}
+      <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {/* ================================================================= */}
-        {/* COLUNA 1: MINIATURAS DAS PÁGINAS (ESQUERDA) */}
+        {/* LEFT COLUMN: PAGES MINIATURES & LAYERS PANEL */}
         {/* ================================================================= */}
         <aside
           data-testid="thumbnails-sidebar"
-          className="w-44 lg:w-52 bg-white border-r flex flex-col shrink-0 overflow-hidden"
+          className="w-56 lg:w-64 bg-card border-r border-border flex flex-col shrink-0 overflow-hidden z-20"
         >
-          <div className="p-3 border-b bg-neutral-50/70 flex items-center justify-between">
-            <span className="text-xs font-bold text-neutral-800 uppercase tracking-wider">
+          {/* Left tabs: Páginas vs Camadas */}
+          <div className="p-2 border-b border-border bg-muted/30 grid grid-cols-2 gap-1">
+            <button
+              type="button"
+              onClick={() => setLeftTab("pages")}
+              className={`py-1.5 text-xs rounded-md font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                leftTab === "pages"
+                  ? "bg-background text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Smartphone className="w-3.5 h-3.5" />
               Páginas ({totalPages})
-            </span>
-            <span className="text-[11px] text-neutral-500 font-medium">
-              {flyerProducts.length} itens
-            </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setLeftTab("layers")}
+              className={`py-1.5 text-xs rounded-md font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                leftTab === "layers"
+                  ? "bg-background text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              Camadas
+            </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
-            {Array.from({ length: totalPages }).map((_, pIdx) => {
-              const pNumber = pIdx + 1;
-              const isCurrent = pNumber === activePage;
-              const startIdx = pIdx * perPage;
-              const itemsThisPage = flyerProducts.slice(startIdx, startIdx + perPage);
-              const customCount = itemsThisPage.filter(
-                (p) => p.customStyle && Object.keys(p.customStyle).length > 0
-              ).length;
+          {leftTab === "pages" ? (
+            <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
+              {Array.from({ length: totalPages }).map((_, pIdx) => {
+                const pNumber = pIdx + 1;
+                const isCurrent = pNumber === activePage;
+                const startIdx = pIdx * perPage;
+                const itemsThisPage = flyerProducts.slice(startIdx, startIdx + perPage);
+                const customCount = itemsThisPage.filter(
+                  (p) => p.customStyle && Object.keys(p.customStyle).length > 0
+                ).length;
 
-              return (
-                <button
-                  key={`thumb-page-${pNumber}`}
-                  type="button"
-                  data-testid={`thumbnail-page-${pNumber}`}
-                  onClick={() => setActivePage(pNumber)}
-                  className={`w-full text-left rounded-lg p-2.5 border transition-all flex flex-col gap-1.5 ${
-                    isCurrent
-                      ? "border-red-600 bg-red-50/60 ring-2 ring-red-500/20"
-                      : "border-neutral-200 hover:bg-neutral-50 bg-white"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`text-xs font-bold ${
-                        isCurrent ? "text-red-700" : "text-neutral-900"
-                      }`}
-                    >
-                      Página {pNumber}
-                    </span>
-                    <span className="text-[10px] font-semibold text-neutral-500 bg-neutral-100 px-1.5 py-0.5 rounded">
-                      {itemsThisPage.length} {itemsThisPage.length === 1 ? "item" : "itens"}
-                    </span>
-                  </div>
-
-                  {/* Representação visual simplificada da folha 9:16 */}
-                  <div className="w-full aspect-[9/16] max-h-36 bg-neutral-800 rounded border border-neutral-300 relative overflow-hidden flex items-center justify-center shadow-2xs">
-                    <img
-                      src={
-                        campaign.template916Image ||
-                        "/templates/template-detona-precos-9-16.png"
-                      }
-                      alt={`Página ${pNumber}`}
-                      className="w-full h-full object-cover opacity-80"
-                    />
-                    <div className="absolute inset-x-2 bottom-2 top-[35%] bg-[#F2F2F2] rounded-xs p-1 grid grid-cols-2 gap-0.5 pointer-events-none opacity-90">
-                      {itemsThisPage.map((p, itemIdx) => (
-                        <div
-                          key={p.id || itemIdx}
-                          className="bg-white rounded-[2px] border border-neutral-300 flex items-center justify-center p-0.5"
-                        >
-                          <div className="w-full h-1 bg-red-600 rounded-full" />
-                        </div>
-                      ))}
+                return (
+                  <button
+                    key={`thumb-page-${pNumber}`}
+                    type="button"
+                    data-testid={`thumbnail-page-${pNumber}`}
+                    onClick={() => setActivePage(pNumber)}
+                    className={`w-full text-left rounded-lg p-2.5 border transition-all flex flex-col gap-1.5 ${
+                      isCurrent
+                        ? "border-primary bg-primary/10 ring-2 ring-primary/30"
+                        : "border-border hover:bg-muted/50 bg-card"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`text-xs font-bold ${
+                          isCurrent ? "text-primary" : "text-foreground"
+                        }`}
+                      >
+                        Página {pNumber}
+                      </span>
+                      <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                        {itemsThisPage.length} {itemsThisPage.length === 1 ? "item" : "itens"}
+                      </span>
                     </div>
-                  </div>
 
-                  {customCount > 0 && (
-                    <div className="flex items-center gap-1 text-[10px] text-purple-700 font-semibold mt-0.5">
-                      <Sparkles className="h-3 w-3" />
-                      <span>{customCount} customizado(s)</span>
+                    {/* Miniature 9:16 layout representation */}
+                    <div className="w-full aspect-[9/16] max-h-36 bg-black rounded border border-border relative overflow-hidden flex items-center justify-center shadow-inner">
+                      <img
+                        src={
+                          campaign.template916Image ||
+                          "/templates/template-detona-precos-9-16.png"
+                        }
+                        alt={`Página ${pNumber}`}
+                        className="w-full h-full object-cover opacity-80"
+                      />
+                      <div className="absolute inset-x-2 bottom-2 top-[35%] bg-neutral-200/90 rounded p-1 grid grid-cols-2 gap-0.5 pointer-events-none">
+                        {itemsThisPage.map((p, itemIdx) => (
+                          <div
+                            key={p.id || itemIdx}
+                            className="bg-white rounded border border-neutral-300 flex items-center justify-center p-0.5"
+                          >
+                            <div className="w-full h-1 bg-red-600 rounded-full" />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+
+                    {customCount > 0 && (
+                      <div className="flex items-center gap-1 text-[10px] text-primary font-semibold mt-0.5">
+                        <Sparkles className="h-3 w-3" />
+                        <span>{customCount} customizado(s)</span>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex-1 overflow-hidden">
+              <LayersPanel
+                products={pageProducts}
+                customStyles={Object.fromEntries(
+                  pageProducts.map((p) => [p.id, p.customStyle || {}])
+                )}
+                selectedTarget={
+                  selectedProductId
+                    ? { productId: selectedProductId, element: selectedElement || "box" }
+                    : null
+                }
+                selectedTargets={selectedTargets}
+                onSelectTarget={handleSelectTarget}
+                onToggleLock={handleToggleLock}
+                onToggleVisibility={handleToggleVisibility}
+                onReorderProduct={handleReorderProduct}
+              />
+            </div>
+          )}
         </aside>
 
         {/* ================================================================= */}
-        {/* COLUNA 2: CANVAS INTERATIVO AMPLIADO (CENTRO) */}
+        {/* CENTER COLUMN: INTERACTIVE CANVAS WITH RULERS & TRANSFORM BOX */}
         {/* ================================================================= */}
         <main
           data-testid="interactive-canvas"
           ref={mainRef}
-          className="flex-1 min-w-0 bg-neutral-900 flex flex-col items-center justify-center relative overflow-auto p-4 sm:p-6"
+          onWheel={handleWheel}
+          onMouseDown={handleMouseDownCanvas}
+          onMouseMove={handleMouseMoveCanvas}
+          onMouseUp={handleMouseUpCanvas}
+          className={`flex-1 min-w-0 bg-[#121212] flex flex-col relative overflow-hidden select-none ${
+            isSpacePressed || activeTool === "hand" ? "cursor-grab" : ""
+          } ${isPanning ? "cursor-grabbing" : ""}`}
         >
-          {/* Alerta de Fontes Menores que o Mínimo */}
+          {/* Top Legibility Warning Banner if font is below 24px */}
           {fontWarnings.length > 0 && (
-            <div className="absolute top-4 left-6 right-6 z-30 bg-amber-500/95 border border-amber-600 text-black px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-between shadow-md">
+            <div className="absolute top-8 left-12 right-12 z-30 bg-amber-500 text-black px-4 py-2 rounded-lg text-xs font-bold flex items-center justify-between shadow-lg">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 shrink-0 text-black" />
                 <span>Aviso de Legibilidade: {fontWarnings.join(" · ")}</span>
@@ -584,573 +1064,191 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
             </div>
           )}
 
-          {/* Canvas com StoryPage916 escalada proporcionalmente sem estourar dimensões de layout */}
+          {/* Rulers Overlay */}
+          <CanvasRulers
+            zoom={zoom}
+            panOffset={panOffset}
+            visible={showRulers}
+            guides={guides}
+            onAddGuide={(g) => setGuides((prev) => [...prev, g])}
+            onUpdateGuide={(id, pos) =>
+              setGuides((prev) => prev.map((g) => (g.id === id ? { ...g, position: pos } : g)))
+            }
+            onRemoveGuide={(id) => setGuides((prev) => prev.filter((g) => g.id !== id))}
+          />
+
+          {/* Canvas Wrapper */}
           <div
-            className="relative shrink-0 select-none my-auto transition-[width,height] duration-75"
+            ref={canvasContainerRef}
+            className="flex-1 flex items-center justify-center relative overflow-hidden"
             style={{
-              width: `${Math.round(1080 * zoom)}px`,
-              height: `${Math.round(1920 * zoom)}px`,
+              paddingLeft: showRulers ? "24px" : "0",
+              paddingTop: showRulers ? "24px" : "0",
             }}
           >
+            {/* 1080x1920 Page scaled with transform */}
             <div
+              className="relative shrink-0 transition-[transform] duration-75"
               style={{
-                width: "1080px",
-                height: "1920px",
-                transform: `scale(${zoom})`,
-                transformOrigin: "top left",
-                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.7)",
+                width: `${Math.round(1080 * zoom)}px`,
+                height: `${Math.round(1920 * zoom)}px`,
+                transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
               }}
-              className="absolute top-0 left-0"
             >
-              <StoryPage916
-                pageNumber={activePage}
-                totalPages={totalPages}
-                products={pageProducts}
-                store={store}
-                campaign={campaign}
-                domId={`story-page-editor-${activePage}`}
-                selectedProductId={selectedProductId}
-                onSelectProduct={(id) => setSelectedProductId(id)}
-                isInteractive={true}
-              />
+              {/* Actual 1080x1920 canvas container */}
+              <div
+                style={{
+                  width: "1080px",
+                  height: "1920px",
+                  transform: `scale(${zoom})`,
+                  transformOrigin: "top left",
+                  boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255,255,255,0.08)",
+                }}
+                className="absolute top-0 left-0 bg-black overflow-hidden"
+              >
+                {/* 1. Underlying StoryPage916 */}
+                <StoryPage916
+                  pageNumber={activePage}
+                  totalPages={totalPages}
+                  products={pageProducts}
+                  store={store}
+                  campaign={campaign}
+                  domId={`story-page-editor-${activePage}`}
+                  selectedProductId={selectedProductId}
+                  selectedElement={selectedElement}
+                  onSelectProduct={(id) => {
+                    setSelectedProductId(id);
+                    setSelectedElement("box");
+                  }}
+                  onSelectElement={(id, el) => {
+                    setSelectedProductId(id);
+                    setSelectedElement(el);
+                  }}
+                  isInteractive={true}
+                />
+
+                {/* 2. Grid overlay */}
+                {showGrid && (
+                  <div
+                    className="absolute inset-0 pointer-events-none z-20"
+                    style={{
+                      backgroundImage: `linear-gradient(to right, rgba(0, 168, 255, 0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(0, 168, 255, 0.15) 1px, transparent 1px)`,
+                      backgroundSize: `${gridSpacing}px ${gridSpacing}px`,
+                    }}
+                  />
+                )}
+
+                {/* 3. Transform Bounding Box with 8 handles & Smart Guides */}
+                {currentBoundingBox && selectedProduct && !currentCustom.isLocked && (
+                  <TransformBoundingBox
+                    box={currentBoundingBox}
+                    zoom={1} // Natively in 1080x1920 canvas coordinates
+                    allowRotation={selectedElement === "image"}
+                    snapGuides={smartGuides}
+                    onTransform={handleTransformBox}
+                    onTransformEnd={() => {
+                      setSmartGuides([]);
+                    }}
+                  />
+                )}
+              </div>
             </div>
+
+            {/* Marquee selection rectangle */}
+            {marqueeBox && (
+              <div
+                className="absolute pointer-events-none border border-primary bg-primary/20 z-40"
+                style={{
+                  left: `${marqueeBox.x}px`,
+                  top: `${marqueeBox.y}px`,
+                  width: `${marqueeBox.width}px`,
+                  height: `${marqueeBox.height}px`,
+                }}
+              />
+            )}
           </div>
+
+          {/* Bottom Status Bar */}
+          <footer className="h-7 bg-card border-t border-border px-4 flex items-center justify-between text-[11px] text-muted-foreground shrink-0 z-30">
+            <div className="flex items-center gap-3">
+              <span>
+                Página <b className="text-foreground">{activePage}</b> de {totalPages}
+              </span>
+              <span>·</span>
+              <span>
+                Zoom: <b className="text-foreground">{Math.round(zoom * 100)}%</b>
+              </span>
+              {selectedProduct && (
+                <>
+                  <span>·</span>
+                  <span>
+                    Selecionado:{" "}
+                    <b className="text-foreground truncate max-w-xs inline-block align-bottom">
+                      {selectedProduct.name} ({selectedElement || "box"})
+                    </b>
+                  </span>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline">Pressione</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border font-mono text-[10px] font-bold text-foreground">
+                ?
+              </kbd>
+              <span className="hidden sm:inline">para atalhos</span>
+            </div>
+          </footer>
         </main>
 
         {/* ================================================================= */}
-        {/* COLUNA 3: PAINEL DE PROPRIEDADES (DIREITA) */}
+        {/* RIGHT COLUMN: PROPERTIES PANEL (INSPECTOR) */}
         {/* ================================================================= */}
         <aside
           data-testid="properties-panel"
-          className="w-80 lg:w-96 bg-white border-l flex flex-col shrink-0 overflow-hidden"
+          className="w-80 lg:w-96 bg-card border-l border-border flex flex-col shrink-0 overflow-hidden z-20"
         >
-          {selectedProduct ? (
-            <div className="flex-1 flex flex-col overflow-y-auto">
-              {/* CABEÇALHO DO PRODUTO SELECIONADO */}
-              <div className="p-3.5 border-b bg-neutral-50/80">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-[11px] font-mono font-bold bg-neutral-200 px-1.5 py-0.5 rounded text-neutral-800 shrink-0">
-                      {selectedProduct.code || "S/ CÓD"}
-                    </span>
-                    <h3
-                      className="text-xs font-bold text-neutral-900 truncate"
-                      title={selectedProduct.name}
-                    >
-                      {selectedProduct.name}
-                    </h3>
-                  </div>
-                  {selectedProduct.customStyle && (
-                    <span className="text-[10px] bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0">
-                      <Sparkles className="h-3 w-3" />
-                      Editado
-                    </span>
-                  )}
-                </div>
-
-                {/* BOTÕES DE REORDENAÇÃO E MUDANÇA DE PÁGINA */}
-                <div className="mt-2.5 flex items-center justify-between gap-1.5 pt-2 border-t border-neutral-200/60">
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleReorderProduct("up")}
-                      className="h-7 px-2 text-[11px]"
-                      title="Mover card para antes"
-                    >
-                      <ArrowUp className="h-3 w-3 mr-1" />
-                      Antes
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleReorderProduct("down")}
-                      className="h-7 px-2 text-[11px]"
-                      title="Mover card para depois"
-                    >
-                      <ArrowDown className="h-3 w-3 mr-1" />
-                      Depois
-                    </Button>
-                  </div>
-
-                  {totalPages > 1 && (
-                    <div className="flex items-center gap-1">
-                      <Label className="text-[10px] text-neutral-500">Pág:</Label>
-                      <select
-                        value={activePage}
-                        onChange={(e) => handleMoveToPage(Number(e.target.value))}
-                        className="h-7 text-xs border rounded px-1.5 bg-white font-medium"
-                      >
-                        {Array.from({ length: totalPages }).map((_, i) => (
-                          <option key={`goto-${i + 1}`} value={i + 1}>
-                            Pág. {i + 1}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleResetProduct}
-                    className="h-7 px-2 text-[11px] text-neutral-500 hover:text-red-600"
-                    title="Restaurar padrão do layout deste produto"
-                  >
-                    <RotateCcw className="h-3 w-3 mr-1" />
-                    Padrão
-                  </Button>
-                </div>
-              </div>
-
-              {/* SEÇÃO 1: EDIÇÃO RÁPIDA DE DADOS DO PRODUTO */}
-              <div className="p-3.5 border-b space-y-2.5">
-                <div className="text-[11px] font-bold text-neutral-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <Type className="h-3.5 w-3.5 text-neutral-500" />
-                  Valores do Produto
-                </div>
-                <div className="space-y-2">
-                  <div>
-                    <Label className="text-[11px] text-neutral-600">Nome do Produto</Label>
-                    <Input
-                      value={selectedProduct.name}
-                      onChange={(e) => updateProductData("name", e.target.value)}
-                      className="h-8 text-xs font-semibold"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-[11px] text-neutral-600">Código</Label>
-                      <Input
-                        value={selectedProduct.code || ""}
-                        onChange={(e) => updateProductData("code", e.target.value)}
-                        className="h-8 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-[11px] text-neutral-600">Embalagem</Label>
-                      <Input
-                        value={selectedProduct.packaging || ""}
-                        onChange={(e) => updateProductData("packaging", e.target.value)}
-                        className="h-8 text-xs"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-[11px] text-neutral-600">Preço (R$)</Label>
-                      <Input
-                        value={selectedProduct.price || ""}
-                        onChange={(e) => updateProductData("price", e.target.value)}
-                        className="h-8 text-xs font-bold text-red-600"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-[11px] text-neutral-600">Unidade (UND/CX)</Label>
-                      <Input
-                        value={selectedProduct.unit || ""}
-                        onChange={(e) => updateProductData("unit", e.target.value)}
-                        className="h-8 text-xs font-semibold"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-[11px] text-neutral-600">Validade</Label>
-                      <Input
-                        value={selectedProduct.validity || ""}
-                        onChange={(e) => updateProductData("validity", e.target.value)}
-                        className="h-8 text-xs"
-                        placeholder="dd/mm/aaaa"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-[11px] text-neutral-600">Estoque</Label>
-                      <Input
-                        value={selectedProduct.stock || ""}
-                        onChange={(e) => updateProductData("stock", e.target.value)}
-                        className="h-8 text-xs"
-                        placeholder="ex: 15 UNID"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* SEÇÃO 2: ELEMENTO SELECIONADO & ESTILOS VISUAIS */}
-              <div className="p-3.5 border-b space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-neutral-800 uppercase tracking-wider flex items-center gap-1.5">
-                    <Palette className="h-3.5 w-3.5 text-neutral-500" />
-                    Estilo Visual
-                  </span>
-
-                  {/* ESCOPO DAS ALTERAÇÕES */}
-                  <div className="flex items-center border rounded bg-neutral-100 p-0.5 text-[10px]">
-                    <button
-                      type="button"
-                      onClick={() => setScope("product")}
-                      className={`px-1.5 py-0.5 rounded font-bold transition-colors ${
-                        scope === "product" ? "bg-white text-neutral-900 shadow-2xs" : "text-neutral-500"
-                      }`}
-                      title="Aplicar apenas a este produto"
-                    >
-                      Item
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setScope("page")}
-                      className={`px-1.5 py-0.5 rounded font-bold transition-colors ${
-                        scope === "page" ? "bg-white text-neutral-900 shadow-2xs" : "text-neutral-500"
-                      }`}
-                      title="Aplicar aos cards desta página"
-                    >
-                      Página
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setScope("all")}
-                      className={`px-1.5 py-0.5 rounded font-bold transition-colors ${
-                        scope === "all" ? "bg-white text-neutral-900 shadow-2xs" : "text-neutral-500"
-                      }`}
-                      title="Aplicar a todas as páginas da campanha"
-                    >
-                      Todos
-                    </button>
-                  </div>
-                </div>
-
-                {/* SELETOR DE ELEMENTO DO BOX */}
-                <div className="grid grid-cols-4 gap-1">
-                  {[
-                    { id: "pill", label: "Pílula" },
-                    { id: "name", label: "Nome" },
-                    { id: "header", label: "Código" },
-                    { id: "validity", label: "Validade" },
-                    { id: "stock", label: "Estoque" },
-                    { id: "box", label: "Borda/Box" },
-                    { id: "image", label: "Foto" },
-                  ].map((el) => (
-                    <button
-                      key={el.id}
-                      type="button"
-                      onClick={() => setActiveElement(el.id as TargetElement)}
-                      className={`py-1 px-1.5 rounded text-[11px] font-bold border transition-colors ${
-                        activeElement === el.id
-                          ? "bg-red-600 text-white border-red-600 shadow-2xs"
-                          : "bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100"
-                      }`}
-                    >
-                      {el.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* PAINEL DE CORES (PALETA + CAMPO HEX) */}
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-[11px] text-neutral-600 font-semibold">
-                      Cor do Elemento ({activeElement})
-                    </Label>
-                    <span className="text-[10px] font-mono text-neutral-500">
-                      {activeElement === "pill"
-                        ? currentCustom.pillBgColor || "#E30613"
-                        : activeElement === "name"
-                        ? currentCustom.nameColor || "#000000"
-                        : activeElement === "header"
-                        ? currentCustom.headerColor || "#000000"
-                        : activeElement === "validity"
-                        ? currentCustom.validityBgColor || "#000000"
-                        : activeElement === "stock"
-                        ? currentCustom.stockBgColor || "#000000"
-                        : activeElement === "box"
-                        ? currentCustom.boxBorderColor || "#D9D9D9"
-                        : ""}
-                    </span>
-                  </div>
-
-                  {/* Paleta oficial de 10 cores */}
-                  <div className="grid grid-cols-5 gap-1.5">
-                    {TEMPLATE_PALETTE.map((c) => (
-                      <button
-                        key={c.hex}
-                        type="button"
-                        onClick={() => {
-                          if (activeElement === "pill") updateCustomStyle({ pillBgColor: c.hex });
-                          else if (activeElement === "name") updateCustomStyle({ nameColor: c.hex });
-                          else if (activeElement === "header") updateCustomStyle({ headerColor: c.hex });
-                          else if (activeElement === "validity") updateCustomStyle({ validityBgColor: c.hex });
-                          else if (activeElement === "stock") updateCustomStyle({ stockBgColor: c.hex });
-                          else if (activeElement === "box") updateCustomStyle({ boxBorderColor: c.hex });
-                        }}
-                        style={{ backgroundColor: c.hex }}
-                        className="h-6 rounded border border-neutral-300 shadow-2xs hover:scale-105 transition-transform"
-                        title={`${c.name} (${c.hex})`}
-                      />
-                    ))}
-                  </div>
-
-                  {/* Campo Hex Manual */}
-                  <div className="flex items-center gap-2 pt-1">
-                    <span className="text-xs text-neutral-400 font-mono">#</span>
-                    <Input
-                      placeholder="Hex (ex: E30613)"
-                      className="h-7 text-xs font-mono uppercase"
-                      maxLength={7}
-                      onChange={(e) => {
-                        const val = e.target.value.trim();
-                        const hex = val.startsWith("#") ? val : `#${val}`;
-                        if (/^#[0-9A-Fa-f]{6}$/.test(hex)) {
-                          if (activeElement === "pill") updateCustomStyle({ pillBgColor: hex });
-                          else if (activeElement === "name") updateCustomStyle({ nameColor: hex });
-                          else if (activeElement === "header") updateCustomStyle({ headerColor: hex });
-                          else if (activeElement === "validity") updateCustomStyle({ validityBgColor: hex });
-                          else if (activeElement === "stock") updateCustomStyle({ stockBgColor: hex });
-                          else if (activeElement === "box") updateCustomStyle({ boxBorderColor: hex });
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* CONTROLES DE TIPOGRAFIA (SE ELEMENTO FOR TEXTO) */}
-                {(activeElement === "name" || activeElement === "header" || activeElement === "pill") && (
-                  <div className="space-y-2 pt-2 border-t border-neutral-100">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-[11px] text-neutral-600 font-semibold">
-                        Tamanho da Fonte (px)
-                      </Label>
-                      <div className="flex items-center border rounded bg-neutral-50 p-0.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (activeElement === "name") {
-                              const cur = currentCustom.nameFontSize || 32;
-                              updateCustomStyle({ nameFontSize: Math.max(20, cur - 1) });
-                            } else if (activeElement === "header") {
-                              const cur = currentCustom.headerFontSize || 28;
-                              updateCustomStyle({ headerFontSize: Math.max(18, cur - 1) });
-                            } else if (activeElement === "pill") {
-                              const cur = currentCustom.priceFontSize || 48;
-                              updateCustomStyle({ priceFontSize: Math.max(28, cur - 2) });
-                            }
-                          }}
-                          className="h-6 w-6 flex items-center justify-center text-xs font-bold hover:bg-neutral-200 rounded"
-                        >
-                          −
-                        </button>
-                        <span className="text-xs font-bold px-2 text-neutral-800">
-                          {activeElement === "name"
-                            ? currentCustom.nameFontSize || 32
-                            : activeElement === "header"
-                            ? currentCustom.headerFontSize || 28
-                            : currentCustom.priceFontSize || 48}
-                          px
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (activeElement === "name") {
-                              const cur = currentCustom.nameFontSize || 32;
-                              updateCustomStyle({ nameFontSize: Math.min(54, cur + 1) });
-                            } else if (activeElement === "header") {
-                              const cur = currentCustom.headerFontSize || 28;
-                              updateCustomStyle({ headerFontSize: Math.min(42, cur + 1) });
-                            } else if (activeElement === "pill") {
-                              const cur = currentCustom.priceFontSize || 48;
-                              updateCustomStyle({ priceFontSize: Math.min(64, cur + 2) });
-                            }
-                          }}
-                          className="h-6 w-6 flex items-center justify-center text-xs font-bold hover:bg-neutral-200 rounded"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Aviso se tamanho ficar abaixo do mínimo legível */}
-                    {activeElement === "name" && (currentCustom.nameFontSize || 32) < 24 && (
-                      <p className="text-[10px] text-amber-700 font-bold bg-amber-50 p-1.5 rounded border border-amber-200">
-                        ⚠️ Atenção: Tamanho abaixo do mínimo legível recomendado (24px).
-                      </p>
-                    )}
-
-                    {/* PESO E ALINHAMENTO */}
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <div>
-                        <Label className="text-[10px] text-neutral-500">Peso</Label>
-                        <div className="flex border rounded bg-neutral-50 p-0.5 text-[11px]">
-                          {(["normal", "semibold", "bold"] as const).map((w) => (
-                            <button
-                              key={w}
-                              type="button"
-                              onClick={() => {
-                                if (activeElement === "name") updateCustomStyle({ nameFontWeight: w });
-                                else if (activeElement === "header") updateCustomStyle({ headerFontWeight: w });
-                                else if (activeElement === "pill") updateCustomStyle({ priceFontWeight: w });
-                              }}
-                              className={`flex-1 py-0.5 rounded font-bold capitalize transition-colors ${
-                                (activeElement === "name"
-                                  ? currentCustom.nameFontWeight || "bold"
-                                  : activeElement === "header"
-                                  ? currentCustom.headerFontWeight || "bold"
-                                  : currentCustom.priceFontWeight || "bold") === w
-                                  ? "bg-white text-neutral-900 shadow-2xs"
-                                  : "text-neutral-500"
-                              }`}
-                            >
-                              {w === "normal" ? "Norm" : w === "semibold" ? "Semi" : "Bold"}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <Label className="text-[10px] text-neutral-500">Alinhamento</Label>
-                        <div className="flex border rounded bg-neutral-50 p-0.5 text-[11px]">
-                          {(["left", "center", "right"] as const).map((a) => (
-                            <button
-                              key={a}
-                              type="button"
-                              onClick={() => {
-                                if (activeElement === "name") updateCustomStyle({ nameAlign: a });
-                                else if (activeElement === "header") updateCustomStyle({ headerAlign: a });
-                              }}
-                              className={`flex-1 py-0.5 rounded font-bold capitalize transition-colors ${
-                                (activeElement === "name"
-                                  ? currentCustom.nameAlign || "center"
-                                  : currentCustom.headerAlign || "center") === a
-                                  ? "bg-white text-neutral-900 shadow-2xs"
-                                  : "text-neutral-500"
-                              }`}
-                            >
-                              {a === "left" ? "Esq" : a === "center" ? "Cent" : "Dir"}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* CONTROLES DE TAMANHO DA FOTO */}
-                {activeElement === "image" && (
-                  <div className="space-y-2 pt-2 border-t border-neutral-100">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-[11px] text-neutral-600 font-semibold">
-                        Escala da Foto (Zoom Seguro)
-                      </Label>
-                      <span className="text-xs font-bold text-neutral-800">
-                        {Math.round((currentCustom.imageScale ?? 1.0) * 100)}%
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          updateCustomStyle({
-                            imageScale: Math.max(0.5, Number(((currentCustom.imageScale ?? 1.0) - 0.05).toFixed(2))),
-                          })
-                        }
-                        className="h-7 w-7 p-0"
-                      >
-                        −
-                      </Button>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="1.3"
-                        step="0.05"
-                        value={currentCustom.imageScale ?? 1.0}
-                        onChange={(e) => updateCustomStyle({ imageScale: parseFloat(e.target.value) })}
-                        className="flex-1 accent-red-600"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          updateCustomStyle({
-                            imageScale: Math.min(1.3, Number(((currentCustom.imageScale ?? 1.0) + 0.05).toFixed(2))),
-                          })
-                        }
-                        className="h-7 w-7 p-0"
-                      >
-                        +
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* VISIBILIDADE DE ELEMENTOS */}
-                <div className="space-y-1.5 pt-2 border-t border-neutral-100">
-                  <Label className="text-[11px] text-neutral-600 font-semibold block">
-                    Mostrar ou Ocultar Elementos
-                  </Label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {[
-                      { key: "showCode", label: "Código", val: currentCustom.showCode !== false },
-                      { key: "showName", label: "Nome", val: currentCustom.showName !== false },
-                      { key: "showValidity", label: "Validade", val: currentCustom.showValidity !== false },
-                      { key: "showStock", label: "Estoque", val: currentCustom.showStock !== false },
-                    ].map((item) => (
-                      <button
-                        key={item.key}
-                        type="button"
-                        onClick={() => updateCustomStyle({ [item.key]: !item.val })}
-                        className={`flex items-center justify-between px-2 py-1 rounded text-[11px] font-semibold border ${
-                          item.val ? "bg-neutral-50 text-neutral-800" : "bg-neutral-100 text-neutral-400 line-through"
-                        }`}
-                      >
-                        <span>{item.label}</span>
-                        {item.val ? <Eye className="h-3 w-3 text-neutral-600" /> : <EyeOff className="h-3 w-3 text-neutral-400" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* BOTÃO APLICAR A TODAS AS PÁGINAS */}
-                <div className="pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleApplyToAllPages}
-                    className="w-full text-xs font-semibold text-neutral-700 bg-neutral-50 hover:bg-neutral-100"
-                  >
-                    <Layers className="h-3.5 w-3.5 mr-1.5 text-neutral-500" />
-                    Aplicar estilo a todas as páginas
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1 p-6 flex flex-col items-center justify-center text-center text-neutral-400 space-y-3">
-              <Move className="h-10 w-10 stroke-1" />
-              <p className="text-xs font-medium">
-                Selecione um produto no encarte para personalizar seu estilo visual ou editar seus dados.
-              </p>
-            </div>
-          )}
+          <PropertiesPanel
+            selectedTarget={
+              selectedProductId
+                ? { productId: selectedProductId, element: selectedElement || "box" }
+                : null
+            }
+            selectedTargets={selectedTargets}
+            product={selectedProduct}
+            customStyle={currentCustom}
+            globalStyle={currentGlobalStyle}
+            scope={scope}
+            onChangeScope={setScope}
+            onUpdateStyle={updateCustomStyle}
+            onUpdateProductData={handleUpdateProductData}
+            onResetStyle={handleResetProduct}
+            onAlignElements={(type) => {
+              if (type === "left") updateCustomStyle({ nameTextAlign: "left" });
+              if (type === "center") updateCustomStyle({ nameTextAlign: "center" });
+              if (type === "right") updateCustomStyle({ nameTextAlign: "right" });
+              if (type === "top") updateCustomStyle({ boxOffsetY: 0 });
+              if (type === "middle") updateCustomStyle({ boxOffsetY: 0 });
+              if (type === "bottom") updateCustomStyle({ boxOffsetY: 0 });
+            }}
+          />
         </aside>
       </div>
 
-      {/* BARRA DE STATUS / ATALHOS INFERIOR (FORA DO CANVAS, NUNCA SOBREPÕE OS PRODUTOS) */}
-      <footer className="h-8 bg-neutral-900 border-t border-neutral-800 px-4 flex items-center justify-between text-[11px] text-neutral-400 shrink-0 z-20 select-none">
-        <span className="flex items-center gap-1.5 truncate">
-          <span className="text-amber-400">💡</span> Clique em um produto para selecioná-lo. Use as setas do teclado para mover sutilmente dentro do box.
-        </span>
-        <div className="flex items-center gap-3 shrink-0">
-          <span>
-            Desfazer: <kbd className="bg-neutral-800 px-1.5 py-0.5 rounded text-white font-mono text-[10px] border border-neutral-700">Ctrl+Z</kbd>
-          </span>
-          <span>
-            Refazer: <kbd className="bg-neutral-800 px-1.5 py-0.5 rounded text-white font-mono text-[10px] border border-neutral-700">Ctrl+Y</kbd>
-          </span>
-        </div>
-      </footer>
+      {/* 3. PRE-FLIGHT CHECK MODAL BEFORE EXPORT */}
+      <PreflightModal
+        open={showPreflightModal}
+        onOpenChange={setShowPreflightModal}
+        issues={preflightIssues}
+        onFixIssue={handleFixIssue}
+        onProceedToExport={onProceedToExport}
+      />
+
+      {/* 4. KEYBOARD SHORTCUTS REFERENCE MODAL */}
+      <ShortcutsHelpModal
+        open={showShortcutsModal}
+        onOpenChange={setShowShortcutsModal}
+      />
     </div>
   );
 };

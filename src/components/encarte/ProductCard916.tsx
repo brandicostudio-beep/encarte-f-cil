@@ -9,7 +9,8 @@ import type {
 import { isDateExpired } from "@/lib/encarte-helpers";
 import { BADGE_LABELS } from "@/types/encarte";
 import { deriveSaleUnit } from "@/lib/parse-product";
-
+import { Sparkles } from "lucide-react";
+import type { TargetElementType } from "@/types/editor";
 
 interface ProductCard916Props {
   product: EncarteProduct;
@@ -21,7 +22,9 @@ interface ProductCard916Props {
   pageStyle?: CampaignGlobalStyle;
   globalStyle?: CampaignGlobalStyle;
   isSelected?: boolean;
+  selectedElement?: TargetElementType | null;
   onSelect?: () => void;
+  onSelectElement?: (element: TargetElementType) => void;
   isInteractive?: boolean;
 }
 
@@ -45,7 +48,9 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
   pageStyle,
   globalStyle,
   isSelected = false,
+  selectedElement = null,
   onSelect,
+  onSelectElement,
   isInteractive = false,
   index = 0,
 }) => {
@@ -57,16 +62,36 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
   const gs = globalStyle || {};
 
   // Cores efetivas
-  const effectivePillBg = cs.pillBgColor || ps.pillBgColor || gs.pillBgColor || "#E30613";
-  const effectivePillText = cs.pillTextColor || ps.pillTextColor || gs.pillTextColor || "#FFE600";
+  const effectivePillBg = cs.pillBg || cs.pillBgColor || ps.pillBgColor || gs.pillBgColor || "#E30613";
+  const effectivePillText = cs.pillText || cs.pillTextColor || ps.pillTextColor || gs.pillTextColor || "#FFE600";
   const effectiveValidityBg = cs.validityBgColor || ps.validityBgColor || gs.validityBgColor || (isExpired ? "#b91c1c" : "#000000");
   const effectiveValidityText = cs.validityTextColor || ps.validityTextColor || gs.validityTextColor || "#FFFFFF";
   const effectiveStockBg = cs.stockBgColor || ps.stockBgColor || gs.stockBgColor || "#000000";
   const effectiveStockText = cs.stockTextColor || ps.stockTextColor || gs.stockTextColor || "#FFFFFF";
-  const effectiveBoxBorder = cs.boxBorderColor || ps.boxBorderColor || gs.boxBorderColor || "#D9D9D9";
-  const effectiveBoxBg = cs.boxBgColor || ps.boxBgColor || gs.boxBgColor || "#FFFFFF";
-  const effectiveNameColor = cs.nameColor || ps.nameColor || gs.nameColor || "#000000";
+  const effectiveBoxBorder = cs.borderColor || cs.boxBorderColor || ps.boxBorderColor || gs.boxBorderColor || "#D9D9D9";
+  const effectiveBoxBg = cs.boxBg || cs.boxBgColor || ps.boxBgColor || gs.boxBgColor || "#FFFFFF";
+  const effectiveNameColor = cs.textColor || cs.nameColor || ps.nameColor || gs.nameColor || "#000000";
   const effectiveHeaderColor = cs.headerColor || ps.headerColor || gs.headerColor || "#000000";
+  const effectiveFontFamily = cs.fontFamily || ps.fontFamily || gs.fontFamily || "Inter, system-ui, sans-serif";
+
+  const getSubElementActiveClasses = (el: TargetElementType) => {
+    if (!isInteractive || !isSelected || selectedElement !== el) return "";
+    return "ring-2 ring-blue-500 rounded-xs";
+  };
+
+  const handleSubElementClick = (element: TargetElementType, e: React.MouseEvent) => {
+    if (!isInteractive) return;
+    e.stopPropagation();
+    onSelectElement?.(element);
+  };
+
+  const handleBoxClick = () => {
+    if (isSelected && onSelectElement && !selectedElement) {
+      onSelectElement("name");
+    } else {
+      onSelect?.();
+    }
+  };
 
   // Visibilidade
   const showCode = cs.showCode ?? ps.showCode ?? gs.showCode ?? true;
@@ -221,20 +246,34 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
   if (layoutMode === "hero") {
     return (
       <div
+        id={`product-card-${product.id || index}`}
         data-testid={`product-box-${product.id || index}`}
-        onClick={() => onSelect?.()}
+        data-element-type="box"
+        onClick={handleBoxClick}
         className={`relative w-full max-w-[840px] h-[950px] mx-auto rounded-[8px] border border-[#D9D9D9] p-8 flex flex-col justify-between text-neutral-900 select-none shadow-none transition-all ${
-          isSelected && isInteractive ? "ring-4 ring-blue-500 shadow-lg ring-offset-2 z-20" : ""
+          isSelected ? "ring-4 ring-blue-500 shadow-lg ring-offset-2 z-20" : ""
         } ${isInteractive ? "cursor-pointer hover:ring-2 hover:ring-blue-300" : ""}`}
         style={{
           boxSizing: "border-box",
           backgroundColor: effectiveBoxBg,
           borderColor: effectiveBoxBorder,
-          borderWidth: "1px",
-          borderStyle: "solid",
+          borderWidth: cs.borderWidth !== undefined ? `${cs.borderWidth}px` : "1px",
+          borderStyle: cs.borderWidth === 0 ? "none" : "solid",
+          borderRadius: cs.boxRadius !== undefined ? `${cs.boxRadius}px` : "8px",
+          fontFamily: effectiveFontFamily,
           transform: boxOffsetX || boxOffsetY ? `translate(${boxOffsetX}px, ${boxOffsetY}px)` : undefined,
         }}
       >
+        {/* Indicador de Personalizado */}
+        {isCustomized && isInteractive && (
+          <div
+            className="absolute top-2 right-2 z-30 bg-purple-600 text-white rounded-full p-1 shadow-xs flex items-center justify-center"
+            title="Produto com personalização visual aplicada"
+          >
+            <Sparkles className="h-4 w-4" />
+          </div>
+        )}
+
         {/* Selo Promocional se houver */}
         {showBadge && product.badge && product.badge !== "nenhum" && (
           <div className="absolute top-4 left-4 z-20 bg-gradient-to-r from-[#FFD400] to-[#FACC15] text-black font-bold text-xl px-5 py-1.5 rounded-lg border-2 border-black tracking-wider uppercase transform -rotate-2">
@@ -371,29 +410,47 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
   // =========================================================================
   return (
     <div
+      id={`product-card-${product.id || index}`}
       data-testid={`product-box-${product.id || index}`}
-      onClick={() => onSelect?.()}
+      data-element-type="box"
+      onClick={handleBoxClick}
       className={`relative w-full h-full rounded-[8px] border border-[#D9D9D9] p-[12px] flex flex-col justify-between select-none shadow-none transition-all ${
-        isSelected && isInteractive ? "ring-4 ring-blue-500 shadow-lg ring-offset-2 z-20" : ""
+        isSelected ? "ring-4 ring-blue-500 shadow-lg ring-offset-2 z-20" : ""
       } ${isInteractive ? "cursor-pointer hover:ring-2 hover:ring-blue-300" : ""}`}
       style={{
         boxSizing: "border-box",
         backgroundColor: effectiveBoxBg,
         borderColor: effectiveBoxBorder,
-        borderWidth: "1px",
-        borderStyle: "solid",
+        borderWidth: cs.borderWidth !== undefined ? `${cs.borderWidth}px` : "1px",
+        borderStyle: cs.borderWidth === 0 ? "none" : "solid",
+        borderRadius: cs.boxRadius !== undefined ? `${cs.boxRadius}px` : "8px",
+        fontFamily: effectiveFontFamily,
         transform: boxOffsetX || boxOffsetY ? `translate(${boxOffsetX}px, ${boxOffsetY}px)` : undefined,
       }}
     >
+      {/* Indicador de Personalizado */}
+      {isCustomized && isInteractive && (
+        <div
+          className="absolute top-1.5 right-1.5 z-30 bg-purple-600 text-white rounded-full p-0.5 shadow-xs flex items-center justify-center"
+          title="Produto com personalização visual aplicada"
+        >
+          <Sparkles className="h-3 w-3" />
+        </div>
+      )}
+
       {/* Selo Promocional se houver */}
       {showBadge && product.badge && product.badge !== "nenhum" && (
-        <div className="absolute top-1 left-1 z-10 bg-gradient-to-r from-[#FFD400] to-[#FACC15] text-black font-bold text-[11px] px-2 py-0.5 rounded shadow-2xs border border-black/20 uppercase tracking-wider transform -rotate-2">
+        <div data-element-type="badge" className="absolute top-1 left-1 z-10 bg-gradient-to-r from-[#FFD400] to-[#FACC15] text-black font-bold text-[11px] px-2 py-0.5 rounded shadow-2xs border border-black/20 uppercase tracking-wider transform -rotate-2">
           ★ {BADGE_LABELS[product.badge]}
         </div>
       )}
 
       {/* 1. CABEÇALHO DO PRODUTO: Código e Embalagem */}
-      <div className="w-full shrink-0">
+      <div
+        data-element-type="header"
+        onClick={(e) => handleSubElementClick("header", e)}
+        className={`w-full shrink-0 ${getSubElementActiveClasses("header")}`}
+      >
         {showCode && headerLine ? (
           <div
             style={{
@@ -417,7 +474,11 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
       </div>
 
       {/* 2. NOME DO PRODUTO */}
-      <div className={`w-full ${nameBoxHeight} flex items-center px-0.5 shrink-0 ${getAlignClass(nameAlign)}`}>
+      <div
+        data-element-type="name"
+        onClick={(e) => handleSubElementClick("name", e)}
+        className={`w-full ${nameBoxHeight} flex items-center px-0.5 shrink-0 ${getAlignClass(nameAlign)} ${getSubElementActiveClasses("name")}`}
+      >
         {showName && (
           <h3
             style={{
@@ -425,6 +486,8 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
               lineHeight: 1.1,
               fontWeight: getWeightNumber(nameWeight),
               color: effectiveNameColor,
+              letterSpacing: cs.letterSpacing === "tighter" ? "-0.05em" : cs.letterSpacing === "wide" ? "0.05em" : undefined,
+              textTransform: cs.textTransform || "uppercase",
             }}
             className={`font-sans uppercase tracking-tight line-clamp-2 overflow-hidden w-full ${
               nameAlign === "left" ? "text-left" : nameAlign === "right" ? "text-right" : "text-center"
@@ -440,16 +503,24 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
       <div className="w-full flex-1 flex items-center justify-between gap-2.5 min-h-[105px] pt-1">
         {/* Coluna Esquerda: Área quadrada fixa para foto do produto */}
         <div
-          style={{ width: `${photoSizePx}px`, minWidth: `${photoSizePx}px`, height: `${photoSizePx}px` }}
-          className="bg-white flex items-center justify-center p-0 shrink-0 overflow-hidden"
+          data-element-type="image"
+          onClick={(e) => handleSubElementClick("image", e)}
+          style={{
+            width: cs.photoWidth ? `${cs.photoWidth}px` : `${photoSizePx}px`,
+            minWidth: cs.photoWidth ? `${cs.photoWidth}px` : `${photoSizePx}px`,
+            height: cs.photoHeight ? `${cs.photoHeight}px` : `${photoSizePx}px`,
+          }}
+          className={`bg-white flex items-center justify-center p-0 shrink-0 overflow-hidden ${getSubElementActiveClasses("image")}`}
         >
           {product.image ? (
             <img
               src={product.image}
               alt={product.name}
               style={{
-                transform: `scale(${safePhotoScale}) translate(${photoOffsetX}px, ${photoOffsetY}px)`,
+                transform: `scale(${safePhotoScale}) translate(${photoOffsetX}px, ${photoOffsetY}px)${cs.photoRotation ? ` rotate(${cs.photoRotation}deg)` : ""}`,
                 transformOrigin: "center center",
+                opacity: cs.photoOpacity ?? 1,
+                objectFit: (cs.photoFit as any) || "contain",
               }}
               className="w-[85%] h-[85%] max-w-[85%] max-h-[85%] object-contain block"
               crossOrigin="anonymous"
@@ -467,14 +538,21 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
           {/* Faixa de Preço (Pílula) */}
           {rawPrice ? (
             <div
-              style={{ backgroundColor: effectivePillBg }}
-              className={`w-full ${pricePillHeight} bg-[#E30613] rounded-full px-3.5 flex items-center justify-between shadow-xs`}
+              data-element-type="price"
+              onClick={(e) => handleSubElementClick("price", e)}
+              style={{
+                backgroundColor: effectivePillBg,
+                borderRadius: cs.pillRadius !== undefined ? `${cs.pillRadius}px` : undefined,
+                paddingLeft: cs.pillPadding !== undefined ? `${cs.pillPadding}px` : undefined,
+                paddingRight: cs.pillPadding !== undefined ? `${cs.pillPadding}px` : undefined,
+              }}
+              className={`w-full ${pricePillHeight} bg-[#E30613] rounded-full px-3.5 flex items-center justify-between shadow-xs ${getSubElementActiveClasses("price")}`}
             >
               <div className="flex items-baseline min-w-0">
                 <span
                   style={{
-                    fontSize: `${rsFontSize}px`,
-                    fontWeight: getWeightNumber(priceWeight),
+                    fontSize: `${cs.priceCurrencySize || rsFontSize}px`,
+                    fontWeight: getWeightNumber(cs.priceCurrencyFontWeight || priceWeight),
                     color: effectivePillText,
                   }}
                   className="mr-1 leading-none shrink-0 font-bold"
@@ -493,7 +571,11 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
                 </span>
               </div>
               <span
-                style={{ fontSize: `${unitFontSize}px`, fontWeight: 700 }}
+                style={{
+                  fontSize: `${cs.priceUnitSize || unitFontSize}px`,
+                  fontWeight: getWeightNumber(cs.priceUnitFontWeight || "bold"),
+                  color: cs.pillTextColor ? effectivePillText : undefined,
+                }}
                 className="text-white uppercase leading-none pl-1 shrink-0 font-bold"
               >
                 {unitLabel}
@@ -508,10 +590,18 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
           {/* Faixa de Validade */}
           {showValidity && validityText && (
             <div
-              style={{ backgroundColor: effectiveValidityBg, color: effectiveValidityText }}
+              data-element-type="validity"
+              onClick={(e) => handleSubElementClick("validity", e)}
+              style={{
+                backgroundColor: effectiveValidityBg,
+                color: effectiveValidityText,
+                height: cs.validityHeight ? `${cs.validityHeight}px` : undefined,
+                borderRadius: cs.validityBorderRadius !== undefined ? `${cs.validityBorderRadius}px` : undefined,
+                fontWeight: cs.validityFontWeight ? getWeightNumber(cs.validityFontWeight) : 700,
+              }}
               className={`w-full h-[26px] min-h-[26px] px-2 rounded-xs flex items-center justify-center text-center font-bold text-[20px] leading-tight tracking-wide uppercase ${
                 isExpired ? "animate-pulse" : ""
-              }`}
+              } ${getSubElementActiveClasses("validity")}`}
               title={`Validade: ${validityText}`}
             >
               VALIDADE: {validityText}
@@ -521,8 +611,16 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
           {/* Faixa de Estoque */}
           {showStock && stockText && (
             <div
-              style={{ backgroundColor: effectiveStockBg, color: effectiveStockText }}
-              className="w-full h-[26px] min-h-[26px] px-2 rounded-xs flex items-center justify-center text-center font-bold text-[20px] leading-tight tracking-wide uppercase"
+              data-element-type="stock"
+              onClick={(e) => handleSubElementClick("stock", e)}
+              style={{
+                backgroundColor: effectiveStockBg,
+                color: effectiveStockText,
+                height: cs.stockHeight ? `${cs.stockHeight}px` : undefined,
+                borderRadius: cs.stockBorderRadius !== undefined ? `${cs.stockBorderRadius}px` : undefined,
+                fontWeight: cs.stockFontWeight ? getWeightNumber(cs.stockFontWeight) : 700,
+              }}
+              className={`w-full h-[26px] min-h-[26px] px-2 rounded-xs flex items-center justify-center text-center font-bold text-[20px] leading-tight tracking-wide uppercase ${getSubElementActiveClasses("stock")}`}
               title={stockText}
             >
               {stockText}

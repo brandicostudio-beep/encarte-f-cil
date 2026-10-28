@@ -1,5 +1,6 @@
 import React from "react";
 import type { EncarteProduct, StoreConfig, CampaignConfig, ProductsPerPageOption } from "@/types/encarte";
+import type { TargetElementType } from "@/types/editor";
 import { DEFAULT_TEMPLATE_9_16_AREA } from "@/types/encarte";
 import { ProductCard916 } from "./ProductCard916";
 import { AlertCircle } from "lucide-react";
@@ -12,7 +13,9 @@ interface StoryPage916Props {
   campaign: CampaignConfig;
   domId?: string;
   selectedProductId?: string | null;
+  selectedElement?: TargetElementType | null;
   onSelectProduct?: (productId: string) => void;
+  onSelectElement?: (productId: string, element: TargetElementType) => void;
   isInteractive?: boolean;
 }
 
@@ -56,7 +59,9 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
   campaign,
   domId,
   selectedProductId,
+  selectedElement,
   onSelectProduct,
+  onSelectElement,
   isInteractive = false,
 }) => {
   const isLastPage = pageNumber === totalPages;
@@ -189,7 +194,9 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
               layoutMode="hero"
               perPage={effectivePerPage}
               isSelected={selectedProductId === products[0]?.id}
+              selectedElement={selectedProductId === products[0]?.id ? selectedElement : null}
               onSelect={() => onSelectProduct?.(products[0]?.id)}
+              onSelectElement={(el) => onSelectElement?.(products[0]?.id, el)}
               isInteractive={isInteractive}
               customStyle={products[0]?.customStyle}
               pageStyle={pageStyle}
@@ -221,7 +228,9 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
                     store={store}
                     perPage={effectivePerPage}
                     isSelected={selectedProductId === prod.id}
+                    selectedElement={selectedProductId === prod.id ? selectedElement : null}
                     onSelect={() => onSelectProduct?.(prod.id)}
+                    onSelectElement={(el) => onSelectElement?.(prod.id, el)}
                     isInteractive={isInteractive}
                     customStyle={prod.customStyle}
                     pageStyle={pageStyle}
@@ -265,7 +274,9 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
                           store={store}
                           perPage={effectivePerPage}
                           isSelected={selectedProductId === prod.id}
+                          selectedElement={selectedProductId === prod.id ? selectedElement : null}
                           onSelect={() => onSelectProduct?.(prod.id)}
+                          onSelectElement={(el) => onSelectElement?.(prod.id, el)}
                           isInteractive={isInteractive}
                           customStyle={prod.customStyle}
                           pageStyle={pageStyle}
@@ -303,7 +314,9 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
                         store={store}
                         perPage={effectivePerPage}
                         isSelected={selectedProductId === prod.id}
+                        selectedElement={selectedProductId === prod.id ? selectedElement : null}
                         onSelect={() => onSelectProduct?.(prod.id)}
+                        onSelectElement={(el) => onSelectElement?.(prod.id, el)}
                         isInteractive={isInteractive}
                         customStyle={prod.customStyle}
                         pageStyle={pageStyle}
