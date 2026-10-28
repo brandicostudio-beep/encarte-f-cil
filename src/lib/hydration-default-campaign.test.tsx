@@ -18,7 +18,7 @@ describe("DEFAULT_CAMPAIGN e Hidratação de Dados", () => {
     expect(DEFAULT_CAMPAIGN.title).toBe("DETONA PREÇOS");
     expect(DEFAULT_CAMPAIGN.subtitle).toBe("PRODUTOS COM VALIDADE CURTA!");
     expect(DEFAULT_CAMPAIGN.observation).toContain("Não aceitamos devolução");
-    expect(DEFAULT_CAMPAIGN.productsPerPage).toBe(12);
+    expect(DEFAULT_CAMPAIGN.productsPerPage).toBe(10);
     expect(DEFAULT_CAMPAIGN.format).toBe("story_9_16");
     expect(DEFAULT_CAMPAIGN.template916Image).toBe("/templates/template-detona-precos-9-16.png");
     expect(DEFAULT_CAMPAIGN.template916Area).toEqual(DEFAULT_TEMPLATE_9_16_AREA);

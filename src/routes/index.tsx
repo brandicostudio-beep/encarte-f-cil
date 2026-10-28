@@ -124,6 +124,7 @@ function EncarteApp() {
   const [editProduct, setEditProduct] = useState<EncarteProduct | null>(null);
   const [addManualOpen, setAddManualOpen] = useState(false);
   const [expiredWarningOpen, setExpiredWarningOpen] = useState(false);
+  const [unpricedModalOpen, setUnpricedModalOpen] = useState(false);
   const [pendingExportAction, setPendingExportAction] = useState<
     (() => void) | null
   >(null);
@@ -490,8 +491,14 @@ function EncarteApp() {
     [flyerProducts]
   );
 
-  // Paginação: produtos por página (padrão 12, ajustável para 6, 8, 9, 12)
-  const perPage = campaign?.productsPerPage || 12;
+  // Produtos incluídos sem preço cadastrado (bloqueiam a exportação)
+  const unpricedIncluded = useMemo(
+    () => (products || []).filter((p) => p && p.included && (!p.price || String(p.price).trim() === "")),
+    [products]
+  );
+
+  // Paginação: produtos por página (padrão 10 para Story 9:16, ajustável para 6, 8, 10, 12)
+  const perPage = campaign?.productsPerPage || 10;
   const totalPages = Math.max(1, Math.ceil((flyerProducts || []).length / perPage));
 
   const pageProducts = useMemo(() => {
@@ -630,7 +637,17 @@ function EncarteApp() {
     }
   };
 
+  // Validação obrigatória: bloqueia exportação se houver produto sem preço marcado no encarte
+  const checkUnpricedBeforeExport = (): boolean => {
+    if (unpricedIncluded.length > 0) {
+      setUnpricedModalOpen(true);
+      return false;
+    }
+    return true;
+  };
+
   const handleExportPdf = () => {
+    if (!checkUnpricedBeforeExport()) return;
     if (flyerProducts.length === 0) {
       alert("Nenhum produto com preço está marcado para entrar no encarte.");
       return;
@@ -682,6 +699,7 @@ function EncarteApp() {
   };
 
   const handleExportPng = () => {
+    if (!checkUnpricedBeforeExport()) return;
     if (flyerProducts.length === 0) {
       alert("Nenhum produto com preço está marcado para entrar no encarte.");
       return;
@@ -745,6 +763,7 @@ function EncarteApp() {
   };
 
   const handleExportZip = () => {
+    if (!checkUnpricedBeforeExport()) return;
     if (flyerProducts.length === 0) {
       alert("Nenhum produto com preço está marcado para entrar no encarte.");
       return;
@@ -1750,6 +1769,65 @@ function EncarteApp() {
               }}
             >
               Exportar Mesmo Assim
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 6. Bloqueio de Exportação por Preço Vazio */}
+      <Dialog open={unpricedModalOpen} onOpenChange={setUnpricedModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-red-700 font-bold flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
+              Exportação Bloqueada: Preços Pendentes
+            </DialogTitle>
+            <DialogDescription className="text-xs text-neutral-600 pt-1">
+              Existem <strong>{unpricedIncluded.length} produto(s)</strong> no encarte sem preço preenchido. Para garantir a qualidade das artes, todos os preços devem ser informados antes de exportar.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 rounded-lg border bg-neutral-50 text-xs">
+            {unpricedIncluded.map((p) => (
+              <div
+                key={p.id}
+                className="flex items-center justify-between p-1.5 bg-white rounded border border-neutral-200"
+              >
+                <div className="min-w-0 pr-2">
+                  <span className="font-mono font-bold text-red-700 bg-red-50 border border-red-200 px-1 rounded text-[11px] mr-1.5">
+                    {p.code}
+                  </span>
+                  <span className="font-bold text-neutral-900 uppercase truncate">
+                    {p.name}
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded shrink-0">
+                  Sem preço
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setUnpricedModalOpen(false)}
+            >
+              Fechar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 text-white font-bold"
+              onClick={() => {
+                setUnpricedModalOpen(false);
+                setCurrentStep("precos");
+                setActiveIssueFilter("unpriced");
+              }}
+            >
+              Preencher Preços Agora
             </Button>
           </DialogFooter>
         </DialogContent>

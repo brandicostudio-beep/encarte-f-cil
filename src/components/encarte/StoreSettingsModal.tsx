@@ -217,10 +217,10 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
 
             <div>
               <Label className="block mb-2 font-semibold">
-                Produtos por página (Padrão: 12)
+                Produtos por página (Padrão: 10 produtos - 2×5)
               </Label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {([12, 9, 8, 6] as ProductsPerPageOption[]).map((opt) => (
+                {([10, 8, 12, 6] as ProductsPerPageOption[]).map((opt) => (
                   <button
                     key={opt}
                     type="button"
@@ -235,13 +235,13 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
                   >
                     <div className="text-sm font-bold">{opt} produtos</div>
                     <div className="text-[10px] opacity-80">
-                      {opt === 12
-                        ? "3x4 (vertical)"
-                        : opt === 9
-                        ? "3x3 (vertical)"
+                      {opt === 10
+                        ? "2x5 (Padrão 9:16)"
                         : opt === 8
-                        ? "2x4 (horizontal)"
-                        : "2x3 (horizontal)"}
+                        ? "2x4 (Mais espaço)"
+                        : opt === 12
+                        ? "3x4 (Grade 12)"
+                        : "2x3 (Destaque)"}
                     </div>
                   </button>
                 ))}

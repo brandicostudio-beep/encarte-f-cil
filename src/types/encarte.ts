@@ -1,6 +1,6 @@
 export type BadgeType = "nenhum" | "oferta" | "leve" | "imperdivel";
 
-export type ProductsPerPageOption = 6 | 8 | 9 | 12;
+export type ProductsPerPageOption = 6 | 8 | 9 | 10 | 12;
 
 export type PackagingType = "UNIDADE" | "PACOTE" | "CAIXA" | "FARDO" | "";
 export type MeasureUnit = "UNID" | "GR" | "KG" | "ML" | "L" | "LT" | "";
@@ -96,7 +96,7 @@ export const DEFAULT_CAMPAIGN: CampaignConfig = {
   title: "DETONA PREÇOS",
   subtitle: "PRODUTOS COM VALIDADE CURTA!",
   observation: "Não aceitamos devolução. Prazo 07 dias.",
-  productsPerPage: 12,
+  productsPerPage: 10,
   customHeaderImage: "",
   headerTextOverlay: false,
   format: "story_9_16",
