@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import type { EncarteProduct, StoreConfig, ProductsPerPageOption } from "@/types/encarte";
 import { isDateExpired } from "@/lib/encarte-helpers";
 import { BADGE_LABELS } from "@/types/encarte";
-import { calculateOpticalScale } from "@/lib/image-normalizer";
 
 interface ProductCard916Props {
   product: EncarteProduct;
@@ -14,19 +13,20 @@ interface ProductCard916Props {
 
 /**
  * Card de produto do encarte no formato Story 9:16 (1080 × 1920 px).
- * Estrutura fiel à referência de design:
- * 1. Código e embalagem no topo (26 a 30 px, negrito, caixa alta, centralizado)
- * 2. Nome do produto (30 a 34 px, negrito, caixa alta, centralizado, até 2 linhas sem reticências)
- * 3. Corpo em duas colunas:
- *    - Esquerda (~40%): foto do produto em fundo branco puro, sem sombra, sem borda e sem caixa cinza
- *    - Direita (~60%):
- *      - Preço em faixa vermelha arredondada (stadium capsule) com R$ menor, valor grande amarelo e unidade branca
- *      - Validade e estoque em faixas pretas com texto branco (22 a 26 px, negrito)
+ * Estrutura e diagramação:
+ * 1. Código e embalagem no topo (mínimo de 28 px, negrito, caixa alta, centralizado)
+ * 2. Espaço de 12 a 16 px até o nome do produto
+ * 3. Nome do produto (30 a 34 px, negrito, caixa alta, centralizado, max 2 linhas, altura padronizada)
+ * 4. Fio fino separador (1.5 px, cinza médio)
+ * 5. Corpo do card em duas colunas com alturas alinhadas:
+ *    - Esquerda: Foto do produto em área fixa quadrada (~165×165 px), sem corte (object-fit: contain, 85%),
+ *      fundo branco puro, sem sombras, filtros, bordas ou caixa cinza.
+ *    - Direita: Pílula de preço no topo + barras pretas de validade e estoque (todas alinhadas pela mesma borda esquerda).
  */
 export const ProductCard916: React.FC<ProductCard916Props> = ({
   product,
   layoutMode = "grid",
-  perPage = 10,
+  perPage = 8,
 }) => {
   const isExpired = isDateExpired(product?.validity || "");
 
@@ -43,10 +43,12 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
     headerLine = packagingText;
   }
 
-  // Tamanho calibrado do cabeçalho (26 a 30 px)
+  // Tamanho calibrado do cabeçalho (mínimo rigoroso de 28 px)
   let headerFontSize = 28;
-  if (headerLine.length > 32) {
-    headerFontSize = 26;
+  if (headerLine.length > 28) {
+    headerFontSize = 28; // Mínimo estrito de 28 px
+  } else if (headerLine.length < 18) {
+    headerFontSize = 30;
   }
 
   // 2. Nome do Produto (30 a 34 px, até 2 linhas sem reticências)
@@ -81,15 +83,18 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
     }
   }
 
+  // Calibragem tipográfica e dimensional com base no número de produtos por página
+  const isCompact = perPage === 10 || perPage === 12;
+
   // Calibragem tipográfica do preço (60 a 68 px para valores normais; 48 a 56 px para preços altos como 1.249,90)
-  let priceFontSize = 64;
-  let rsFontSize = 36;
+  let priceFontSize = isCompact ? 56 : 64;
+  let rsFontSize = isCompact ? 32 : 36;
   if (formattedPrice.length >= 8) {
-    priceFontSize = 50;
-    rsFontSize = 30;
+    priceFontSize = isCompact ? 44 : 50;
+    rsFontSize = isCompact ? 26 : 30;
   } else if (formattedPrice.length >= 6) {
-    priceFontSize = 58;
-    rsFontSize = 34;
+    priceFontSize = isCompact ? 50 : 58;
+    rsFontSize = isCompact ? 30 : 34;
   }
 
   const unitLabel = (product?.unit || "UND").trim().toUpperCase();
@@ -114,25 +119,22 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
     stockText = rawStock.startsWith("ESTOQUE") ? rawStock : `ESTOQUE: ${rawStock}`;
   }
 
-  // Normalização óptica da foto do produto
-  const [aspectRatio, setAspectRatio] = useState<number | null>(null);
-  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget;
-    if (img.naturalWidth && img.naturalHeight) {
-      setAspectRatio(img.naturalWidth / img.naturalHeight);
-    }
-  };
-
-  const autoScale = aspectRatio ? calculateOpticalScale(aspectRatio) : 1.0;
+  // Controle de escala da foto do produto (sempre contido para nunca cortar)
   const userScale =
     typeof product.imageScale === "number" && !isNaN(product.imageScale) && product.imageScale > 0
       ? product.imageScale
       : 1.0;
-  const totalScale = Number((autoScale * userScale).toFixed(2));
+  const safePhotoScale = Math.min(1.0, userScale);
+
+  // Dimensões dinâmicas do bloco da foto e altura do nome para acomodar 8 ou 10 por página
+  const photoSizePx = isCompact ? 135 : 165;
+  const nameBoxHeight = isCompact ? "h-[50px] min-h-[50px]" : "h-[62px] min-h-[62px]";
+  const headerSpacePx = isCompact ? 8 : 12;
+  const pricePillHeight = isCompact ? "h-[54px]" : "h-[62px]";
 
   // =========================================================================
   // MODO HERO: 1 Produto sozinho na última página (centralizado e ampliado)
-  // Mantém a mesma estrutura visual e o mesmo template.
+  // Mantém a mesma estrutura visual, proporções e alinhamentos.
   // =========================================================================
   if (layoutMode === "hero") {
     return (
@@ -144,47 +146,51 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
           </div>
         )}
 
-        {/* Topo: Código e Embalagem + Nome */}
-        <div className="w-full text-center space-y-2 shrink-0">
+        {/* Topo: Código e Embalagem + Espaço + Nome + Fio fino separador */}
+        <div className="w-full text-center shrink-0">
           {headerLine && (
             <div className="font-sans font-black text-[38px] text-black uppercase tracking-wide leading-tight">
               {headerLine}
             </div>
           )}
-          <h2 className="font-sans font-black text-[52px] text-black uppercase tracking-tight leading-[1.1] max-w-[800px] mx-auto">
+          <div className="h-[14px]" />
+          <h2 className="font-sans font-black text-[52px] text-black uppercase tracking-tight leading-[1.1] max-w-[800px] mx-auto min-h-[110px] flex items-center justify-center">
             {nameText}
           </h2>
+          {/* Fio fino separador do cabeçalho */}
+          <div className="w-full my-4 flex items-center justify-center">
+            <div className="w-full h-[2px] bg-neutral-300" />
+          </div>
         </div>
 
         {/* Corpo: Duas Colunas (Foto à Esquerda e Preço/Validade/Estoque à Direita) */}
-        <div className="w-full flex-1 flex items-center justify-between gap-8 pt-4">
-          {/* Foto à Esquerda */}
-          <div className="w-[45%] h-[560px] bg-white flex items-center justify-center p-2">
+        <div className="w-full flex-1 flex items-center justify-between gap-8 pt-2">
+          {/* Foto à Esquerda em área quadrada fixa ampliada, ocupando 85% sem corte nem sombra */}
+          <div className="w-[380px] min-w-[380px] h-[380px] bg-white flex items-center justify-center p-0 shrink-0">
             {product.image ? (
               <img
                 src={product.image}
                 alt={product.name}
-                onLoad={handleImageLoad}
                 style={{
-                  transform: `scale(${totalScale})`,
+                  transform: `scale(${safePhotoScale})`,
                   transformOrigin: "center center",
                 }}
-                className="max-h-full max-w-full object-contain"
+                className="w-[85%] h-[85%] max-w-[85%] max-h-[85%] object-contain block"
                 crossOrigin="anonymous"
                 loading="eager"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center bg-white text-[#9ca3af] font-black text-3xl uppercase tracking-widest">
+              <div className="w-[85%] h-[85%] flex items-center justify-center bg-white text-[#9ca3af] font-black text-3xl uppercase tracking-widest select-none">
                 SEM FOTO
               </div>
             )}
           </div>
 
-          {/* Coluna da Direita: Preço, Validade e Estoque */}
-          <div className="w-[53%] flex flex-col justify-center items-center space-y-5">
+          {/* Coluna da Direita: Preço, Validade e Estoque alinhados pela mesma borda */}
+          <div className="flex-1 min-w-0 flex flex-col justify-center space-y-5">
             {/* Faixa Vermelha de Preço */}
             {rawPrice ? (
-              <div className="w-full h-[140px] bg-[#E30613] rounded-full px-8 flex items-center justify-between shadow-md">
+              <div className="w-full h-[140px] bg-[#E30613] rounded-full px-8 flex items-center justify-between shadow-xs">
                 <div className="flex items-baseline">
                   <span className="font-black text-[#FFE600] text-[48px] mr-2 leading-none">
                     R$
@@ -227,12 +233,12 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
   }
 
   // =========================================================================
-  // MODO GRADE PADRÃO (2 colunas × 5 linhas = 10 produtos por página)
-  // Cada card mede cerca de 500 × 236 px no canvas 1080 × 1920 px.
+  // MODO GRADE PADRÃO (8 produtos 2×4 ou 10 produtos 2×5)
+  // Cada card possui área fixa sem corte e proporções ideais.
   // =========================================================================
   return (
     <div
-      className="relative w-full h-full bg-white flex flex-col justify-between p-2 select-none overflow-hidden"
+      className="relative w-full h-full bg-white flex flex-col justify-between p-2 select-none"
       style={{
         boxSizing: "border-box",
       }}
@@ -244,7 +250,7 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
         </div>
       )}
 
-      {/* 1. TOPO: Código e Embalagem (26 a 30 px, negrito, centralizado, preto) */}
+      {/* 1. CABEÇALHO DO PRODUTO: Código e Embalagem (mínimo de 28 px, negrito, centralizado, preto) */}
       <div className="w-full text-center shrink-0">
         {headerLine ? (
           <div
@@ -257,50 +263,61 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
         ) : (
           <div className="h-[28px]" />
         )}
+      </div>
 
-        {/* 2. NOME DO PRODUTO: Centralizado, caixa alta, negrito, até 2 linhas (30 a 34 px, preto) */}
+      {/* Espaço de 12 a 16 px entre o cabeçalho e o nome */}
+      <div style={{ height: `${headerSpacePx}px` }} className="shrink-0" />
+
+      {/* 2. NOME DO PRODUTO: Centralizado, caixa alta, negrito, até 2 linhas, altura padronizada em todos os cards */}
+      <div className={`w-full ${nameBoxHeight} flex items-center justify-center shrink-0 px-1`}>
         <h3
           style={{
             fontSize: `${nameFontSize}px`,
             lineHeight: 1.1,
-            maxHeight: "68px",
           }}
-          className="font-sans font-black text-black uppercase tracking-tight line-clamp-2 text-center mt-0.5 px-0.5 overflow-hidden"
+          className="font-sans font-black text-black uppercase tracking-tight line-clamp-2 text-center overflow-hidden"
           title={nameText}
         >
           {nameText}
         </h3>
       </div>
 
-      {/* 3. CORPO: Duas Colunas (Esquerda: Foto ~40%; Direita: Preço + Validade + Estoque ~60%) */}
-      <div className="w-full flex-1 flex items-center justify-between gap-2 min-h-[120px] pt-1">
-        {/* Coluna Esquerda: Foto do Produto (Fundo branco puro, sem caixa cinza, sem sombra, sem borda) */}
-        <div className="w-[40%] min-w-[140px] h-full max-h-[135px] bg-white flex items-center justify-center p-0.5 overflow-hidden shrink-0">
+      {/* Espaço de 12 a 16 px entre o nome e o corpo + Fio fino separador (1.5 px, cinza médio) */}
+      <div className={`w-full ${isCompact ? "my-1" : "my-2"} flex items-center justify-center shrink-0`}>
+        <div className="w-full h-[1.5px] bg-neutral-300" />
+      </div>
+
+      {/* 3. CORPO DO CARD: Duas Colunas com Alturas Alinhadas */}
+      <div className="w-full flex-1 flex items-center justify-between gap-3 min-h-[120px]">
+        {/* Coluna Esquerda: Área quadrada fixa para foto do produto (~165×165 px, sem corte, fundo branco puro) */}
+        <div
+          style={{ width: `${photoSizePx}px`, minWidth: `${photoSizePx}px`, height: `${photoSizePx}px` }}
+          className="bg-white flex items-center justify-center p-0 shrink-0"
+        >
           {product.image ? (
             <img
               src={product.image}
               alt={product.name}
-              onLoad={handleImageLoad}
               style={{
-                transform: `scale(${totalScale})`,
+                transform: `scale(${safePhotoScale})`,
                 transformOrigin: "center center",
               }}
-              className="max-h-full max-w-full object-contain"
+              className="w-[85%] h-[85%] max-w-[85%] max-h-[85%] object-contain block"
               crossOrigin="anonymous"
               loading="eager"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-white text-[#9ca3af] font-black text-[18px] uppercase tracking-wider">
+            <div className="w-[85%] h-[85%] flex items-center justify-center bg-white text-[#9ca3af] font-black text-[18px] uppercase tracking-wider select-none">
               SEM FOTO
             </div>
           )}
         </div>
 
-        {/* Coluna Direita: Preço, Validade e Estoque empilhados */}
-        <div className="w-[58%] flex flex-col justify-center items-center space-y-1.5 shrink-0">
+        {/* Coluna Direita: Preço, Validade e Estoque alinhados pela mesma borda esquerda e com a mesma largura */}
+        <div className="flex-1 min-w-0 flex flex-col justify-center space-y-2">
           {/* Faixa Vermelha de Preço (Capsule / Stadium Pill) */}
           {rawPrice ? (
-            <div className="w-full h-[66px] bg-[#E30613] rounded-full px-3.5 flex items-center justify-between shadow-xs">
+            <div className={`w-full ${pricePillHeight} bg-[#E30613] rounded-full px-3.5 flex items-center justify-between shadow-xs`}>
               <div className="flex items-baseline min-w-0">
                 <span
                   style={{ fontSize: `${rsFontSize}px` }}
@@ -320,15 +337,15 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
               </span>
             </div>
           ) : (
-            <div className="w-full h-[60px] bg-neutral-100 text-neutral-500 font-bold text-sm rounded-full flex items-center justify-center border border-dashed border-neutral-300">
+            <div className={`w-full ${pricePillHeight} bg-neutral-100 text-neutral-500 font-bold text-sm rounded-full flex items-center justify-center border border-dashed border-neutral-300`}>
               Preço a conferir
             </div>
           )}
 
-          {/* Faixa Preta de Validade: "VALIDADE: dd/mm/aaaa" (22 a 26 px, negrito) */}
+          {/* Faixa Preta de Validade: "VALIDADE: dd/mm/aaaa" (cerca de 26 px, negrito, caixa alta, texto branco) */}
           {validityText && (
             <div
-              className={`w-full min-h-[26px] py-0.5 px-2 rounded-xs flex items-center justify-center text-center font-black text-[22px] leading-tight tracking-wide uppercase ${
+              className={`w-full h-[26px] min-h-[26px] px-2 rounded-xs flex items-center justify-center text-center font-black text-[22px] leading-tight tracking-wide uppercase ${
                 isExpired ? "bg-red-700 text-white animate-pulse" : "bg-black text-white"
               }`}
               title={`Validade: ${validityText}`}
@@ -337,10 +354,10 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
             </div>
           )}
 
-          {/* Faixa Preta de Estoque: "ESTOQUE: X UNID" (22 a 26 px, negrito) */}
+          {/* Faixa Preta de Estoque: "ESTOQUE: X UNID" (cerca de 26 px, negrito, caixa alta, texto branco) */}
           {stockText && (
             <div
-              className="w-full min-h-[26px] py-0.5 px-2 bg-black text-white rounded-xs flex items-center justify-center text-center font-black text-[22px] leading-tight tracking-wide uppercase"
+              className="w-full h-[26px] min-h-[26px] px-2 bg-black text-white rounded-xs flex items-center justify-center text-center font-black text-[22px] leading-tight tracking-wide uppercase"
               title={stockText}
             >
               {stockText}

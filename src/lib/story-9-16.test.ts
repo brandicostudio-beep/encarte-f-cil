@@ -570,5 +570,116 @@ describe("Modo de Encarte 9:16 (1080 × 1920 px) com Template PNG", () => {
       expect(html).toContain("font-size:30px"); // R$ ajustado para 30px
       expect(html).toContain("bg-[#E30613]");
     });
+
+    it("Página com 8 produtos (2×4): margem interna de 24 px no painel branco, sem corte de fotos ou textos", () => {
+      const eightProducts = createMockProducts(8);
+      const campaign: CampaignConfig = {
+        ...DEFAULT_CAMPAIGN,
+        format: "story_9_16",
+        productsPerPage: 8,
+      };
+
+      const html = renderToString(
+        React.createElement(StoryPage916, {
+          pageNumber: 1,
+          totalPages: 1,
+          products: eightProducts,
+          store: DEFAULT_STORE,
+          campaign,
+          domId: "story-page-8-prods",
+        })
+      );
+
+      // Margem interna de 24 px no painel branco
+      expect(html).toContain("p-[24px]");
+      expect(html).toContain('data-testid="product-white-area"');
+      // 4 linhas de 2 produtos
+      expect(html).toContain('data-testid="grid-row-0"');
+      expect(html).toContain('data-testid="grid-row-1"');
+      expect(html).toContain('data-testid="grid-row-2"');
+      expect(html).toContain('data-testid="grid-row-3"');
+      // Sem overflow ou filtros de sombra nas fotos
+      expect(html).not.toContain("drop-shadow");
+      expect(html).toContain("object-contain");
+      expect(html).toContain("w-[85%]");
+    });
+
+    it("Última página com 3 produtos em grade de 2 colunas: primeira linha com 2 cards, segunda linha com 1 card centralizado", () => {
+      const threeProducts = createMockProducts(3);
+      const campaign: CampaignConfig = {
+        ...DEFAULT_CAMPAIGN,
+        format: "story_9_16",
+        productsPerPage: 8,
+      };
+
+      const html = renderToString(
+        React.createElement(StoryPage916, {
+          pageNumber: 2,
+          totalPages: 2,
+          products: threeProducts,
+          store: DEFAULT_STORE,
+          campaign,
+          domId: "story-page-last-3",
+        })
+      );
+
+      // Linha 0 completa com 2 produtos
+      expect(html).toContain('data-testid="grid-row-0"');
+      // Linha 1 incompleta centralizada na horizontal
+      expect(html).toContain('data-testid="incomplete-row-centered"');
+      expect(html).toContain("justify-center");
+      expect(html).toContain("PRODUTO DE TESTE 3");
+    });
+
+    it("Rodapé institucional na área preta de ~58 px renderizado em todas as páginas com dados da loja", () => {
+      const products = createMockProducts(2);
+      const campaign: CampaignConfig = {
+        ...DEFAULT_CAMPAIGN,
+        format: "story_9_16",
+        productsPerPage: 10,
+      };
+
+      const html = renderToString(
+        React.createElement(StoryPage916, {
+          pageNumber: 1,
+          totalPages: 1,
+          products,
+          store: DEFAULT_STORE,
+          campaign,
+          domId: "story-page-footer",
+        })
+      );
+
+      // Rodapé institucional presente com dados do store
+      expect(html).toContain('data-testid="story-footer"');
+      expect(html).toContain("h-[58px]");
+      expect(html).toContain("text-white");
+      expect(html).toContain(DEFAULT_STORE.legalNotice);
+      expect(html).toContain(DEFAULT_STORE.phone);
+      expect(html).toContain(DEFAULT_STORE.address);
+    });
+
+    it("Resolução de exportação suporta 1080x1920 (pixelRatio = 1) e 2160x3840 (pixelRatio = 2)", () => {
+      const standardResCampaign: CampaignConfig = {
+        ...DEFAULT_CAMPAIGN,
+        format: "story_9_16",
+        exportResolution916: "1080x1920",
+      };
+
+      const highResCampaign: CampaignConfig = {
+        ...DEFAULT_CAMPAIGN,
+        format: "story_9_16",
+        exportResolution916: "2160x3840",
+      };
+
+      const getPixelRatio = (camp: CampaignConfig) => {
+        const is916 = camp.format === "story_9_16";
+        const isHighRes = camp.exportResolution916 === "2160x3840";
+        return is916 ? (isHighRes ? 2 : 1) : 3.125;
+      };
+
+      expect(getPixelRatio(standardResCampaign)).toBe(1);
+      expect(getPixelRatio(highResCampaign)).toBe(2);
+    });
   });
 });

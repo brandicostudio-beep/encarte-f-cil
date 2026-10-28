@@ -100,7 +100,7 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
                 transform: `scale(${totalScale})`,
                 transformOrigin: "center center",
               }}
-              className="max-h-full max-w-full object-contain filter drop-shadow-md transition-transform duration-200"
+              className="max-h-full max-w-full object-contain transition-transform duration-200"
             />
           ) : (
             <div className="flex flex-col h-full w-full items-center justify-center rounded-2xl bg-neutral-100 p-6 text-center text-neutral-400 border-2 border-dashed border-neutral-300">
@@ -200,7 +200,7 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
                 transform: `scale(${totalScale})`,
                 transformOrigin: "center center",
               }}
-              className="max-h-full max-w-full object-contain filter drop-shadow-2xs transition-transform duration-200"
+              className="max-h-full max-w-full object-contain transition-transform duration-200"
             />
           ) : (
             <div className="flex flex-col h-full w-full items-center justify-center rounded-lg bg-neutral-100 p-1 text-center text-neutral-400 border border-dashed border-neutral-300">
@@ -322,7 +322,7 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
               transform: `scale(${totalScale})`,
               transformOrigin: "center center",
             }}
-            className="max-h-full max-w-full object-contain filter drop-shadow-xs transition-transform duration-200"
+            className="max-h-full max-w-full object-contain transition-transform duration-200"
           />
         ) : (
           <div className="flex flex-col h-full w-full items-center justify-center rounded-xl bg-neutral-100 p-2 text-center text-neutral-400 border border-dashed border-neutral-300">

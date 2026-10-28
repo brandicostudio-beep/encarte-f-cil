@@ -86,20 +86,20 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
     10: {
       gapX: "12px",
       gapY: "5px",
-      cardWidthStyle: "calc((100% - 12px) / 2)", // exatamente ~500 px
-      rowHeightStyle: "calc((100% - 20px) / 5)", // exatamente ~236 px
+      cardWidthStyle: "calc((100% - 12px) / 2)",
+      rowHeightStyle: "calc((100% - 20px) / 5)",
     },
     8: {
       gapX: "12px",
       gapY: "8px",
-      cardWidthStyle: "calc((100% - 12px) / 2)", // exatamente ~500 px
-      rowHeightStyle: "calc((100% - 24px) / 4)", // exatamente ~294 px
+      cardWidthStyle: "calc((100% - 12px) / 2)",
+      rowHeightStyle: "calc((100% - 24px) / 4)",
     },
     6: {
       gapX: "12px",
       gapY: "10px",
-      cardWidthStyle: "calc((100% - 12px) / 2)", // exatamente ~500 px
-      rowHeightStyle: "calc((100% - 20px) / 3)", // exatamente ~394 px
+      cardWidthStyle: "calc((100% - 12px) / 2)",
+      rowHeightStyle: "calc((100% - 20px) / 3)",
     },
     9: {
       gapX: "12px",
@@ -148,10 +148,10 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
         crossOrigin="anonymous"
       />
 
-      {/* 2. ÁREA BRANCA DOS PRODUTOS (x 46 a 1057 e y 661 a 1862) */}
+      {/* 2. ÁREA BRANCA DOS PRODUTOS (x 46 a 1057 e y 661 a 1862) com margem interna de 24 px */}
       <div
         data-testid="product-white-area"
-        className="absolute rounded-[36px] overflow-hidden flex flex-col justify-center z-10 bg-white"
+        className="absolute rounded-[36px] overflow-hidden flex flex-col justify-center z-10 bg-white p-[24px]"
         style={{
           left: `${leftPct}%`,
           top: `${topPct}%`,
@@ -170,7 +170,7 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
 
         {/* CASO A: Sobra de 1 único produto na última página (Centralizado e ampliado) */}
         {isLastPage && count === 1 ? (
-          <div className="w-full h-full flex items-center justify-center p-6">
+          <div className="w-full h-full flex items-center justify-center p-2">
             <ProductCard916
               product={products[0]}
               index={0}
@@ -186,7 +186,7 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
               data-testid="incomplete-row-centered"
               style={{
                 width: "100%",
-                height: effectivePerPage === 10 ? "280px" : gridStyles.rowHeightStyle,
+                height: effectivePerPage === 10 ? "260px" : gridStyles.rowHeightStyle,
                 display: "flex",
                 justifyContent: "center",
                 gap: gridStyles.gapX,
@@ -209,7 +209,7 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
             </div>
           </div>
         ) : (
-          /* CASO C: Grade completa ou com linhas finais centralizadas */
+          /* CASO C: Grade completa ou com linhas finais centralizadas (ex: 3 produtos na última página) */
           <div
             data-testid="product-grid-container"
             className="w-full h-full flex flex-col justify-center"
@@ -282,6 +282,28 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
           </div>
         )}
       </div>
+
+      {/* 3. RODAPÉ INSTITUCIONAL (Área preta de ~58 px abaixo do painel branco, y = 1862 a 1920 px) */}
+      <footer
+        data-testid="story-footer"
+        className="absolute left-0 right-0 bottom-0 h-[58px] z-20 flex items-center justify-between px-10 text-white select-none pointer-events-none"
+        style={{
+          boxSizing: "border-box",
+        }}
+      >
+        <div className="flex-1 min-w-0 pr-4">
+          <p className="font-sans text-[15px] font-semibold text-neutral-200 tracking-wide truncate uppercase">
+            {store?.legalNotice || "Preços válidos enquanto durarem os estoques. Imagens meramente ilustrativas."}
+          </p>
+        </div>
+        {(store?.phone || store?.address) && (
+          <div className="shrink-0 flex items-center gap-3 text-[15px] font-bold text-white uppercase tracking-wider">
+            {store.phone && <span>{store.phone}</span>}
+            {store.phone && store.address && <span className="text-neutral-500">•</span>}
+            {store.address && <span className="truncate max-w-[450px]">{store.address}</span>}
+          </div>
+        )}
+      </footer>
     </div>
   );
 };

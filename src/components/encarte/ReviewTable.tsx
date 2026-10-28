@@ -179,7 +179,7 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                   <td className="p-2 text-center align-middle">
                     <div className="flex flex-col items-center gap-1">
                       <div
-                        className="relative h-11 w-11 rounded-lg border bg-white flex items-center justify-center overflow-hidden shadow-2xs group cursor-pointer hover:border-red-400"
+                        className="relative h-11 w-11 rounded-lg border bg-white flex items-center justify-center overflow-hidden group cursor-pointer hover:border-red-400"
                         onClick={() => onEditProduct(p)}
                         title={
                           p.image

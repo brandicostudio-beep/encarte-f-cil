@@ -251,7 +251,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               )}
             </div>
             <div className="flex items-start gap-4">
-              <div className="h-20 w-20 rounded-xl border bg-neutral-50 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+              <div className="h-20 w-20 rounded-xl border bg-white flex items-center justify-center shrink-0">
                 {form.image ? (
                   <img
                     src={form.image}
