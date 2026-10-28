@@ -70,6 +70,8 @@ import {
   Archive,
   Upload,
   Scale,
+  Trash2,
+  AlertCircle,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -121,6 +123,7 @@ function EncarteApp() {
   // Modais
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false);
   const [storeSettingsOpen, setStoreSettingsOpen] = useState(false);
+  const [resetModalOpen, setResetModalOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<EncarteProduct | null>(null);
   const [addManualOpen, setAddManualOpen] = useState(false);
   const [expiredWarningOpen, setExpiredWarningOpen] = useState(false);
@@ -245,7 +248,18 @@ function EncarteApp() {
           }));
 
           setProducts(sanitized);
-          setCurrentStep("precos");
+
+          // Restaura a etapa apenas em caso de recarregamento (F5) na mesma aba via sessionStorage.
+          // Ao abrir o link em uma nova janela ou aba, inicia sempre na etapa "origem", sem forçar ida para preços.
+          let stepToSet: EditorStep = "origem";
+          try {
+            const sessionStep = sessionStorage.getItem("encarte-active-step") as EditorStep | null;
+            if (sessionStep && ["origem", "dados", "precos", "campanha", "exportar"].includes(sessionStep)) {
+              stepToSet = sessionStep;
+            }
+          } catch {}
+
+          setCurrentStep(stepToSet);
           setCompletedSteps(new Set(["origem", "dados"]));
         }
       }
@@ -375,7 +389,7 @@ function EncarteApp() {
     // 1. Atualizar navegação e etapas concluídas imediatamente
     setUnmatchedPhotos(unmatched);
     setCompletedSteps((prev) => new Set([...prev, "origem", "dados"]));
-    setCurrentStep("precos");
+    navigateToStep("precos");
 
     // 2. Persistir lista de produtos no estado de forma resiliente
     try {
@@ -396,22 +410,52 @@ function EncarteApp() {
     setSavedNotice("Fotos da pasta do computador atualizadas com sucesso!");
   };
 
+  // Navegação segura entre etapas persistindo na sessão ativa
+  const navigateToStep = (step: EditorStep) => {
+    setCurrentStep(step);
+    try {
+      sessionStorage.setItem("encarte-active-step", step);
+    } catch {}
+  };
+
   // Carregar dados de demonstração (16 produtos com codes, fotos e validade)
   const handleLoadSample = () => {
     const samples = getSampleProducts();
     updateProductsState(samples);
     setUnmatchedPhotos([]);
     setCompletedSteps((prev) => new Set([...prev, "origem", "dados"]));
-    setCurrentStep("precos");
+    navigateToStep("precos");
   };
 
+  // Abrir modal de confirmação para zerar dados e iniciar novo encarte
   const handleResetEncarte = () => {
-    if (confirm("Deseja reiniciar o encarte para escolher uma nova origem?")) {
-      updateProductsState([]);
-      setUnmatchedPhotos([]);
-      setCurrentStep("origem");
-      setCompletedSteps(new Set());
+    setResetModalOpen(true);
+  };
+
+  // Executa o reset completo: limpa localStorage, estado da memória e sessão
+  const handleExecuteReset = () => {
+    try {
+      localStorage.removeItem("encarte-products-v2");
+      localStorage.removeItem("encarte-products");
+      localStorage.removeItem("encarte-campaign-v2");
+      localStorage.removeItem("encarte-campaign");
+      localStorage.removeItem("encarte-drive-cache");
+      sessionStorage.removeItem("encarte-active-step");
+    } catch (err) {
+      console.warn("Aviso ao limpar dados do localStorage:", err);
     }
+
+    setProducts([]);
+    setUndoStack([]);
+    setUnmatchedPhotos([]);
+    setCurrentStep("origem");
+    setCompletedSteps(new Set());
+    setCampaign(DEFAULT_CAMPAIGN);
+    setCurrentPage(1);
+    setSearchQuery("");
+    setActiveIssueFilter("all");
+    setSavedNotice("Encarte zerado com sucesso. Pronto para iniciar.");
+    setResetModalOpen(false);
   };
 
   // Conexão com a Server Function de categoria
@@ -855,6 +899,17 @@ function EncarteApp() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setResetModalOpen(true)}
+              className="min-h-[44px] bg-red-600 hover:bg-red-700 text-white border-red-500 text-xs font-bold shadow-xs transition-colors"
+              title="Zerar todos os dados e começar um novo encarte limpo"
+            >
+              <RotateCcw className="h-4 w-4 mr-1.5" />
+              Novo Encarte (Zerar Dados)
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setStoreSettingsOpen(true)}
               className="min-h-[44px] bg-neutral-900 text-white border-neutral-700 hover:bg-neutral-800 hover:text-[#FFD400] text-xs font-semibold"
             >
@@ -869,10 +924,11 @@ function EncarteApp() {
       <EditorStepper
         currentStep={currentStep}
         completedSteps={completedSteps}
-        onStepClick={(s) => setCurrentStep(s)}
+        onStepClick={navigateToStep}
         savedNotice={savedNotice}
         hasUndo={undoStack.length > 0}
         onUndo={handleUndo}
+        onReset={() => setResetModalOpen(true)}
       />
 
       {/* 3. CONTEÚDO PRINCIPAL DO EDITOR */}
@@ -896,7 +952,7 @@ function EncarteApp() {
             type="no_products"
             primaryAction={{
               label: "Escolher Origem dos Dados",
-              onClick: () => setCurrentStep("origem"),
+              onClick: () => navigateToStep("origem"),
               icon: <Sparkles className="h-4 w-4" />,
             }}
             secondaryAction={{
@@ -923,7 +979,7 @@ function EncarteApp() {
                 <Button
                   onClick={() => {
                     setCompletedSteps((prev) => new Set([...prev, "precos"]));
-                    setCurrentStep("campanha");
+                    navigateToStep("campanha");
                   }}
                   className="w-full min-h-[44px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs"
                 >
@@ -936,7 +992,7 @@ function EncarteApp() {
                 <Button
                   onClick={() => {
                     setCompletedSteps((prev) => new Set([...prev, "campanha"]));
-                    setCurrentStep("exportar");
+                    navigateToStep("exportar");
                   }}
                   className="w-full min-h-[44px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs"
                 >
@@ -1052,7 +1108,7 @@ function EncarteApp() {
                     <Button
                       onClick={() => {
                         setCompletedSteps((prev) => new Set([...prev, "campanha"]));
-                        setCurrentStep("exportar");
+                        navigateToStep("exportar");
                         // Ajustar zoom inicial para visualização confortável
                         if (campaign.format === "story_9_16") {
                           setPreviewZoom(0.38);
@@ -1906,7 +1962,7 @@ function EncarteApp() {
               className="bg-red-600 hover:bg-red-700 text-white font-bold"
               onClick={() => {
                 setUnpricedModalOpen(false);
-                setCurrentStep("precos");
+                navigateToStep("precos");
                 setActiveIssueFilter("unpriced");
               }}
             >
@@ -1957,7 +2013,7 @@ function EncarteApp() {
               size="sm"
               onClick={() => {
                 setMissingPhotoModalOpen(false);
-                setCurrentStep("precos");
+                navigateToStep("precos");
                 setActiveIssueFilter("missing_photo");
               }}
             >
@@ -1977,6 +2033,58 @@ function EncarteApp() {
               }}
             >
               Desmarcar Bloqueio e Exportar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE CONFIRMAÇÃO: NOVO ENCARTE / ZERAR DADOS */}
+      <Dialog open={resetModalOpen} onOpenChange={setResetModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-red-700 font-bold flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-red-600" />
+              Iniciar Novo Encarte e Zerar Dados?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-neutral-600 pt-1 leading-relaxed">
+              Tem certeza que deseja começar um novo encarte? Esta ação irá{" "}
+              <strong>apagar todos os produtos, fotos e dados da campanha atual</strong> salvos no navegador, permitindo iniciar um encarte 100% limpo a partir de uma nova planilha ou origem.
+            </DialogDescription>
+          </DialogHeader>
+
+          {products.length > 0 && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-900 space-y-1">
+              <div className="font-bold flex items-center gap-1.5">
+                <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+                Dados atuais que serão removidos:
+              </div>
+              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-red-800 pl-1">
+                <li>{products.length} produtos carregados na lista</li>
+                <li>Fotos associadas do computador, Drive ou ZIP</li>
+                <li>Preços, estoques e validades editadas</li>
+              </ul>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setResetModalOpen(false)}
+              className="text-xs font-semibold min-h-[38px]"
+            >
+              Cancelar e Manter Dados
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleExecuteReset}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs min-h-[38px]"
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Sim, Zerar Dados e Começar Novo
             </Button>
           </DialogFooter>
         </DialogContent>

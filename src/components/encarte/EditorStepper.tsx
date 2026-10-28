@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, ChevronRight } from "lucide-react";
+import { Check, ChevronRight, RotateCcw } from "lucide-react";
 
 export type EditorStep = "origem" | "dados" | "precos" | "campanha" | "exportar";
 
@@ -24,6 +24,7 @@ interface EditorStepperProps {
   savedNotice?: string;
   hasUndo?: boolean;
   onUndo?: () => void;
+  onReset?: () => void;
 }
 
 export const EditorStepper: React.FC<EditorStepperProps> = ({
@@ -33,6 +34,7 @@ export const EditorStepper: React.FC<EditorStepperProps> = ({
   savedNotice = "Salvo agora há pouco",
   hasUndo = false,
   onUndo,
+  onReset,
 }) => {
   const currentIndex = STEPS.findIndex((s) => s.id === currentStep);
 
@@ -99,8 +101,20 @@ export const EditorStepper: React.FC<EditorStepperProps> = ({
           })}
         </nav>
 
-        {/* Indicador de Salvamento Automático & Ação de Desfazer */}
-        <div className="flex items-center gap-3 shrink-0 self-end md:self-center text-xs">
+        {/* Indicador de Salvamento Automático, Novo Encarte & Desfazer */}
+        <div className="flex items-center gap-2 shrink-0 self-end md:self-center text-xs">
+          {onReset && (
+            <button
+              type="button"
+              onClick={onReset}
+              className="min-h-[44px] px-2.5 py-1 text-xs font-semibold text-neutral-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-red-600"
+              title="Iniciar novo encarte e zerar dados atuais"
+            >
+              <RotateCcw className="h-3.5 w-3.5 text-neutral-500" />
+              <span>Novo Encarte</span>
+            </button>
+          )}
+
           {hasUndo && onUndo && (
             <button
               type="button"

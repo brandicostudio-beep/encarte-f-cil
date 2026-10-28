@@ -159,9 +159,16 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
     });
   }, []);
 
-  // Sincroniza produtos existentes se informados
+  // Sincroniza produtos existentes se informados ou limpa se zerado
   useEffect(() => {
-    if (pendingProducts.length === 0 && existingProducts && existingProducts.length > 0) {
+    if (existingProducts.length === 0) {
+      setPendingProducts([]);
+      setSpreadsheetSuccessInfo(null);
+      setLoadedPhotos([]);
+      setPhotoBankSummary(null);
+      setUnmatchedPhotoNames([]);
+      setLocalCrossingResult(null);
+    } else if (pendingProducts.length === 0 && existingProducts.length > 0) {
       setPendingProducts(existingProducts);
     }
   }, [existingProducts]);
@@ -841,10 +848,11 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
               size="sm"
               variant="outline"
               onClick={onReset}
-              className="min-h-[44px] text-xs text-neutral-600"
+              className="min-h-[44px] text-xs text-red-700 border-red-300 hover:bg-red-50 hover:text-red-800 font-bold"
+              title="Zerar todos os dados e começar um novo encarte limpo"
             >
-              <RotateCcw className="h-3.5 w-3.5 mr-1" />
-              Recomeçar Encarte
+              <RotateCcw className="h-3.5 w-3.5 mr-1 text-red-600" />
+              Novo Encarte (Zerar Dados)
             </Button>
           )}
 
