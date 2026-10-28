@@ -120,8 +120,8 @@ describe("Google Drive API v3 (drive-api) & Conector Lovable", () => {
 
     const matched = matchPhotosWithProducts(loaded, products, "drive");
     const prod = matched.updatedProducts[0];
-    expect(prod.image).toBe("data:order1");
-    expect(prod.alternativePhotos).toHaveLength(1);
+    expect(prod?.image).toBe("data:order1");
+    expect(prod?.alternativePhotos).toHaveLength(1);
     expect(prod.alternativePhotos?.[0]?.filename).toBe("24657-3.jpg");
   });
 
@@ -407,9 +407,9 @@ describe("Google Drive API v3 (drive-api) & Conector Lovable", () => {
 
     expect(res.ok).toBe(true);
     expect(res.photos).toHaveLength(1);
-    expect(res.photos[0].code).toBe("24657");
+    expect(res.photos[0]?.code).toBe("24657");
     expect(res.corruptFiles).toHaveLength(1);
-    expect(res.corruptFiles[0].code).toBe("33104");
+    expect(res.corruptFiles[0]?.code).toBe("33104");
   });
 
   it("Mantém funcionamento contínuo de arquivos .ZIP", async () => {
