@@ -5,6 +5,78 @@ export type ProductsPerPageOption = 6 | 8 | 9 | 10 | 12;
 export type PackagingType = "UNIDADE" | "PACOTE" | "CAIXA" | "FARDO" | "";
 export type MeasureUnit = "UNID" | "GR" | "KG" | "ML" | "L" | "LT" | "";
 
+export interface ProductCustomStyle {
+  // Cores
+  pillBgColor?: string;       // Fundo da pílula de preço (ex: #E30613)
+  pillTextColor?: string;     // Cor do texto/valor na pílula (ex: #FFE600)
+  validityBgColor?: string;   // Fundo da barra de validade (ex: #000000)
+  validityTextColor?: string; // Cor do texto de validade (ex: #FFFFFF)
+  stockBgColor?: string;      // Fundo da barra de estoque (ex: #000000)
+  stockTextColor?: string;    // Cor do texto de estoque (ex: #FFFFFF)
+  boxBorderColor?: string;    // Borda do box do produto (ex: #D9D9D9)
+  boxBgColor?: string;        // Fundo do box (ex: #FFFFFF)
+  nameColor?: string;         // Cor do nome do produto (ex: #000000)
+  headerColor?: string;       // Cor do cabeçalho código/embalagem (ex: #000000)
+
+  // Tipografia & Alinhamento
+  nameFontSize?: number;      // Tamanho da fonte do nome em px (min: 24, max: 54)
+  nameFontWeight?: "normal" | "semibold" | "bold"; // normal=400, semibold=600, bold=700
+  nameAlign?: "left" | "center" | "right";
+
+  headerFontSize?: number;    // Tamanho da fonte do código/embalagem em px (min: 20, max: 40)
+  headerFontWeight?: "normal" | "semibold" | "bold";
+  headerAlign?: "left" | "center" | "right";
+
+  priceFontSize?: number;     // Tamanho da fonte do valor em px (min: 30, max: 64)
+  priceFontWeight?: "normal" | "semibold" | "bold";
+
+  // Visibilidade dos Elementos
+  showCode?: boolean;         // Padrão: true
+  showName?: boolean;         // Padrão: true
+  showValidity?: boolean;     // Padrão: true
+  showStock?: boolean;        // Padrão: true
+  showBadge?: boolean;        // Padrão: true
+
+  // Foto do Produto
+  imageScale?: number;        // Escala / zoom da foto (0.5 a 1.3)
+  imageOffsetX?: number;      // Ajuste de posição X (-25 a 25 px)
+  imageOffsetY?: number;      // Ajuste de posição Y (-25 a 25 px)
+
+  // Deslocamento do Box
+  boxOffsetX?: number;        // Deslocamento fino dentro do box (-20 a 20 px)
+  boxOffsetY?: number;
+
+  // Marcação se foi personalizado
+  isCustomized?: boolean;
+}
+
+export interface CampaignGlobalStyle {
+  pillBgColor?: string;
+  pillTextColor?: string;
+  validityBgColor?: string;
+  validityTextColor?: string;
+  stockBgColor?: string;
+  stockTextColor?: string;
+  boxBorderColor?: string;
+  boxBgColor?: string;
+  nameColor?: string;
+  headerColor?: string;
+  nameFontSize?: number;
+  nameFontWeight?: "normal" | "semibold" | "bold";
+  nameAlign?: "left" | "center" | "right";
+  headerFontSize?: number;
+  headerFontWeight?: "normal" | "semibold" | "bold";
+  headerAlign?: "left" | "center" | "right";
+  priceFontSize?: number;
+  priceFontWeight?: "normal" | "semibold" | "bold";
+  showCode?: boolean;
+  showName?: boolean;
+  showValidity?: boolean;
+  showStock?: boolean;
+  showBadge?: boolean;
+  showFooter?: boolean;
+}
+
 export interface EncarteProduct {
   id: string;
   code: string;            // Código do produto (ex: "24657")
@@ -25,6 +97,7 @@ export interface EncarteProduct {
   productUrl?: string;     // URL da página do produto (se disponível)
   photoSource?: "drive" | "zip" | "upload" | "link" | "sample" | "folder"; // Origem da foto
   photoOriginName?: string; // Nome do arquivo de foto
+  customStyle?: ProductCustomStyle; // Estilos visuais personalizados na edição final
   alternativePhotos?: {
     id: string;
     filename: string;
@@ -80,6 +153,8 @@ export interface CampaignConfig {
   template916Area: TemplateProductArea;
   exportResolution916?: "1080x1920" | "2160x3840";
   blockExportWithoutPhoto?: boolean; // Padrão: false (se marcado, bloqueia exportação se houver produto sem foto)
+  globalStyle?: CampaignGlobalStyle; // Estilos visuais globais da campanha aplicados na edição final
+  pageStyles?: Record<number, CampaignGlobalStyle>; // Estilos visuais por página aplicados na edição final
 }
 
 export const DEFAULT_STORE: StoreConfig = {

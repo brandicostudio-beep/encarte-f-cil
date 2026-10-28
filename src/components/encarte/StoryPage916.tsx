@@ -11,6 +11,9 @@ interface StoryPage916Props {
   store: StoreConfig;
   campaign: CampaignConfig;
   domId?: string;
+  selectedProductId?: string | null;
+  onSelectProduct?: (productId: string) => void;
+  isInteractive?: boolean;
 }
 
 /**
@@ -52,9 +55,16 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
   store,
   campaign,
   domId,
+  selectedProductId,
+  onSelectProduct,
+  isInteractive = false,
 }) => {
   const isLastPage = pageNumber === totalPages;
   const count = products.length;
+
+  const pageStyle = campaign?.pageStyles?.[pageNumber];
+  const globalStyle = campaign?.globalStyle;
+  const showFooter = globalStyle?.showFooter !== false;
 
   const area = campaign?.template916Area || DEFAULT_TEMPLATE_9_16_AREA;
   const canvasWidth = area?.canvasWidth || 1080;
@@ -178,6 +188,12 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
               store={store}
               layoutMode="hero"
               perPage={effectivePerPage}
+              isSelected={selectedProductId === products[0]?.id}
+              onSelect={() => onSelectProduct?.(products[0]?.id)}
+              isInteractive={isInteractive}
+              customStyle={products[0]?.customStyle}
+              pageStyle={pageStyle}
+              globalStyle={globalStyle}
             />
           </div>
         ) : isLastPage && count === 2 ? (
@@ -204,6 +220,12 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
                     index={colIdx}
                     store={store}
                     perPage={effectivePerPage}
+                    isSelected={selectedProductId === prod.id}
+                    onSelect={() => onSelectProduct?.(prod.id)}
+                    isInteractive={isInteractive}
+                    customStyle={prod.customStyle}
+                    pageStyle={pageStyle}
+                    globalStyle={globalStyle}
                   />
                 </div>
               ))}
@@ -242,6 +264,12 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
                           index={rowIdx * numCols + colIdx}
                           store={store}
                           perPage={effectivePerPage}
+                          isSelected={selectedProductId === prod.id}
+                          onSelect={() => onSelectProduct?.(prod.id)}
+                          isInteractive={isInteractive}
+                          customStyle={prod.customStyle}
+                          pageStyle={pageStyle}
+                          globalStyle={globalStyle}
                         />
                       </div>
                     ))}
@@ -274,6 +302,12 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
                         index={rowIdx * numCols + colIdx}
                         store={store}
                         perPage={effectivePerPage}
+                        isSelected={selectedProductId === prod.id}
+                        onSelect={() => onSelectProduct?.(prod.id)}
+                        isInteractive={isInteractive}
+                        customStyle={prod.customStyle}
+                        pageStyle={pageStyle}
+                        globalStyle={globalStyle}
                       />
                     </div>
                   ))}
@@ -285,21 +319,23 @@ export const StoryPage916: React.FC<StoryPage916Props> = ({
       </div>
 
       {/* 3. ÁREA INFERIOR: Telefone, contato, nome da loja e endereço não são exibidos */}
-      <footer
-        data-testid="story-footer"
-        className="absolute left-0 right-0 bottom-0 h-[58px] z-20 flex items-center justify-center px-10 text-white select-none pointer-events-none"
-        style={{
-          boxSizing: "border-box",
-        }}
-      >
-        {store?.legalNotice ? (
-          <div className="flex-1 min-w-0 text-center">
-            <p className="font-sans text-[15px] font-semibold text-neutral-200 tracking-wide truncate uppercase">
-              {store.legalNotice}
-            </p>
-          </div>
-        ) : null}
-      </footer>
+      {showFooter && (
+        <footer
+          data-testid="story-footer"
+          className="absolute left-0 right-0 bottom-0 h-[58px] z-20 flex items-center justify-center px-10 text-white select-none pointer-events-none"
+          style={{
+            boxSizing: "border-box",
+          }}
+        >
+          {store?.legalNotice ? (
+            <div className="flex-1 min-w-0 text-center">
+              <p className="font-sans text-[15px] font-semibold text-neutral-200 tracking-wide truncate uppercase">
+                {store.legalNotice}
+              </p>
+            </div>
+          ) : null}
+        </footer>
+      )}
     </div>
   );
 };

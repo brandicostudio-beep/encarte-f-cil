@@ -37,6 +37,7 @@ import { TemplateAreaAdjuster } from "@/components/encarte/TemplateAreaAdjuster"
 import { SpreadsheetModal } from "@/components/encarte/SpreadsheetModal";
 import { ProductEditModal } from "@/components/encarte/ProductEditModal";
 import { StoreSettingsModal } from "@/components/encarte/StoreSettingsModal";
+import { FinalEditor } from "@/components/encarte/FinalEditor";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,6 +132,14 @@ function EncarteApp() {
   const [expiredWarningOpen, setExpiredWarningOpen] = useState(false);
   const [unpricedModalOpen, setUnpricedModalOpen] = useState(false);
   const [missingPhotoModalOpen, setMissingPhotoModalOpen] = useState(false);
+  const [preExportModalOpen, setPreExportModalOpen] = useState(false);
+  const [preExportIssues, setPreExportIssues] = useState<
+    {
+      type: "missing_photo" | "unpriced" | "font_too_small" | "text_overflow";
+      title: string;
+      description: string;
+    }[]
+  >([]);
   const [pendingExportAction, setPendingExportAction] = useState<
     (() => void) | null
   >(null);
@@ -256,7 +265,7 @@ function EncarteApp() {
           let stepToSet: EditorStep = "origem";
           try {
             const sessionStep = sessionStorage.getItem("encarte-active-step") as EditorStep | null;
-            if (sessionStep && ["origem", "dados", "precos", "campanha", "exportar"].includes(sessionStep)) {
+            if (sessionStep && ["origem", "dados", "precos", "campanha", "edicao_final", "exportar"].includes(sessionStep)) {
               stepToSet = sessionStep;
             }
           } catch {}
@@ -745,20 +754,97 @@ function EncarteApp() {
     return true;
   };
 
-  const handleExportPdf = () => {
+  // Checagem Preventiva de Qualidade antes de Exportar:
+  // Valida produtos sem foto, textos cortados, textos abaixo do tamanho mínimo e preços vazios.
+  const runPreExportDiagnostics = () => {
+    const issues: {
+      type: "missing_photo" | "unpriced" | "font_too_small" | "text_overflow";
+      title: string;
+      description: string;
+    }[] = [];
+
+    // 1. Preços vazios
+    flyerProducts.forEach((p) => {
+      if (!p.price || String(p.price).trim() === "") {
+        issues.push({
+          type: "unpriced",
+          title: "Preço não informado",
+          description: `Produto "${p.name || p.code}" está sem preço preenchido.`,
+        });
+      }
+    });
+
+    // 2. Produtos sem foto
+    flyerProducts.forEach((p) => {
+      if (!p.image || String(p.image).trim() === "") {
+        issues.push({
+          type: "missing_photo",
+          title: "Produto sem foto",
+          description: `Produto "${p.name || p.code}" está sem foto (será gerado com "SEM FOTO").`,
+        });
+      }
+    });
+
+    // 3. Textos abaixo do tamanho mínimo
+    flyerProducts.forEach((p) => {
+      const nameSize = p.customStyle?.nameFontSize;
+      if (typeof nameSize === "number" && nameSize < 24) {
+        issues.push({
+          type: "font_too_small",
+          title: "Fonte do nome muito pequena",
+          description: `Produto "${p.name}": tamanho ${nameSize}px abaixo do mínimo legível (24px).`,
+        });
+      }
+      const headerSize = p.customStyle?.headerFontSize;
+      if (typeof headerSize === "number" && headerSize < 20) {
+        issues.push({
+          type: "font_too_small",
+          title: "Fonte do código muito pequena",
+          description: `Produto "${p.name}": cabeçalho em ${headerSize}px abaixo do mínimo (20px).`,
+        });
+      }
+    });
+
+    // 4. Textos muito longos com risco de corte (overflow)
+    flyerProducts.forEach((p) => {
+      if (p.name && p.name.length > 55 && !p.customStyle?.nameFontSize) {
+        issues.push({
+          type: "text_overflow",
+          title: "Nome muito longo com risco de corte",
+          description: `Produto "${p.name}" tem ${p.name.length} caracteres.`,
+        });
+      }
+    });
+
+    return issues;
+  };
+
+  const confirmOrExecuteExport = (exportAction: () => void) => {
     if (!checkUnpricedBeforeExport()) return;
     if (!checkMissingPhotoBeforeExport()) return;
     if (flyerProducts.length === 0) {
       alert("Nenhum produto com preço está marcado para entrar no encarte.");
       return;
     }
+
+    const issues = runPreExportDiagnostics();
+    if (issues.length > 0) {
+      setPreExportIssues(issues);
+      setPendingExportAction(() => exportAction);
+      setPreExportModalOpen(true);
+      return;
+    }
+
     if (expiredInFlyer.length > 0) {
-      setPendingExportAction(() => executeExportPdf);
+      setPendingExportAction(() => exportAction);
       setExpiredWarningOpen(true);
       return;
     }
-    executeExportPdf();
+
+    exportAction();
   };
+
+  const handleExportPdf = () => confirmOrExecuteExport(executeExportPdf);
 
   // Exportar PNG em Resolução 1080 × 1920 ou 2160 × 3840 (ou A4)
   const executeExportPngCurrentPage = async () => {
@@ -798,20 +884,7 @@ function EncarteApp() {
     }
   };
 
-  const handleExportPng = () => {
-    if (!checkUnpricedBeforeExport()) return;
-    if (!checkMissingPhotoBeforeExport()) return;
-    if (flyerProducts.length === 0) {
-      alert("Nenhum produto com preço está marcado para entrar no encarte.");
-      return;
-    }
-    if (expiredInFlyer.length > 0) {
-      setPendingExportAction(() => executeExportPngCurrentPage);
-      setExpiredWarningOpen(true);
-      return;
-    }
-    executeExportPngCurrentPage();
-  };
+  const handleExportPng = () => confirmOrExecuteExport(executeExportPngCurrentPage);
 
   // Exportar Todas as Páginas em Arquivo ZIP
   const executeExportZipAllPages = async () => {
@@ -863,20 +936,7 @@ function EncarteApp() {
     }
   };
 
-  const handleExportZip = () => {
-    if (!checkUnpricedBeforeExport()) return;
-    if (!checkMissingPhotoBeforeExport()) return;
-    if (flyerProducts.length === 0) {
-      alert("Nenhum produto com preço está marcado para entrar no encarte.");
-      return;
-    }
-    if (expiredInFlyer.length > 0) {
-      setPendingExportAction(() => executeExportZipAllPages);
-      setExpiredWarningOpen(true);
-      return;
-    }
-    executeExportZipAllPages();
-  };
+  const handleExportZip = () => confirmOrExecuteExport(executeExportZipAllPages);
 
   return (
     <div className="min-h-screen bg-neutral-100/90 font-sans text-neutral-900 pb-20">
@@ -964,7 +1024,28 @@ function EncarteApp() {
           />
         )}
 
-        {products.length > 0 && currentStep !== "origem" && (
+        {/* ETAPA 4: EDIÇÃO FINAL (STUDIO WYSIWYG EM 3 COLUNAS) */}
+        {products.length > 0 && currentStep === "edicao_final" && (
+          <FinalEditor
+            products={products}
+            store={store}
+            campaign={campaign}
+            onUpdateProducts={(updated) => updateProductsState(updated)}
+            onUpdateCampaign={(updatedCamp) => saveCampaignConfig(updatedCamp)}
+            onProceedToExport={() => {
+              setCompletedSteps((prev) => new Set([...prev, "edicao_final"]));
+              navigateToStep("exportar");
+              if (campaign.format === "story_9_16") {
+                setPreviewZoom(0.38);
+              } else {
+                setPreviewZoom(0.68);
+              }
+            }}
+            onBackToCampaign={() => navigateToStep("campanha")}
+          />
+        )}
+
+        {products.length > 0 && currentStep !== "origem" && currentStep !== "edicao_final" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* PAINEL LATERAL DE PENDÊNCIAS (SEMPRE VISÍVEL NO DESKTOP, 3 COLUNAS) */}
             <div className="lg:col-span-3 space-y-4 lg:sticky lg:top-[128px]">
@@ -994,11 +1075,11 @@ function EncarteApp() {
                 <Button
                   onClick={() => {
                     setCompletedSteps((prev) => new Set([...prev, "campanha"]));
-                    navigateToStep("exportar");
+                    navigateToStep("edicao_final");
                   }}
                   className="w-full min-h-[44px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs"
                 >
-                  Conferir Pré-visualização A4
+                  Avançar para Edição Final
                   <ArrowRight className="h-4 w-4 ml-1.5" />
                 </Button>
               )}
@@ -1110,17 +1191,11 @@ function EncarteApp() {
                     <Button
                       onClick={() => {
                         setCompletedSteps((prev) => new Set([...prev, "campanha"]));
-                        navigateToStep("exportar");
-                        // Ajustar zoom inicial para visualização confortável
-                        if (campaign.format === "story_9_16") {
-                          setPreviewZoom(0.38);
-                        } else {
-                          setPreviewZoom(0.68);
-                        }
+                        navigateToStep("edicao_final");
                       }}
                       className="min-h-[44px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs"
                     >
-                      Avançar para Pré-visualização
+                      Avançar para Edição Final
                       <ArrowRight className="h-4 w-4 ml-1.5" />
                     </Button>
                   </div>
@@ -2036,6 +2111,107 @@ function EncarteApp() {
             >
               Desmarcar Bloqueio e Exportar
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 8. Checagem Preventiva de Qualidade Antes da Exportação */}
+      <Dialog open={preExportModalOpen} onOpenChange={setPreExportModalOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-amber-800 font-bold flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+              Checagem Preventiva de Qualidade
+            </DialogTitle>
+            <DialogDescription className="text-xs text-neutral-600 pt-1">
+              Foram detectados pontos de atenção antes da exportação. Revise os itens abaixo:
+            </DialogDescription>
+          </DialogHeader>
+
+          <div
+            data-testid="pre-export-issues-list"
+            className="max-h-60 overflow-y-auto space-y-2 p-2.5 rounded-lg border bg-neutral-50 text-xs"
+          >
+            {preExportIssues.map((issue, idx) => (
+              <div
+                key={`issue-${idx}`}
+                className="p-2 bg-white rounded border border-neutral-200 flex items-start gap-2 shadow-2xs"
+              >
+                <AlertCircle
+                  className={`h-4 w-4 shrink-0 mt-0.5 ${
+                    issue.type === "unpriced" ? "text-red-600" : "text-amber-600"
+                  }`}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-neutral-900 flex items-center justify-between">
+                    <span>{issue.title}</span>
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                        issue.type === "unpriced"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-amber-100 text-amber-800"
+                      }`}
+                    >
+                      {issue.type === "unpriced"
+                        ? "Bloqueante"
+                        : issue.type === "missing_photo"
+                        ? "Sem Foto"
+                        : "Ajuste Visual"}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-600 mt-0.5">
+                    {issue.description}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setPreExportModalOpen(false);
+                setPendingExportAction(null);
+                navigateToStep("edicao_final");
+              }}
+            >
+              Revisar na Edição Final
+            </Button>
+            {preExportIssues.some((i) => i.type === "unpriced") ? (
+              <Button
+                type="button"
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white font-bold"
+                onClick={() => {
+                  setPreExportModalOpen(false);
+                  setPendingExportAction(null);
+                  navigateToStep("precos");
+                  setActiveIssueFilter("unpriced");
+                }}
+              >
+                Corrigir Preços Pendentes
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                data-testid="confirm-export-anyway-button"
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
+                onClick={() => {
+                  setPreExportModalOpen(false);
+                  if (pendingExportAction) {
+                    const action = pendingExportAction;
+                    setPendingExportAction(null);
+                    action();
+                  }
+                }}
+              >
+                Confirmar e Exportar Mesmo Assim
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

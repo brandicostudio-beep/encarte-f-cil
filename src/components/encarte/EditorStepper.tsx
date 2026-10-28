@@ -1,7 +1,7 @@
 import React from "react";
 import { Check, ChevronRight, RotateCcw } from "lucide-react";
 
-export type EditorStep = "origem" | "dados" | "precos" | "campanha" | "exportar";
+export type EditorStep = "origem" | "dados" | "precos" | "campanha" | "edicao_final" | "exportar";
 
 interface StepConfig {
   id: EditorStep;
@@ -11,10 +11,10 @@ interface StepConfig {
 
 const STEPS: StepConfig[] = [
   { id: "origem", title: "1. Origem", shortDesc: "Planilha ou Link" },
-  { id: "dados", title: "2. Dados", shortDesc: "Fotos & Validação" },
-  { id: "precos", title: "3. Preços", shortDesc: "Revisão e Valores" },
-  { id: "campanha", title: "4. Campanha", shortDesc: "Textos & Loja" },
-  { id: "exportar", title: "5. Exportar", shortDesc: "PDF & Impressão" },
+  { id: "precos", title: "2. Preços", shortDesc: "Revisão e Valores" },
+  { id: "campanha", title: "3. Campanha", shortDesc: "Textos & Loja" },
+  { id: "edicao_final", title: "4. Edição Final", shortDesc: "Ajustes Visuais" },
+  { id: "exportar", title: "5. Exportar", shortDesc: "PNG & Impressão" },
 ];
 
 interface EditorStepperProps {

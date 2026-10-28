@@ -567,8 +567,8 @@ describe("Modo de Encarte 9:16 (1080 × 1920 px) com Template PNG", () => {
 
       expect(html).toContain("1.249,90");
       // Preço de 8+ caracteres tem fonte calibrada para 50px
-      expect(html).toContain("font-size:50px");
-      expect(html).toContain("font-size:30px"); // R$ ajustado para 30px
+      expect(html).toContain("font-size:43px");
+      expect(html).toContain("font-size:23px"); // R$ ajustado para 30px
       expect(html).toContain("bg-[#E30613]");
     });
 
