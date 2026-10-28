@@ -178,18 +178,35 @@ export function parsePhotoCodeAndSuffix(
 }
 
 /**
- * Obtém o token de acesso do conector Google Drive do Lovable no ambiente do servidor.
+ * Configuração de autenticação para chamadas à Drive API.
+ * - Com `token` explícito (testes): chama a API do Google diretamente.
+ * - Sem token (produção): usa o conector Google Drive do Lovable via gateway,
+ *   com LOVABLE_API_KEY + GOOGLE_DRIVE_API_KEY do ambiente do servidor.
  */
-export function getLovableDriveToken(): string | null {
+export interface DriveRequestConfig {
+  baseUrl: string;
+  headers: Record<string, string>;
+}
+
+export function getDriveRequestConfig(token?: string | null): DriveRequestConfig | null {
+  if (token) {
+    return {
+      baseUrl: "https://www.googleapis.com/drive/v3",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    };
+  }
   if (typeof process === "undefined" || !process.env) return null;
-  return (
-    process.env.GOOGLE_DRIVE_ACCESS_TOKEN ||
-    process.env.LOVABLE_GOOGLE_DRIVE_ACCESS_TOKEN ||
-    process.env.LOVABLE_GOOGLE_DRIVE_TOKEN ||
-    process.env.GOOGLE_ACCESS_TOKEN ||
-    process.env.DRIVE_ACCESS_TOKEN ||
-    null
-  );
+  const lovableKey = process.env.LOVABLE_API_KEY;
+  const connectionKey = process.env.GOOGLE_DRIVE_API_KEY;
+  if (!lovableKey || !connectionKey) return null;
+  return {
+    baseUrl: "https://connector-gateway.lovable.dev/google_drive/drive/v3",
+    headers: {
+      Authorization: `Bearer ${lovableKey}`,
+      "X-Connection-Api-Key": connectionKey,
+      Accept: "application/json",
+    },
+  };
 }
 
 interface FetchDriveOptions {
@@ -215,9 +232,9 @@ export async function listDriveFolderFilesRecursively({
   knownCodes = [],
   fetchFn = fetch,
 }: FetchDriveOptions): Promise<DriveIndexResult> {
-  const authToken = token || getLovableDriveToken();
+  const config = getDriveRequestConfig(token);
 
-  if (!authToken) {
+  if (!config) {
     return {
       ok: false,
       totalImages: 0,
@@ -230,15 +247,12 @@ export async function listDriveFolderFilesRecursively({
     };
   }
 
-  const headers = {
-    Authorization: `Bearer ${authToken}`,
-    Accept: "application/json",
-  };
+  const { baseUrl, headers } = config;
 
   // 1. Buscar metadados da pasta raiz (nome)
   let folderInfo: DriveFolderInfo = { id: folderId, name: "Pasta do Google Drive" };
   try {
-    const metaUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
+    const metaUrl = `${baseUrl}/files/${encodeURIComponent(
       folderId
     )}?fields=id,name,mimeType,trashed&supportsAllDrives=true`;
     const metaRes = await fetchFn(metaUrl, { headers });
@@ -319,7 +333,7 @@ export async function listDriveFolderFilesRecursively({
 
     do {
       const q = `'${current.id}' in parents and trashed = false`;
-      let listUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
+      let listUrl = `${baseUrl}/files?q=${encodeURIComponent(
         q
       )}&pageSize=1000&fields=nextPageToken,files(id,name,mimeType,size,modifiedTime)&supportsAllDrives=true&includeItemsFromAllDrives=true`;
 
@@ -546,15 +560,15 @@ export async function downloadDriveFileMedia({
   token,
   fetchFn = fetch,
 }: DownloadFileOptions): Promise<{ dataUrl: string; mimeType: string } | null> {
-  const authToken = token || getLovableDriveToken();
-  if (!authToken || !fileId) return null;
+  const config = getDriveRequestConfig(token);
+  if (!config || !fileId) return null;
 
-  const url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
+  const url = `${config.baseUrl}/files/${encodeURIComponent(
     fileId
   )}?alt=media&supportsAllDrives=true`;
 
   const res = await fetchFn(url, {
-    headers: { Authorization: `Bearer ${authToken}` },
+    headers: config.headers,
   });
 
   if (!res.ok) return null;
@@ -600,9 +614,9 @@ export async function downloadCampaignPhotosFromDrive({
   fetchFn = fetch,
   concurrency = 4,
 }: DownloadCampaignItemsOptions): Promise<DriveDownloadResult> {
-  const authToken = token || getLovableDriveToken();
+  const config = getDriveRequestConfig(token);
 
-  if (!authToken) {
+  if (!config) {
     return {
       ok: false,
       photos: [],
