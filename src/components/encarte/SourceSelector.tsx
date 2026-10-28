@@ -15,6 +15,7 @@ import {
   setCachedPhoto,
   isPhotoCacheValid,
 } from "@/lib/drive-cache";
+import { optimizeDataUrl } from "@/lib/image-normalizer";
 import { DriveConnectorCard } from "./DriveConnectorCard";
 import type { EncarteProduct } from "@/types/encarte";
 import { DropzoneUpload } from "./DropzoneUpload";
@@ -142,17 +143,18 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
               });
               if (dlRes.ok) {
                 for (const p of dlRes.photos) {
+                  const optimizedUrl = await optimizeDataUrl(p.dataUrl);
                   setCachedPhoto({
                     code: p.code,
                     fileId: p.fileId,
                     filename: p.filename,
                     modifiedTime: p.modifiedTime,
-                    dataUrl: p.dataUrl,
+                    dataUrl: optimizedUrl,
                     cachedAt: Date.now(),
                   });
                   photosToMatch.push({
                     filename: p.filename,
-                    dataUrl: p.dataUrl,
+                    dataUrl: optimizedUrl,
                     extractedCode: p.code,
                     fileId: p.fileId,
                     isPrimary: p.isPrimary,
@@ -333,17 +335,18 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
 
           if (dlRes.ok) {
             for (const p of dlRes.photos) {
+              const optimizedUrl = await optimizeDataUrl(p.dataUrl);
               setCachedPhoto({
                 code: p.code,
                 fileId: p.fileId,
                 filename: p.filename,
                 modifiedTime: p.modifiedTime,
-                dataUrl: p.dataUrl,
+                dataUrl: optimizedUrl,
                 cachedAt: Date.now(),
               });
               photosToMatch.push({
                 filename: p.filename,
-                dataUrl: p.dataUrl,
+                dataUrl: optimizedUrl,
                 extractedCode: p.code,
                 fileId: p.fileId,
                 isPrimary: p.isPrimary,
@@ -439,10 +442,16 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
     }
   };
 
-  // Concluir importação da planilha
+  // Concluir importação da planilha e avançar para preços
   const handleConfirmSpreadsheet = () => {
     if (pendingProducts.length === 0) return;
-    onDataLoaded(pendingProducts, "spreadsheet", unmatchedPhotoNames);
+    try {
+      onDataLoaded(pendingProducts, "spreadsheet", unmatchedPhotoNames);
+    } catch (err) {
+      console.error("Erro ao avançar para etapa de preços:", err);
+      // Fallback seguro de chamada
+      onDataLoaded(pendingProducts, "spreadsheet", unmatchedPhotoNames);
+    }
   };
 
   // Extrair Link da Categoria

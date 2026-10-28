@@ -185,7 +185,7 @@ function EncarteApp() {
             observation:
               parsed.observation || parsed.observacao || DEFAULT_CAMPAIGN.observation,
             format: parsed.format === "a4" ? "a4" : "story_9_16",
-            productsPerPage: [6, 8, 9, 12].includes(Number(parsed.productsPerPage))
+            productsPerPage: [6, 8, 9, 10, 12].includes(Number(parsed.productsPerPage))
               ? (Number(parsed.productsPerPage) as ProductsPerPageOption)
               : DEFAULT_CAMPAIGN.productsPerPage,
             template916Image:
@@ -256,7 +256,7 @@ function EncarteApp() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [undoStack]);
 
-  // Atualizar estado com histórico de Desfazer e Auto-Save
+  // Atualizar estado com histórico de Desfazer e Auto-Save resiliente
   const updateProductsState = (
     updated: EncarteProduct[],
     saveToUndo: boolean = true
@@ -265,7 +265,34 @@ function EncarteApp() {
       setUndoStack((prev) => [...prev.slice(-10), products]);
     }
     setProducts(updated);
-    localStorage.setItem("encarte-products-v2", JSON.stringify(updated));
+
+    // Salvar no localStorage de forma resiliente contra QuotaExceededError
+    try {
+      localStorage.setItem("encarte-products-v2", JSON.stringify(updated));
+    } catch (quotaErr) {
+      console.warn(
+        "Aviso: Quota do localStorage excedida ao salvar fotos completas. Salvando versão compacta...",
+        quotaErr
+      );
+      try {
+        // Remove data URLs pesadas (>50KB) do localStorage de contingência para garantir que todos os dados,
+        // códigos, descrições, preços e configurações continuem salvos sem travar a interface.
+        const safeForStorage = updated.map((p) => {
+          const isHeavyDataUrl = p.image && p.image.startsWith("data:") && p.image.length > 50000;
+          return {
+            ...p,
+            image: isHeavyDataUrl ? "" : p.image,
+            alternativePhotos: (p.alternativePhotos || []).map((alt) => ({
+              ...alt,
+              dataUrl: "",
+            })),
+          };
+        });
+        localStorage.setItem("encarte-products-v2", JSON.stringify(safeForStorage));
+      } catch (innerErr) {
+        console.warn("Aviso: Falha ao gravar no localStorage:", innerErr);
+      }
+    }
 
     // Feedback discreto de salvamento
     const now = new Date();
@@ -333,30 +360,17 @@ function EncarteApp() {
     sourceType: "spreadsheet" | "link" | "sample",
     unmatched: string[]
   ) => {
-    updateProductsState(loaded);
+    // 1. Atualizar navegação e etapas concluídas imediatamente
     setUnmatchedPhotos(unmatched);
     setCompletedSteps((prev) => new Set([...prev, "origem", "dados"]));
     setCurrentStep("precos");
 
-    // Auto-balanceia bordas brancas em segundo plano para novos produtos carregados
-    if (typeof window !== "undefined") {
-      setTimeout(async () => {
-        try {
-          const trimmed = await Promise.all(
-            loaded.map(async (prod) => {
-              if (!prod.image || prod.image.trim() === "") return prod;
-              try {
-                const res = await autoTrimImageWhitespace(prod.image);
-                if (res.wasTrimmed) {
-                  return { ...prod, image: res.trimmedSrc };
-                }
-              } catch {}
-              return prod;
-            })
-          );
-          updateProductsState(trimmed);
-        } catch {}
-      }, 100);
+    // 2. Persistir lista de produtos no estado de forma resiliente
+    try {
+      updateProductsState(loaded);
+    } catch (err) {
+      console.warn("Aviso ao atualizar produtos:", err);
+      setProducts(loaded);
     }
   };
 

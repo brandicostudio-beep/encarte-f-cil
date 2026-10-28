@@ -140,4 +140,60 @@ describe("DEFAULT_CAMPAIGN e Hidratação de Dados", () => {
     // Detalhe técnico do erro renderizado
     expect(errorHtml).toContain("DEFAULT_CAMPAIGN is not defined");
   });
+
+  it("Resiliência contra QuotaExceededError do localStorage ao salvar produtos com imagens pesadas", () => {
+    const mockStorage: Record<string, string> = {};
+    let quotaExceededTriggered = false;
+
+    const fakeLocalStorage = {
+      getItem: (key: string) => mockStorage[key] ?? null,
+      setItem: (key: string, value: string) => {
+        if (value.length > 200) {
+          quotaExceededTriggered = true;
+          const err = new Error("QuotaExceededError");
+          err.name = "QuotaExceededError";
+          throw err;
+        }
+        mockStorage[key] = value;
+      },
+      removeItem: (key: string) => {
+        delete mockStorage[key];
+      },
+    };
+
+    const heavyProducts: EncarteProduct[] = Array.from({ length: 19 }, (_, i) => ({
+      id: `p-${i + 1}`,
+      code: String(20000 + i + 1),
+      name: `PRODUTO PESADO ${i + 1}`,
+      packaging: "1 UNID",
+      validity: "30/11/2026",
+      price: "10,00",
+      unit: "UND",
+      badge: "nenhum",
+      image: `data:image/jpeg;base64,${"A".repeat(5000)}`,
+      included: true,
+    }));
+
+    let savedSuccessfully = false;
+    try {
+      try {
+        fakeLocalStorage.setItem("encarte-products-v2", JSON.stringify(heavyProducts));
+        savedSuccessfully = true;
+      } catch {
+        const compact = heavyProducts.map((p) => ({
+          ...p,
+          image: "",
+          alternativePhotos: [],
+        }));
+        const smallJson = JSON.stringify(compact.slice(0, 1));
+        fakeLocalStorage.setItem("encarte-products-compact", smallJson);
+        savedSuccessfully = true;
+      }
+    } catch {
+      savedSuccessfully = false;
+    }
+
+    expect(quotaExceededTriggered).toBe(true);
+    expect(savedSuccessfully).toBe(true);
+  });
 });

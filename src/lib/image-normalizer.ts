@@ -204,3 +204,63 @@ export async function autoTrimImageWhitespace(
     img.src = imageSrc;
   });
 }
+
+/**
+ * Otimiza e redimensiona uma imagem Base64 (Data URL) para dimensões máximas compatíveis
+ * com os cards do encarte (máx 1200x1200px), reduzindo o peso de dezenas de megabytes para ~100KB.
+ * Previne estouro de memória e cota de armazenamento no navegador.
+ */
+export function optimizeDataUrl(
+  dataUrl: string,
+  maxDimension = 1200,
+  quality = 0.88
+): Promise<string> {
+  if (typeof window === "undefined" || !dataUrl || !dataUrl.startsWith("data:image")) {
+    return Promise.resolve(dataUrl);
+  }
+  // Se for pequena (<150KB), não precisa reprocessar
+  if (dataUrl.length < 150000) {
+    return Promise.resolve(dataUrl);
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        let w = img.naturalWidth || img.width;
+        let h = img.naturalHeight || img.height;
+        if (!w || !h || (w <= maxDimension && h <= maxDimension)) {
+          return resolve(dataUrl);
+        }
+
+        if (w > h) {
+          if (w > maxDimension) {
+            h = Math.round((h * maxDimension) / w);
+            w = maxDimension;
+          }
+        } else {
+          if (h > maxDimension) {
+            w = Math.round((w * maxDimension) / h);
+            h = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve(dataUrl);
+
+        ctx.drawImage(img, 0, 0, w, h);
+        const mime = dataUrl.includes("image/png") ? "image/png" : "image/jpeg";
+        const optimized = canvas.toDataURL(mime, quality);
+        resolve(optimized);
+      } catch {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
