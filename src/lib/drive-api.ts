@@ -13,14 +13,14 @@ export interface DriveIndexedPhoto {
   id: string;
   name: string;
   mimeType: string;
-  size?: number;
-  modifiedTime?: string;
+  size?: number | undefined;
+  modifiedTime?: string | undefined;
   code: string;
   suffixOrder: number;
   suffixLabel: string;
   isPrimary: boolean;
-  folderId?: string;
-  folderPath?: string;
+  folderId?: string | undefined;
+  folderPath?: string | undefined;
 }
 
 export interface DriveFolderInfo {
@@ -46,7 +46,7 @@ export interface DriveIndexResult {
   ambiguousCodes: string[];
   error?: DriveApiErrorCode;
   errorMessage?: string;
-  corruptFiles?: { id: string; name: string; reason: string }[];
+  corruptFiles?: { id: string; name: string; reason: string }[] | undefined;
 }
 
 export interface DriveDownloadResult {
@@ -86,19 +86,19 @@ export function parseGoogleDriveUrl(rawUrl: string): GoogleDriveLinkInfo | null 
   // 1. Pasta: /drive/folders/<id> ou /drive/u/0/folders/<id>
   const folderMatch = url.match(/\/folders\/([a-zA-Z0-9_-]{15,})/i);
   if (folderMatch) {
-    return { url, type: "folder", id: folderMatch[1] };
+    return { url, type: "folder", id: folderMatch[1] ?? "" };
   }
 
   // 2. Arquivo: /file/d/<id>
   const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]{15,})/i);
   if (fileMatch) {
-    return { url, type: "file", id: fileMatch[1] };
+    return { url, type: "file", id: fileMatch[1] ?? "" };
   }
 
   // 3. Query param id: ?id=<id> ou &id=<id>
   const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]{15,})/i);
   if (idMatch) {
-    return { url, type: "file", id: idMatch[1] };
+    return { url, type: "file", id: idMatch[1] ?? "" };
   }
 
   return null;
@@ -143,7 +143,7 @@ export function parsePhotoCodeAndSuffix(
         const remainder = cleanBase.slice(c.length);
         const numericMatch = remainder.match(/^[-_ ]?\(?(\d+)\)?$/);
         if (numericMatch) {
-          const num = parseInt(numericMatch[1], 10);
+          const num = parseInt(numericMatch[1] ?? "0", 10);
           return { code: c, suffixOrder: isNaN(num) ? 50 : num, suffixLabel: remainder };
         }
         return { code: c, suffixOrder: 100, suffixLabel: remainder };
@@ -155,7 +155,7 @@ export function parsePhotoCodeAndSuffix(
   // "24657-1" -> code: "24657", num: 1
   const heuristicMatch = cleanBase.match(/^([a-zA-Z0-9]+)(?:[-_ ]?\(?(\d+)\)?|[-_ ](.+))?$/);
   if (heuristicMatch) {
-    const code = heuristicMatch[1];
+    const code = heuristicMatch[1] ?? "";
     if (heuristicMatch[2]) {
       const num = parseInt(heuristicMatch[2], 10);
       return {
@@ -178,18 +178,37 @@ export function parsePhotoCodeAndSuffix(
 }
 
 /**
- * Obtém o token de acesso do conector Google Drive do Lovable no ambiente do servidor.
+ * Configuração de autenticação para chamadas à Drive API.
+ * - Com `token` explícito (testes): chama a API do Google diretamente.
+ * - Sem token (produção): usa o conector Google Drive do Lovable via gateway,
+ *   com LOVABLE_API_KEY + GOOGLE_DRIVE_API_KEY do ambiente do servidor.
  */
-export function getLovableDriveToken(): string | null {
+export interface DriveRequestConfig {
+  baseUrl: string;
+  headers: Record<string, string>;
+}
+
+export function getDriveRequestConfig(token?: string | null): DriveRequestConfig | null {
+  if (token) {
+    return {
+      baseUrl: "https://www.googleapis.com/drive/v3",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    };
+  }
+  // null explícito = sem conexão (usado em testes); undefined = ler do ambiente
+  if (token === null) return null;
   if (typeof process === "undefined" || !process.env) return null;
-  return (
-    process.env.GOOGLE_DRIVE_ACCESS_TOKEN ||
-    process.env.LOVABLE_GOOGLE_DRIVE_ACCESS_TOKEN ||
-    process.env.LOVABLE_GOOGLE_DRIVE_TOKEN ||
-    process.env.GOOGLE_ACCESS_TOKEN ||
-    process.env.DRIVE_ACCESS_TOKEN ||
-    null
-  );
+  const lovableKey = process.env["LOVABLE_API_KEY"];
+  const connectionKey = process.env["GOOGLE_DRIVE_API_KEY"];
+  if (!lovableKey || !connectionKey) return null;
+  return {
+    baseUrl: "https://connector-gateway.lovable.dev/google_drive/drive/v3",
+    headers: {
+      Authorization: `Bearer ${lovableKey}`,
+      "X-Connection-Api-Key": connectionKey,
+      Accept: "application/json",
+    },
+  };
 }
 
 interface FetchDriveOptions {
@@ -215,9 +234,9 @@ export async function listDriveFolderFilesRecursively({
   knownCodes = [],
   fetchFn = fetch,
 }: FetchDriveOptions): Promise<DriveIndexResult> {
-  const authToken = token || getLovableDriveToken();
+  const config = getDriveRequestConfig(token);
 
-  if (!authToken) {
+  if (!config) {
     return {
       ok: false,
       totalImages: 0,
@@ -230,15 +249,12 @@ export async function listDriveFolderFilesRecursively({
     };
   }
 
-  const headers = {
-    Authorization: `Bearer ${authToken}`,
-    Accept: "application/json",
-  };
+  const { baseUrl, headers } = config;
 
   // 1. Buscar metadados da pasta raiz (nome)
   let folderInfo: DriveFolderInfo = { id: folderId, name: "Pasta do Google Drive" };
   try {
-    const metaUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
+    const metaUrl = `${baseUrl}/files/${encodeURIComponent(
       folderId
     )}?fields=id,name,mimeType,trashed&supportsAllDrives=true`;
     const metaRes = await fetchFn(metaUrl, { headers });
@@ -301,8 +317,8 @@ export async function listDriveFolderFilesRecursively({
     id: string;
     name: string;
     mimeType: string;
-    size?: number;
-    modifiedTime?: string;
+    size?: number | undefined;
+    modifiedTime?: string | undefined;
     folderId: string;
     folderPath: string;
   }[] = [];
@@ -319,7 +335,7 @@ export async function listDriveFolderFilesRecursively({
 
     do {
       const q = `'${current.id}' in parents and trashed = false`;
-      let listUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
+      let listUrl = `${baseUrl}/files?q=${encodeURIComponent(
         q
       )}&pageSize=1000&fields=nextPageToken,files(id,name,mimeType,size,modifiedTime)&supportsAllDrives=true&includeItemsFromAllDrives=true`;
 
@@ -500,8 +516,9 @@ export async function listDriveFolderFilesRecursively({
       return a.name.localeCompare(b.name, undefined, { numeric: true });
     });
 
-    if (fileList.length > 1) {
-      ambiguousCodes.push(fileList[0].code);
+    const firstFile = fileList[0];
+    if (fileList.length > 1 && firstFile) {
+      ambiguousCodes.push(firstFile.code);
     }
 
     fileList.forEach((item, index) => {
@@ -534,7 +551,7 @@ export async function listDriveFolderFilesRecursively({
 
 interface DownloadFileOptions {
   fileId: string;
-  token?: string | null;
+  token?: string | null | undefined;
   fetchFn?: typeof fetch;
 }
 
@@ -546,15 +563,15 @@ export async function downloadDriveFileMedia({
   token,
   fetchFn = fetch,
 }: DownloadFileOptions): Promise<{ dataUrl: string; mimeType: string } | null> {
-  const authToken = token || getLovableDriveToken();
-  if (!authToken || !fileId) return null;
+  const config = getDriveRequestConfig(token);
+  if (!config || !fileId) return null;
 
-  const url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(
+  const url = `${config.baseUrl}/files/${encodeURIComponent(
     fileId
   )}?alt=media&supportsAllDrives=true`;
 
   const res = await fetchFn(url, {
-    headers: { Authorization: `Bearer ${authToken}` },
+    headers: config.headers,
   });
 
   if (!res.ok) return null;
@@ -600,9 +617,9 @@ export async function downloadCampaignPhotosFromDrive({
   fetchFn = fetch,
   concurrency = 4,
 }: DownloadCampaignItemsOptions): Promise<DriveDownloadResult> {
-  const authToken = token || getLovableDriveToken();
+  const config = getDriveRequestConfig(token);
 
-  if (!authToken) {
+  if (!config) {
     return {
       ok: false,
       photos: [],
@@ -627,7 +644,7 @@ export async function downloadCampaignPhotosFromDrive({
       try {
         const media = await downloadDriveFileMedia({
           fileId: item.id,
-          token: authToken,
+          token,
           fetchFn,
         });
 
