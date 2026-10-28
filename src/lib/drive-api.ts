@@ -641,7 +641,7 @@ export async function downloadCampaignPhotosFromDrive({
       try {
         const media = await downloadDriveFileMedia({
           fileId: item.id,
-          token: authToken,
+          token,
           fetchFn,
         });
 
