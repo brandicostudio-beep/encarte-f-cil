@@ -216,14 +216,28 @@ describe("Item 2 - Embalagem, unidade, pacote e gramatura", () => {
     expect(deriveSaleUnit("SACHÊ 120 GR")).toEqual({ unit: "SCH", hasUnitWord: true });
     expect(deriveSaleUnit("SACHE 50G")).toEqual({ unit: "SCH", hasUnitWord: true });
 
-    // 5. Sem palavra de unidade: retorna UND e hasUnitWord: false (para entrar na lista de pendências)
+    // 5. Regra Varejo / Atacado: multiplicador X define Caixa (>1X) ou Unidade (1X)
+    expect(deriveSaleUnit("20X500 GR")).toEqual({ unit: "CX", hasUnitWord: true });
+    expect(deriveSaleUnit("30X120 GR")).toEqual({ unit: "CX", hasUnitWord: true });
+    expect(deriveSaleUnit("24X300 GR")).toEqual({ unit: "CX", hasUnitWord: true });
+    expect(deriveSaleUnit("27X200 ML")).toEqual({ unit: "CX", hasUnitWord: true });
+    expect(deriveSaleUnit("15X25 GR")).toEqual({ unit: "CX", hasUnitWord: true });
+    expect(deriveSaleUnit("36X20 GR")).toEqual({ unit: "CX", hasUnitWord: true });
+    expect(deriveSaleUnit("10X1 KG")).toEqual({ unit: "CX", hasUnitWord: true });
+    expect(deriveSaleUnit("1X153 GR")).toEqual({ unit: "UND", hasUnitWord: true });
+    expect(deriveSaleUnit("1X234 ML")).toEqual({ unit: "UND", hasUnitWord: true });
+    expect(deriveSaleUnit("1X3 KG")).toEqual({ unit: "UND", hasUnitWord: true });
+    expect(deriveSaleUnit("1X1,01KG")).toEqual({ unit: "UND", hasUnitWord: true });
+    expect(deriveSaleUnit("1 UNID")).toEqual({ unit: "UND", hasUnitWord: true });
+    expect(deriveSaleUnit("1X24 UNID")).toEqual({ unit: "UND", hasUnitWord: true });
+
+    // 6. Sem multiplicador e sem palavra de unidade: retorna UND e hasUnitWord: false (para entrar na lista de pendências)
     expect(deriveSaleUnit("23 GR")).toEqual({ unit: "UND", hasUnitWord: false });
-    expect(deriveSaleUnit("1X24 UNID")).toEqual({ unit: "UND", hasUnitWord: false });
     expect(deriveSaleUnit("500G")).toEqual({ unit: "UND", hasUnitWord: false });
     expect(deriveSaleUnit("")).toEqual({ unit: "UND", hasUnitWord: false });
     expect(deriveSaleUnit(undefined)).toEqual({ unit: "UND", hasUnitWord: false });
 
-    // 6. Respeita correção manual se fornecida pelo usuário
+    // 7. Respeita correção manual se fornecida pelo usuário
     expect(deriveSaleUnit("23 GR", "CX")).toEqual({ unit: "CX", hasUnitWord: false });
     expect(deriveSaleUnit("PACOTE 1X24", "KG")).toEqual({ unit: "KG", hasUnitWord: true });
   });

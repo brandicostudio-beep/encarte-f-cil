@@ -290,7 +290,7 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
       packaging: packaging || "",
       validity: validity || "",
       price: rawPrice || "",
-      unit: deriveSaleUnit(packaging).unit,
+      unit: deriveSaleUnit(packaging, undefined, name).unit,
       stock,
       badge: "nenhum",
       image: "",

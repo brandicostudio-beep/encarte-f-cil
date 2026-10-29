@@ -187,6 +187,24 @@ describe("Leitor de Planilhas e Mapeamento de Colunas (WinThor / ERP)", () => {
     // No produto 1, preço total era 129, preço de venda era 3,00
     expect(p1.price).not.toBe("129,00");
     expect(p1.price).toBe("3,00");
+
+    // Unidades de venda automáticas (regra de atacado/varejo: >1X é CX, 1X é UND)
+    expect(p1.unit).toBe("UND"); // 1X234 ML -> UND
+    const pCuscuz = result.validProducts.find((p) => p.code === "26004");
+    expect(pCuscuz?.packaging).toBe("20X500 GR");
+    expect(pCuscuz?.unit).toBe("CX"); // 20X500 GR -> CX
+
+    const pLeiteCoco = result.validProducts.find((p) => p.code === "11096");
+    expect(pLeiteCoco?.packaging).toBe("27X200 ML");
+    expect(pLeiteCoco?.unit).toBe("CX"); // 27X200 ML -> CX
+
+    const pGelatina = result.validProducts.find((p) => p.code === "24717");
+    expect(pGelatina?.packaging).toBe("15X25 GR");
+    expect(pGelatina?.unit).toBe("CX"); // 15X25 GR -> CX
+
+    const pAlho = result.validProducts.find((p) => p.code === "23957");
+    expect(pAlho?.packaging).toBe("1X1,01KG");
+    expect(pAlho?.unit).toBe("UND"); // 1X1,01KG -> UND
   });
 
   it("Preserva compatibilidade com formatos convencionais de planilha", () => {

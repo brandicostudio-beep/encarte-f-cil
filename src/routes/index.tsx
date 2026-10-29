@@ -291,7 +291,11 @@ function EncarteApp() {
                 : p?.preco !== undefined && p?.preco !== null
                 ? String(p.preco)
                 : "",
-            unit: String(p?.unit || p?.unidade || "UND"),
+            unit: deriveSaleUnit(
+              String(p?.packaging ?? p?.embalagem ?? ""),
+              p?.unit || p?.unidade,
+              String(p?.name ?? p?.nome ?? p?.descricao ?? "")
+            ).unit,
             stock: String(p?.stock ?? p?.estoque ?? ""),
             badge: p?.badge || p?.selo || "nenhum",
             image: String(p?.image ?? p?.foto ?? p?.imageUrl ?? ""),

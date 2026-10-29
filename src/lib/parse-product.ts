@@ -68,12 +68,25 @@ export interface DerivedSaleUnit {
  */
 export function deriveSaleUnit(
   packaging?: string | null,
-  explicitUnit?: string | null
+  explicitUnit?: string | null,
+  productName?: string | null
 ): DerivedSaleUnit {
   const cleanPack = (packaging || "").trim();
+  const cleanName = (productName || "").trim();
   const manualUnit = (explicitUnit || "").trim().toUpperCase();
 
-  if (!cleanPack) {
+  // 1. Se não há embalagem, tentar extrair padrão do nome se disponível
+  let textToAnalyze = cleanPack;
+  if (!textToAnalyze && cleanName) {
+    const fromName =
+      cleanName.match(/\b(\d+\s*[Xx]\s*[\d.,]+\s*(?:GR?|KG|ML|L|LT|UNID?|UN|G)?)\b/i) ||
+      cleanName.match(/\b(CAIXA|FARDO|PACOTE|UNIDADE|CX|FD|PCT|UND)\b/i);
+    if (fromName) {
+      textToAnalyze = fromName[0];
+    }
+  }
+
+  if (!textToAnalyze) {
     return {
       unit: manualUnit || "UND",
       hasUnitWord: false,
@@ -81,10 +94,78 @@ export function deriveSaleUnit(
   }
 
   // Remove parênteses, colchetes ou caracteres iniciais, ex: "(PACOTE 1) 1X24 UNID" -> "PACOTE"
-  const stripped = cleanPack.replace(/^[([{\s]+/, "").trim();
+  const stripped = textToAnalyze.replace(/^[([{\s]+/, "").trim();
   const firstWord = stripped.split(/[\s\-_/()[\]{}!?:;,.]+/)[0]?.toUpperCase() || "";
 
-  // Se a primeira palavra começar com dígito (ex.: "23", "23GR", "1X24", "500G", "1,01"),
+  // 2. Palavras de unidade explícitas no início (ex.: "FARDO 9X24", "PACOTE 1X24", "CAIXA 12X1")
+  if (/^FARDO$|^FD$/.test(firstWord) || /\b(FARDO|FD)\b/i.test(stripped)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "FD", hasUnitWord: true };
+  }
+  if (/^PACOTE$|^PCTE?$|^PC$|^PCT$/.test(firstWord) || /\b(PACOTE|PCT)\b/i.test(stripped)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "PCT", hasUnitWord: true };
+  }
+  if (/^CAIXA$|^CXA?$|^CX$/.test(firstWord) || /\b(CAIXA|CX)\b/i.test(stripped)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "CX", hasUnitWord: true };
+  }
+  if (/^BALDE$|^BLD$/.test(firstWord) || /\b(BALDE|BLD)\b/i.test(stripped)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "BLD", hasUnitWord: true };
+  }
+  if (/^BANDEJA$|^BDJ$/.test(firstWord) || /\b(BANDEJA|BDJ)\b/i.test(stripped)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "BDJ", hasUnitWord: true };
+  }
+  if (/^SACH[EÊ]$|^SCH$/.test(firstWord) || /\b(SACH[EÊ]|SCH)\b/i.test(stripped)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "SCH", hasUnitWord: true };
+  }
+  if (/^POTE$|^PT$/.test(firstWord) || /\b(POTE|PT)\b/i.test(stripped)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "PT", hasUnitWord: true };
+  }
+  if (/^GARRAFA$|^GF$|^GRF$/.test(firstWord) || /\b(GARRAFA|GF)\b/i.test(stripped)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "GF", hasUnitWord: true };
+  }
+  if (/^LATA$|^LT$/.test(firstWord)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "LT", hasUnitWord: true };
+  }
+  if (/^DISPLAY$|^DISP$|^DP$/.test(firstWord) || /\b(DISPLAY|DISP)\b/i.test(stripped)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "DSP", hasUnitWord: true };
+  }
+
+  // 3. Multiplicador com X: ex.: "20X500 GR", "1X234 ML", "10X1 KG", "1X1,01KG", "30X120 GR", "12X1 LT"
+  // Regra do Varejo / Atacado / Distribuição:
+  // Se multiplicador > 1 (ex.: 2X, 10X, 20X, 24X, 30X) -> é CAIXA ("CX")!
+  // Se multiplicador <= 1 (ex.: 1X) -> é UNIDADE ("UND")!
+  const multiplierMatch =
+    stripped.match(/^(\d+(?:[.,]\d+)?)\s*[Xx]\s*(.+)?/i) ||
+    stripped.match(/\b(\d+(?:[.,]\d+)?)\s*[Xx]\s*(?:[\d.,]+)?\s*(?:GR?|KG|ML|L|LT|UNID?|UN|G)?\b/i);
+
+  if (multiplierMatch) {
+    const qty = parseFloat(multiplierMatch[1].replace(",", "."));
+    // Se o usuário selecionou manualmente uma unidade customizada diferente de UND e CX (ex: PCT, FD, KG), respeita
+    if (manualUnit && manualUnit !== "UND" && manualUnit !== "CX") {
+      return { unit: manualUnit, hasUnitWord: true };
+    }
+    if (qty > 1) {
+      return { unit: "CX", hasUnitWord: true };
+    } else {
+      return { unit: "UND", hasUnitWord: true };
+    }
+  }
+
+  // 4. Padrão com UNID / UNIDADE / UND:
+  // "1 UNID", "1 UN", "UNIDADE" -> UND
+  // "12 UNID", "24 UN" -> CX
+  const unidMatch = stripped.match(/^(\d+)?\s*(?:UNID(?:ADE)?|UND|UN)\b/i);
+  if (unidMatch) {
+    const qty = unidMatch[1] ? parseInt(unidMatch[1], 10) : 1;
+    if (manualUnit && manualUnit !== "UND") {
+      return { unit: manualUnit, hasUnitWord: true };
+    }
+    if (qty > 1) {
+      return { unit: "CX", hasUnitWord: true };
+    }
+    return { unit: "UND", hasUnitWord: true };
+  }
+
+  // 5. Se começar com dígito mas sem multiplicador X (ex.: "23 GR", "500G", "1,01"),
   // a embalagem NÃO possui palavra de unidade identificada
   if (!firstWord || /^\d/.test(firstWord)) {
     return {
@@ -93,44 +174,7 @@ export function deriveSaleUnit(
     };
   }
 
-  // Mapeamentos específicos por regra:
-  if (/^UNID(ADE)?$|^UN$|^UND$/.test(firstWord)) {
-    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "UND", hasUnitWord: true };
-  }
-  if (/^CAIXA$|^CXA?$|^CX$/.test(firstWord)) {
-    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "CX", hasUnitWord: true };
-  }
-  if (/^PACOTE$|^PCTE?$|^PC$|^PCT$/.test(firstWord)) {
-    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "PCT", hasUnitWord: true };
-  }
-
-  // Abreviações padrão para outras palavras de embalagem:
-  if (/^FARDO$|^FD$/.test(firstWord)) {
-    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "FD", hasUnitWord: true };
-  }
-  if (/^BALDE$|^BLD$/.test(firstWord)) {
-    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "BLD", hasUnitWord: true };
-  }
-  if (/^SACH[EÊ]$|^SCH$/.test(firstWord)) {
-    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "SCH", hasUnitWord: true };
-  }
-  if (/^BANDEJA$|^BDJ$/.test(firstWord)) {
-    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "BDJ", hasUnitWord: true };
-  }
-  if (/^POTE$|^PT$/.test(firstWord)) {
-    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "PT", hasUnitWord: true };
-  }
-  if (/^GARRAFA$|^GF$|^GRF$/.test(firstWord)) {
-    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "GF", hasUnitWord: true };
-  }
-  if (/^LATA$|^LT$/.test(firstWord)) {
-    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "LT", hasUnitWord: true };
-  }
-  if (/^DISPLAY$|^DISP$|^DP$/.test(firstWord)) {
-    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "DSP", hasUnitWord: true };
-  }
-
-  // Caso seja uma palavra descritiva qualquer (ex: "VIDRO" -> "VDR", "TUBO" -> "TUBO"):
+  // Caso seja outra palavra descritiva (ex: "VIDRO" -> "VDR", "TUBO" -> "TUBO"):
   if (manualUnit && manualUnit !== "UND") {
     return { unit: manualUnit, hasUnitWord: true };
   }

@@ -116,7 +116,7 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
               const hasPrice = Boolean(p?.price && String(p.price).trim() !== "");
               const hasPhoto = Boolean(p?.image && String(p.image).trim() !== "");
               const hasPackaging = Boolean(p?.packaging && String(p.packaging).trim() !== "");
-              const unitCheck = deriveSaleUnit(p?.packaging, p?.unit);
+              const unitCheck = deriveSaleUnit(p?.packaging, p?.unit, p?.name);
 
               // Diagnóstico de pendências com cor E texto explícito (Acessibilidade)
               const issues: { type: string; label: string; className: string }[] = [];
