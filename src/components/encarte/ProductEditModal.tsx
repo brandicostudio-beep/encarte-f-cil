@@ -12,8 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { EncarteProduct, BadgeType } from "@/types/encarte";
 import { BADGE_LABELS } from "@/types/encarte";
-import { formatPrice, parsePackaging, deriveSaleUnit, SALE_UNITS } from "@/lib/parse-product";
-import { Package, Upload, Trash2, Scissors, ZoomIn, ZoomOut, RotateCcw, Layers } from "lucide-react";
+import { formatPrice, parsePackaging, deriveSaleUnit, SALE_UNITS, evaluateStockExpression, previewStockCalculation } from "@/lib/parse-product";
+import { Package, Upload, Trash2, Scissors, ZoomIn, ZoomOut, RotateCcw, Layers, Calculator } from "lucide-react";
 import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
 
 interface ProductEditModalProps {
@@ -107,6 +107,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
     e.preventDefault();
     if (!form) return;
     const parsedPack = parsePackaging(form.packaging || "");
+    const finalStock = form.stock ? evaluateStockExpression(form.stock, form.unit) : "";
     onSave({
       ...form,
       packaging: (form.packaging || "").trim(),
@@ -115,6 +116,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
       packagingUnit: parsedPack?.unidadeMedida,
       packagingWeight: parsedPack?.gramatura,
       price: formatPrice(form.price || ""),
+      stock: finalStock,
       imageScale: typeof form.imageScale === "number" ? form.imageScale : 1.0,
     });
     onOpenChange(false);
@@ -256,13 +258,55 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               />
             </div>
             <div>
-              <Label htmlFor="stock">Estoque (Opcional)</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="stock">Estoque (Opcional)</Label>
+                {previewStockCalculation(form.stock, form.unit) && (
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-300">
+                    Total: {previewStockCalculation(form.stock, form.unit)}
+                  </span>
+                )}
+              </div>
               <Input
                 id="stock"
                 value={form.stock || ""}
                 onChange={(e) => setForm({ ...form, stock: e.target.value })}
-                placeholder="Ex: 50 UND (vazio para ocultar)"
+                onBlur={() => {
+                  if (form.stock) {
+                    const evaluated = evaluateStockExpression(form.stock, form.unit);
+                    if (evaluated !== form.stock) {
+                      setForm((prev) => (prev ? { ...prev, stock: evaluated } : null));
+                    }
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (form.stock) {
+                      const evaluated = evaluateStockExpression(form.stock, form.unit);
+                      setForm((prev) => (prev ? { ...prev, stock: evaluated } : null));
+                    }
+                  }
+                }}
+                placeholder="Ex: 80+53 ou 133 UND"
               />
+              {previewStockCalculation(form.stock, form.unit) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const evaluated = evaluateStockExpression(form.stock, form.unit);
+                    setForm((prev) => (prev ? { ...prev, stock: evaluated } : null));
+                  }}
+                  className="mt-1 flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded px-2 py-1 transition-all w-full text-left cursor-pointer shadow-2xs"
+                  title="Clique para aplicar o resultado da soma"
+                >
+                  <Calculator className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                  <span>Resultado da soma: <strong>{previewStockCalculation(form.stock, form.unit)}</strong> (clique para aplicar)</span>
+                </button>
+              ) : (
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Dica: digite somas como <strong>80+53</strong> para somar estoques de diferentes locais automaticamente.
+                </p>
+              )}
             </div>
           </div>
 

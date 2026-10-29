@@ -24,7 +24,7 @@ import {
   getValidityTimestamp,
   sortProductsByValidityAsc,
 } from "@/lib/encarte-helpers";
-import { formatPrice, deriveSaleUnit } from "@/lib/parse-product";
+import { formatPrice, deriveSaleUnit, evaluateStockExpression } from "@/lib/parse-product";
 import { DESIGN_TOKENS } from "@/lib/design-tokens";
 import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
 
@@ -582,7 +582,7 @@ function EncarteApp() {
       validity: newProd.validity.trim(),
       price: formatPrice(newProd.price),
       unit: newProd.unit.trim().toUpperCase() || "UND",
-      stock: newProd.stock.trim() ? `${newProd.stock.trim()} UND` : "",
+      stock: newProd.stock.trim() ? evaluateStockExpression(newProd.stock.trim(), newProd.unit) : "",
       badge: newProd.badge,
       image: newProd.image.trim(),
       included: true,
@@ -2029,11 +2029,19 @@ function EncarteApp() {
               <div>
                 <label className="text-xs font-semibold">Estoque (Opcional)</label>
                 <Input
-                  placeholder="Ex: 80 UND"
+                  placeholder="Ex: 80+53 ou 80 UND"
                   value={newProd.stock}
                   onChange={(e) =>
                     setNewProd({ ...newProd, stock: e.target.value })
                   }
+                  onBlur={() => {
+                    if (newProd.stock) {
+                      setNewProd({
+                        ...newProd,
+                        stock: evaluateStockExpression(newProd.stock, newProd.unit),
+                      });
+                    }
+                  }}
                 />
               </div>
               <div>

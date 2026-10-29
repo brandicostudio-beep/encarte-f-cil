@@ -35,7 +35,7 @@ import {
   Crosshair,
 } from "lucide-react";
 import { EncarteProduct, ProductCustomStyle, CampaignGlobalStyle } from "@/types/encarte";
-import { SALE_UNITS } from "@/lib/parse-product";
+import { SALE_UNITS, evaluateStockExpression, previewStockCalculation } from "@/lib/parse-product";
 import { SelectedTarget, TargetElementType, ChangeScope, StylePreset } from "@/types/editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1403,12 +1403,44 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           </div>
 
           <div className="space-y-1">
-            <Label className="text-[11px] text-muted-foreground">Texto do Estoque</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] text-muted-foreground">Texto do Estoque</Label>
+              {previewStockCalculation(product.stock, product.unit) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const evaluated = evaluateStockExpression(product.stock, product.unit);
+                    onUpdateProductData(product.id, { stock: evaluated });
+                  }}
+                  className="text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded px-1.5 py-0.5 cursor-pointer"
+                  title="Clique para aplicar a soma calculada"
+                >
+                  = {previewStockCalculation(product.stock, product.unit)} (Aplicar)
+                </button>
+              )}
+            </div>
             <Input
               value={product.stock || ""}
               onChange={(e) => onUpdateProductData(product.id, { stock: e.target.value })}
-              className="h-8 text-xs"
-              placeholder="Ex: Últimas 15 unidades"
+              onBlur={() => {
+                if (product.stock) {
+                  const evaluated = evaluateStockExpression(product.stock, product.unit);
+                  if (evaluated !== product.stock) {
+                    onUpdateProductData(product.id, { stock: evaluated });
+                  }
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (product.stock) {
+                    const evaluated = evaluateStockExpression(product.stock, product.unit);
+                    onUpdateProductData(product.id, { stock: evaluated });
+                  }
+                }
+              }}
+              className="h-8 text-xs font-mono"
+              placeholder="Ex: 80+53 ou 133 UND"
             />
           </div>
         </TabsContent>

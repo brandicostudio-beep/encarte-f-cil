@@ -808,3 +808,90 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
 
   return products;
 }
+
+/**
+ * Avalia expressões matemáticas no campo de estoque (ex: "80+53", "80 + 53 UND", "10*12", "100 - 15")
+ * e retorna a quantidade total calculada com a unidade de medida adequada.
+ */
+export function evaluateStockExpression(
+  input?: string | null,
+  fallbackUnit?: string | null
+): string {
+  if (!input) return "";
+  const raw = String(input).trim();
+  if (!raw) return "";
+
+  // 1. Extrair unidade de medida presente na string (ex: "UND", "CX", "PCT", "FD", "DISP", "KG", "L")
+  let detectedUnit = "";
+  const unitMatch = raw.match(/\b(UND|UNID|UNIDADE|UN|CX|CAIXA|PCT|PACOTE|FD|FARDO|DISP|DSP|DISPLAY|KG|GR|G|L|ML|LT)\b/i);
+  if (unitMatch) {
+    detectedUnit = normalizeSaleUnit(unitMatch[0]);
+  } else if (fallbackUnit) {
+    detectedUnit = normalizeSaleUnit(fallbackUnit);
+  }
+
+  // 2. Isolar a parte matemática removendo "ESTOQUE", "EST" e unidades
+  let mathStr = raw
+    .replace(/\b(ESTOQUE|EST)\b[:\s]*/gi, "")
+    .replace(/\b(UND|UNID|UNIDADE|UN|CX|CAIXA|PCT|PACOTE|FD|FARDO|DISP|DSP|DISPLAY|KG|GR|G|L|ML|LT)\b/gi, "")
+    .trim();
+
+  // Substituir 'x' ou 'X' entre números por '*' (ex: "10x12" -> "10 * 12")
+  mathStr = mathStr.replace(/(\d+)\s*[xX]\s*(\d+)/g, "$1 * $2");
+  // Substituir vírgula decimal por ponto (ex: "10,5 + 2" -> "10.5 + 2")
+  mathStr = mathStr.replace(/,/g, ".");
+
+  // Verificar se há operadores matemáticos (+, -, *, /)
+  const hasOperator = /[+\-*/]/.test(mathStr);
+  if (!hasOperator) {
+    return raw;
+  }
+
+  // Sanitização de segurança estrita: apenas dígitos, pontos, espaços e operadores matemáticos básicos
+  if (!/^[\d\s.+\-*/()]+$/.test(mathStr)) {
+    return raw;
+  }
+
+  try {
+    const sanitizedEval = new Function('"use strict"; return (' + mathStr + ');');
+    const result = sanitizedEval();
+
+    if (typeof result === "number" && !isNaN(result) && isFinite(result)) {
+      const formattedNumber = Number.isInteger(result)
+        ? String(result)
+        : String(Math.round(result * 100) / 100).replace(".", ",");
+
+      const finalUnit = detectedUnit || (fallbackUnit ? normalizeSaleUnit(fallbackUnit) : "UND");
+      return finalUnit ? `${formattedNumber} ${finalUnit}` : formattedNumber;
+    }
+  } catch {
+    // Retorna raw se a expressão estiver em andamento (ex: "80+")
+    return raw;
+  }
+
+  return raw;
+}
+
+/**
+ * Retorna uma prévia do resultado calculado de uma expressão matemática de estoque se houver cálculo a ser feito,
+ * ou null se for um texto comum ou expressão incompleta.
+ */
+export function previewStockCalculation(
+  input?: string | null,
+  fallbackUnit?: string | null
+): string | null {
+  if (!input) return null;
+  const raw = String(input).trim();
+  // Tem que conter operador matemático (+, -, *, /) ou multiplicação 'x' entre dígitos (ex: "10x5")
+  if (!/[+\-*/]/.test(raw) && !/\d\s*[xX]\s*\d/.test(raw)) return null;
+
+  const evaluated = evaluateStockExpression(raw, fallbackUnit);
+  if (evaluated && evaluated !== raw) {
+    // Remover siglas como CX para não confundir o 'X' da sigla com operador de multiplicação
+    const cleanEvaluated = evaluated.replace(/\b(CX|CAIXA|PCT|DISP|UND|FD)\b/gi, "").trim();
+    if (!/[+\-*/]/.test(cleanEvaluated) && !/\d\s*[xX]\s*\d/.test(cleanEvaluated)) {
+      return evaluated;
+    }
+  }
+  return null;
+}

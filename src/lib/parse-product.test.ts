@@ -10,6 +10,8 @@ import {
   deriveSaleUnit,
   SALE_UNITS,
   normalizeSaleUnit,
+  evaluateStockExpression,
+  previewStockCalculation,
 } from "./parse-product";
 import { parseSpreadsheetPrices, isDateExpired } from "./encarte-helpers";
 import type { CampaignConfig } from "@/types/encarte";
@@ -286,6 +288,46 @@ describe("Item 2 - Embalagem, unidade, pacote e gramatura", () => {
     expect(deriveSaleUnit("23 GR", "DISP", undefined, true)).toEqual({ unit: "DISP", hasUnitWord: true });
     expect(deriveSaleUnit("23 GR", "FD", undefined, true)).toEqual({ unit: "FD", hasUnitWord: true });
   });
+  it("avalia expressões matemáticas no estoque e calcula a quantidade total (ex: 80+53 -> 133 UND)", () => {
+    // 1. Soma básica 80+53
+    expect(evaluateStockExpression("80+53")).toBe("133 UND");
+    expect(evaluateStockExpression("80+53", "CX")).toBe("133 CX");
+    expect(evaluateStockExpression("80+53", "PCT")).toBe("133 PCT");
+    expect(evaluateStockExpression("80+53", "FD")).toBe("133 FD");
+    expect(evaluateStockExpression("80+53", "DISP")).toBe("133 DISP");
+
+    // 2. Com espaços e múltiplos termos
+    expect(evaluateStockExpression("80 + 53")).toBe("133 UND");
+    expect(evaluateStockExpression("80 + 53 + 20")).toBe("153 UND");
+
+    // 3. Com unidade na própria string
+    expect(evaluateStockExpression("80+53 UND")).toBe("133 UND");
+    expect(evaluateStockExpression("80 + 53 CX")).toBe("133 CX");
+    expect(evaluateStockExpression("80 + 53 PCT")).toBe("133 PCT");
+    expect(evaluateStockExpression("ESTOQUE: 80+53")).toBe("133 UND");
+
+    // 4. Multiplicação e subtração
+    expect(evaluateStockExpression("10*12")).toBe("120 UND");
+    expect(evaluateStockExpression("10x12 PCT")).toBe("120 PCT");
+    expect(evaluateStockExpression("100 - 15")).toBe("85 UND");
+
+    // 5. Números decimais com vírgula ou ponto
+    expect(evaluateStockExpression("10,5 + 4,5")).toBe("15 UND");
+    expect(evaluateStockExpression("10.5 + 4")).toBe("14,5 UND");
+
+    // 6. Texto sem operadores matemáticos permanece inalterado
+    expect(evaluateStockExpression("133 UND")).toBe("133 UND");
+    expect(evaluateStockExpression("50")).toBe("50");
+    expect(evaluateStockExpression("")).toBe("");
+    expect(evaluateStockExpression(null)).toBe("");
+
+    // 7. previewStockCalculation
+    expect(previewStockCalculation("80+53")).toBe("133 UND");
+    expect(previewStockCalculation("80+53", "CX")).toBe("133 CX");
+    expect(previewStockCalculation("80+")).toBeNull();
+    expect(previewStockCalculation("133 UND")).toBeNull();
+  });
+
 
 });
 
