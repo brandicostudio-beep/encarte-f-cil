@@ -2349,7 +2349,17 @@ function EncarteApp() {
       />
 
       {/* 4. Cadastro Manual de Produto */}
-      <Dialog open={addManualOpen} onOpenChange={setAddManualOpen}>
+      <Dialog
+        open={addManualOpen}
+        onOpenChange={(open) => {
+          setAddManualOpen(open);
+          if (!open) {
+            setProductUrlInput("");
+            setFetchUrlError(null);
+            setFetchUrlSuccess(null);
+          }
+        }}
+      >
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base font-bold">
