@@ -463,8 +463,21 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
         }
 
         setPendingProducts(prods);
+        const cols = result.identifiedColumns;
+        let colInfo = "";
+        if (cols) {
+          const colParts: string[] = [];
+          if (cols.code) colParts.push(`Cód: ${cols.code}`);
+          if (cols.name) colParts.push(`Nome: ${cols.name}`);
+          if (cols.packaging) colParts.push(`Embalagem: ${cols.packaging}`);
+          if (cols.stock) colParts.push(`Estoque: ${cols.stock}`);
+          if (cols.price) colParts.push(`Preço: ${cols.price}`);
+          if (colParts.length > 0) {
+            colInfo = ` (${colParts.join(" · ")})`;
+          }
+        }
         setSpreadsheetSuccessInfo(
-          `${result.validProducts.length} produtos válidos identificados na planilha.`
+          `${result.validProducts.length} produtos válidos identificados na planilha.${colInfo}`
         );
       }
     } catch (err) {

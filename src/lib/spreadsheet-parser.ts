@@ -6,18 +6,115 @@ export interface SpreadsheetValidationResult {
   validProducts: EncarteProduct[];
   errors: { line: number; message: string; raw?: any }[];
   totalRows: number;
+  identifiedColumns?: {
+    code?: string;
+    name?: string;
+    packaging?: string;
+    stock?: string;
+    price?: string;
+    validity?: string;
+  };
 }
 
 /**
  * Normaliza os nomes de cabeçalhos para identificar as colunas esperadas:
  * código, descrição/nome, embalagem, estoque e validade.
  */
-function normalizeHeader(key: string): string {
+export function normalizeHeader(key: string): string {
   return key
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Resolve as colunas da planilha por prioridade semântica estrita,
+ * evitando ambiguidades (ex.: confundir CODPROD com CODCOMPRADOR,
+ * DESCRICAO com NOME do comprador, ou PRECO_VENDA com PRECO_TOTAL).
+ */
+export function resolveSpreadsheetHeaders(headerKeys: string[]): {
+  codeKey?: string;
+  nameKey?: string;
+  packagingKey?: string;
+  stockKey?: string;
+  priceKey?: string;
+  validityKey?: string;
+} {
+  // 1. Código do produto (prioriza CODPROD, CODIGO_PRODUTO; exclui compradores/clientes/fornecedores)
+  const codeKey =
+    headerKeys.find((k) => {
+      const n = normalizeHeader(k);
+      if (n.includes("comprador") || n.includes("cliente") || n.includes("fornecedor") || n.includes("vend")) return false;
+      return n === "codprod" || n === "codproduto" || n === "codigoproduto" || n === "codprodut" || n === "cod" || n === "codigo" || n === "sku" || n === "id";
+    }) ||
+    headerKeys.find((k) => {
+      const n = normalizeHeader(k);
+      return !n.includes("comprador") && !n.includes("cliente") && (n.includes("codigo") || n.includes("cod"));
+    }) ||
+    headerKeys[0];
+
+  // 2. Descrição / Nome do produto (prioriza DESCRICAO, DESC_PROD; exclui NOME de comprador/vendedor)
+  const nameKey =
+    headerKeys.find((k) => {
+      const n = normalizeHeader(k);
+      if (n.includes("comprador") || n.includes("cliente") || n.includes("fornecedor") || n.includes("vendedor")) return false;
+      return n === "descricao" || n === "descricaoproduto" || n === "descprod" || n === "descproduto" || n === "produto" || n === "nomeproduto";
+    }) ||
+    headerKeys.find((k) => {
+      const n = normalizeHeader(k);
+      return (
+        !n.includes("comprador") &&
+        !n.includes("cliente") &&
+        !n.includes("vendedor") &&
+        (n.includes("descricao") || n.includes("produto") || n === "item" || n === "nome")
+      );
+    }) ||
+    headerKeys[1];
+
+  // 3. Embalagem
+  const packagingKey = headerKeys.find((k) => {
+    const n = normalizeHeader(k);
+    return n.includes("embalagem") || n.includes("emb") || n.includes("unidade") || n.includes("apresentacao") || n.includes("pacote");
+  });
+
+  // 4. Estoque (prioriza QTDISP_WMS, depois QTEST_WINTHOR; exclui QTRESERV e vendas do mês)
+  const stockKey =
+    headerKeys.find((k) => {
+      const n = normalizeHeader(k);
+      return n === "qtdispwms" || n === "qtdisp" || n.includes("dispwms") || n.includes("qtdisp") || n.includes("estoquedisp");
+    }) ||
+    headerKeys.find((k) => {
+      const n = normalizeHeader(k);
+      return n === "qtestwinthor" || n === "qtest" || n.includes("estwinthor") || n.includes("estoquewinthor");
+    }) ||
+    headerKeys.find((k) => {
+      const n = normalizeHeader(k);
+      if (n.includes("reserv") || n.includes("vend")) return false;
+      return n.includes("estoque") || n.includes("saldo") || n.includes("quantidade") || n.includes("qtd");
+    });
+
+  // 5. Preço de Venda (prioriza PRECO_VENDA, PREO_VENDA; exclui PRECO_TOTAL, CUSTO e vendas)
+  const priceKey =
+    headerKeys.find((k) => {
+      const n = normalizeHeader(k);
+      if (n.includes("total") || n.includes("custo") || n.includes("mes") || n.includes("comprador")) return false;
+      return n.includes("venda") || n.includes("vnd") || n.includes("unitario");
+    }) ||
+    headerKeys.find((k) => {
+      const n = normalizeHeader(k);
+      if (n.includes("total") || n.includes("custo") || n.includes("mes") || n.includes("comprador")) return false;
+      return n.includes("preco") || n.includes("preo") || n.includes("prec") || n.includes("valor") || n.includes("prc");
+    });
+
+  // 6. Validade (prioriza DTVAL, VALIDADE; exclui :DATAINICIAL e :DATAFINAL)
+  const validityKey = headerKeys.find((k) => {
+    const n = normalizeHeader(k);
+    if (n.includes("inicial") || n.includes("final")) return false;
+    return n === "dtval" || n.includes("validade") || n.includes("vencimento") || n === "val" || n.includes("dtvenc");
+  });
+
+  return { codeKey, nameKey, packagingKey, stockKey, priceKey, validityKey };
 }
 
 /**
@@ -71,11 +168,12 @@ function formatSpreadsheetDate(raw: any, SSF?: any): string {
 export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValidationResult> {
   const XLSX = await import("xlsx");
   const buffer = await file.arrayBuffer();
-  // read com { raw: false } para manter formato de texto quando possível
+
+  // read com raw: true para evitar distorção de datas brasileiras dd/mm/aaaa para mm/dd/aaaa
   const workbook = XLSX.read(buffer, {
     type: "array",
     cellDates: false,
-    raw: false,
+    raw: true,
   });
 
   const firstSheetName = workbook.SheetNames[0];
@@ -97,9 +195,10 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
       totalRows: 0,
     };
   }
+
   // Converter para linhas com cabeçalho
   const rows: any[] = XLSX.utils.sheet_to_json(worksheet, {
-    raw: false,
+    raw: true,
     defval: "",
   });
 
@@ -112,38 +211,10 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
     };
   }
 
-  // Identificar mapeamento de colunas
+  // Identificar mapeamento de colunas com regras semânticas estritas
   const sampleRow = rows[0] || {};
   const headerKeys = Object.keys(sampleRow);
-
-  let codeKey: string | undefined;
-  let nameKey: string | undefined;
-  let packagingKey: string | undefined;
-  let stockKey: string | undefined;
-  let validityKey: string | undefined;
-  let priceKey: string | undefined;
-
-  headerKeys.forEach((key) => {
-    const norm = normalizeHeader(key);
-    if (!codeKey && (norm.includes("codigo") || norm.includes("cod") || norm === "id" || norm === "sku")) {
-      codeKey = key;
-    } else if (!nameKey && (norm.includes("descricao") || norm.includes("nome") || norm.includes("produto") || norm.includes("item"))) {
-      nameKey = key;
-    } else if (!packagingKey && (norm.includes("embalagem") || norm.includes("emb") || norm.includes("unidade") || norm.includes("apresentacao") || norm.includes("pacote"))) {
-      packagingKey = key;
-    } else if (!stockKey && (norm.includes("estoque") || norm.includes("qtd") || norm.includes("quantidade") || norm.includes("saldo"))) {
-      stockKey = key;
-    } else if (!validityKey && (norm.includes("validade") || norm.includes("vencimento") || norm.includes("val") || norm.includes("data"))) {
-      validityKey = key;
-    } else if (!priceKey && (norm.includes("preco") || norm.includes("valor") || norm.includes("unitario"))) {
-      priceKey = key;
-    }
-  });
-
-  // Se não encontrou código por aproximação semântica, usa a 1ª coluna como código
-  if (!codeKey && headerKeys.length > 0) codeKey = headerKeys[0];
-  // Se não encontrou nome, usa a 2ª coluna
-  if (!nameKey && headerKeys.length > 1) nameKey = headerKeys[1];
+  const { codeKey, nameKey, packagingKey, stockKey, priceKey, validityKey } = resolveSpreadsheetHeaders(headerKeys);
 
   const validProducts: EncarteProduct[] = [];
   const errors: { line: number; message: string; raw?: any }[] = [];
@@ -178,11 +249,11 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
     }
     seenCodes.set(code, lineNumber);
 
-    // Nome / Descrição
+    // Nome / Descrição do produto
     const rawName = nameKey ? String(row[nameKey] ?? "").trim() : "";
     const name = (rawName || `PRODUTO ${code}`).toUpperCase().slice(0, 120);
 
-    // Embalagem (opcional, ex: "1X10 GR")
+    // Embalagem (opcional, ex: "1X234 ML", "10X100 GR")
     let packaging = packagingKey ? String(row[packagingKey] ?? "").trim().toUpperCase() : "";
     if (!packaging) {
       const packMatch =
@@ -192,19 +263,23 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
       else packaging = "";
     }
 
-    // Estoque (opcional)
+    // Estoque (opcional, formatado como "43 UND")
     const rawStock = stockKey ? String(row[stockKey] ?? "").trim() : "";
     let stock = "";
     if (rawStock) {
-      const stockDigits = rawStock.replace(/[^\d]/g, "");
-      if (stockDigits) stock = `${stockDigits} UND`;
+      const stockDigits = rawStock.replace(/[^\d.,]/g, "").trim();
+      if (stockDigits) {
+        stock = rawStock.toUpperCase().includes("UND") || rawStock.toUpperCase().includes("CX") || rawStock.toUpperCase().includes("PCT")
+          ? rawStock.toUpperCase()
+          : `${stockDigits} UND`;
+      }
     }
 
     // Validade (opcional, dd/mm/aaaa)
     const rawVal = validityKey ? row[validityKey] : "";
     const validity = formatSpreadsheetDate(rawVal, XLSX.SSF);
 
-    // Preço (inicia em branco conforme regra de negócio)
+    // Preço de venda formatado em moeda (ex: "3" -> "3,00", "24,9" -> "24,90", "4,27" -> "4,27")
     const rawPrice = priceKey ? formatPrice(row[priceKey]) : "";
 
     validProducts.push({
@@ -212,8 +287,8 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
       code,
       name,
       packaging: packaging || "",
-      validity,
-      price: rawPrice || "", // Preço vazio inicialmente
+      validity: validity || "",
+      price: rawPrice || "",
       unit: deriveSaleUnit(packaging).unit,
       stock,
       badge: "nenhum",
@@ -227,5 +302,13 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
     validProducts,
     errors,
     totalRows: rows.length,
+    identifiedColumns: {
+      code: codeKey,
+      name: nameKey,
+      packaging: packagingKey,
+      stock: stockKey,
+      price: priceKey,
+      validity: validityKey,
+    },
   };
 }
