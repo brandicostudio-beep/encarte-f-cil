@@ -552,6 +552,91 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
             </div>
           </div>
 
+          {/* Ajustes em Massa e Predefinições de Estilo */}
+          {onApplyBulk && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-2.5">
+              <div className="text-xs font-bold text-amber-900 uppercase tracking-wide">
+                Aplicar estes ajustes em massa
+              </div>
+              <p className="text-[11px] text-neutral-600 leading-tight">
+                Aplica o tamanho da foto, o selo e a unidade deste item a outros produtos. Nenhum outro item é alterado sem você escolher o escopo aqui.
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={bulkScope}
+                  onChange={(e) => setBulkScope(e.target.value as "page" | "all")}
+                  className="h-8 rounded-md border border-amber-300 bg-white px-2 text-xs font-medium"
+                  aria-label="Escopo da aplicação em massa"
+                >
+                  <option value="page">Todos os produtos desta página</option>
+                  <option value="all">Todos os produtos do encarte</option>
+                </select>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleBulkApply}
+                  className="h-8 text-xs bg-white border-amber-300 text-amber-900 hover:bg-amber-100"
+                >
+                  <Layers className="h-3.5 w-3.5 mr-1" />
+                  Aplicar em massa
+                </Button>
+              </div>
+
+              {/* Predefinições salvas */}
+              <div className="pt-1.5 border-t border-amber-200 space-y-1.5">
+                <div className="text-[11px] font-bold text-amber-900 uppercase tracking-wide">
+                  Predefinições de estilo
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    value={presetName}
+                    onChange={(e) => setPresetName(e.target.value)}
+                    placeholder="Nome da predefinição (ex: Foto grande)"
+                    className="h-8 text-xs bg-white"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleSavePreset}
+                    disabled={!presetName.trim()}
+                    className="h-8 text-xs bg-white shrink-0"
+                  >
+                    Salvar
+                  </Button>
+                </div>
+                {presets.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {presets.map((preset) => (
+                      <span
+                        key={preset.name}
+                        className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-white px-2 py-1 text-[11px] font-medium"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleApplyPreset(preset)}
+                          className="hover:text-amber-800"
+                          title={`Aplicar: foto ${Math.round(preset.imageScale * 100)}%, selo ${BADGE_LABELS[preset.badge]}, unidade ${preset.unit}`}
+                        >
+                          {preset.name}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePreset(preset.name)}
+                          className="text-neutral-400 hover:text-red-600"
+                          aria-label={`Excluir predefinição ${preset.name}`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <DialogFooter className="pt-2">
             <Button
               type="button"
