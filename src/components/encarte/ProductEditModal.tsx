@@ -108,17 +108,18 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
     if (!form) return;
     const parsedPack = parsePackaging(form.packaging || "");
     const finalStock = form.stock ? evaluateStockExpression(form.stock, form.unit) : "";
-    onSave({
+    const updated: EncarteProduct = {
       ...form,
       packaging: (form.packaging || "").trim(),
-      packagingType: parsedPack?.tipo,
-      packagingQuantity: parsedPack?.quantidade,
-      packagingUnit: parsedPack?.unidadeMedida,
-      packagingWeight: parsedPack?.gramatura,
       price: formatPrice(form.price || ""),
       stock: finalStock,
       imageScale: typeof form.imageScale === "number" ? form.imageScale : 1.0,
-    });
+    };
+    if (parsedPack?.tipo) updated.packagingType = parsedPack.tipo;
+    if (parsedPack?.quantidade) updated.packagingQuantity = parsedPack.quantidade;
+    if (parsedPack?.unidadeMedida) updated.packagingUnit = parsedPack.unidadeMedida;
+    if (parsedPack?.gramatura) updated.packagingWeight = parsedPack.gramatura;
+    onSave(updated);
     onOpenChange(false);
   };
 

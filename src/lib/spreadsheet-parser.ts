@@ -41,6 +41,7 @@ export function resolveSpreadsheetHeaders(headerKeys: string[]): {
   stockKey?: string;
   priceKey?: string;
   validityKey?: string;
+  unitKey?: string;
 } {
   // 1. Código do produto (prioriza CODPROD, CODIGO_PRODUTO; exclui compradores/clientes/fornecedores)
   const codeKey =
@@ -317,13 +318,15 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
     validProducts: sortedValidProducts,
     errors,
     totalRows: rows.length,
-    identifiedColumns: {
-      code: codeKey,
-      name: nameKey,
-      packaging: packagingKey,
-      stock: stockKey,
-      price: priceKey,
-      validity: validityKey,
-    },
+    identifiedColumns: (() => {
+      const cols: NonNullable<SpreadsheetValidationResult["identifiedColumns"]> = {};
+      if (codeKey) cols.code = codeKey;
+      if (nameKey) cols.name = nameKey;
+      if (packagingKey) cols.packaging = packagingKey;
+      if (stockKey) cols.stock = stockKey;
+      if (priceKey) cols.price = priceKey;
+      if (validityKey) cols.validity = validityKey;
+      return cols;
+    })(),
   };
 }

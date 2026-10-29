@@ -41,6 +41,18 @@ import { SpreadsheetModal } from "@/components/encarte/SpreadsheetModal";
 import { ProductEditModal } from "@/components/encarte/ProductEditModal";
 import { StoreSettingsModal } from "@/components/encarte/StoreSettingsModal";
 import { FinalEditor } from "@/components/encarte/FinalEditor";
+import { ProjectTopBar } from "@/components/encarte/projects/ProjectTopBar";
+import { ProjectManagerModal } from "@/components/encarte/projects/ProjectManagerModal";
+import { VersionHistoryModal } from "@/components/encarte/projects/VersionHistoryModal";
+import { ProjectUpdateCheckModal } from "@/components/encarte/projects/ProjectUpdateCheckModal";
+import type { ProjectData, ProjectSyncStatus } from "@/types/project";
+import {
+  saveProjectUnified,
+  saveProjectAsUnified,
+  renameProjectUnified,
+} from "@/lib/project-sync-manager";
+import { loadProjectLocal } from "@/lib/project-indexeddb";
+import { checkDriveStatusFn } from "@/lib/project.functions";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -184,6 +196,47 @@ function EncarteApp() {
   const [pendingExportAction, setPendingExportAction] = useState<
     (() => void) | null
   >(null);
+
+  // Estado e Gerenciamento de Projetos (IndexedDB + Google Drive)
+  const [currentProject, setCurrentProject] = useState<ProjectData | null>(() => {
+    const now = new Date().toISOString();
+    return {
+      id: `proj-initial-${Date.now()}`,
+      name: "Encarte Ofertas da Semana",
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+      source: { type: "manual" },
+      products: [],
+      campaign: DEFAULT_CAMPAIGN,
+      store: DEFAULT_STORE,
+      versionHistory: [
+        {
+          version: 1,
+          savedAt: now,
+          itemCount: 0,
+          notes: "Projeto inicial",
+        },
+      ],
+    };
+  });
+  const [projectSaveStatus, setProjectSaveStatus] = useState<ProjectSyncStatus>("synced");
+  const [projectStatusNotice, setProjectStatusNotice] = useState<string>("Sincronizado");
+  const [isSavingProject, setIsSavingProject] = useState(false);
+  const [driveConnected, setDriveConnected] = useState(false);
+
+  // Modais de Projeto (Canva-style)
+  const [projectManagerOpen, setProjectManagerOpen] = useState(false);
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
+  const [historyTargetProjectId, setHistoryTargetProjectId] = useState<string | null>(null);
+  const [updateCheckOpen, setUpdateCheckOpen] = useState(false);
+  const [saveAsModalOpen, setSaveAsModalOpen] = useState(false);
+  const [saveAsName, setSaveAsName] = useState("");
+  const [saveAsError, setSaveAsError] = useState<string | null>(null);
+  const [missingPhotosNotice, setMissingPhotosNotice] = useState<string | null>(null);
+
+  const isDirtyRef = useRef(false);
+  const lastAutoSaveRef = useRef<number>(Date.now());
 
   // Formulário Manual de Produto
   const [newProd, setNewProd] = useState({
@@ -384,14 +437,18 @@ function EncarteApp() {
       now.getMinutes()
     ).padStart(2, "0")}`;
     setSavedNotice(`Salvo às ${timeStr}`);
+    isDirtyRef.current = true;
+    setProjectSaveStatus("unsaved");
   };
 
   const handleUndo = () => {
     if (undoStack.length === 0) return;
     const previous = undoStack[undoStack.length - 1];
     setUndoStack((prev) => prev.slice(0, -1));
-    updateProductsState(previous, false);
-    setSavedNotice("Alteração desfeita");
+    if (previous) {
+      updateProductsState(previous, false);
+      setSavedNotice("Alteração desfeita");
+    }
   };
 
   // Salvar configurações
@@ -399,12 +456,221 @@ function EncarteApp() {
     setStore(updated);
     localStorage.setItem("encarte-store-v2", JSON.stringify(updated));
     setSavedNotice("Configurações da loja salvas");
+    isDirtyRef.current = true;
+    setProjectSaveStatus("unsaved");
   };
 
   const saveCampaignConfig = (updated: CampaignConfig) => {
     setCampaign(updated);
     localStorage.setItem("encarte-campaign-v2", JSON.stringify(updated));
     setSavedNotice("Campanha salva");
+    isDirtyRef.current = true;
+    setProjectSaveStatus("unsaved");
+  };
+
+  // Checagem de status da conexão do Google Drive
+  useEffect(() => {
+    checkDriveStatusFn()
+      .then((res) => {
+        setDriveConnected(Boolean(res.connected));
+      })
+      .catch(() => {
+        setDriveConnected(false);
+      });
+  }, []);
+
+  // Salvar Projeto Unificado (Local + Drive)
+  const handleSaveProject = async (isNewVersion = false) => {
+    if (!currentProject) return;
+    setIsSavingProject(true);
+    try {
+      const projectToSave: ProjectData = {
+        ...currentProject,
+        products,
+        campaign,
+        store,
+      };
+      const res = await saveProjectUnified(projectToSave, isNewVersion, {
+        onStatusChange: (status, notice) => {
+          setProjectSaveStatus(status);
+          if (notice) setProjectStatusNotice(notice);
+        },
+        onProjectSaved: (savedProj, notice) => {
+          setCurrentProject(savedProj);
+          setSavedNotice(notice);
+        },
+      });
+      if (res.ok) {
+        isDirtyRef.current = false;
+        lastAutoSaveRef.current = Date.now();
+      }
+    } catch (err) {
+      console.warn("Erro ao salvar projeto:", err);
+      setProjectSaveStatus("sync_error");
+      setProjectStatusNotice("Falha ao salvar");
+    } finally {
+      setIsSavingProject(false);
+    }
+  };
+
+  // Salvamento Automático com intervalo mínimo de 30 segundos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      if (isDirtyRef.current && now - lastAutoSaveRef.current >= 30000 && !isSavingProject) {
+        handleSaveProject(false);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [currentProject, products, campaign, store, isSavingProject]);
+
+  // Atalho de Teclado Ctrl+S / Cmd+S para salvar imediatamente
+  useEffect(() => {
+    const handleShortcut = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        handleSaveProject(false);
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [currentProject, products, campaign, store]);
+
+  // Abrir Projeto Selecionado no Gerenciador
+  const handleOpenProject = async (projectId: string) => {
+    const res = await loadProjectLocal(projectId);
+    if (res.ok && res.project) {
+      const proj = res.project;
+      setCurrentProject(proj);
+      setProducts(proj.products || []);
+      if (proj.campaign) setCampaign(proj.campaign);
+      if (proj.store) setStore(proj.store);
+
+      try {
+        localStorage.setItem("encarte-active-project-id", proj.id);
+        localStorage.setItem("encarte-products-v2", JSON.stringify(proj.products || []));
+        if (proj.store) localStorage.setItem("encarte-store-v2", JSON.stringify(proj.store));
+        if (proj.campaign) localStorage.setItem("encarte-campaign-v2", JSON.stringify(proj.campaign));
+      } catch {}
+
+      // Diagnóstico de fotos faltantes sem quebrar a tela
+      const missing = (proj.products || []).filter((p) => !p.image || String(p.image).trim() === "");
+      if (missing.length > 0) {
+        setMissingPhotosNotice(`${missing.length} produto(s) deste encarte estão sem foto vinculada.`);
+      } else {
+        setMissingPhotosNotice(null);
+      }
+
+      setCompletedSteps(new Set(["origem", "dados", "precos"]));
+      navigateToStep("precos");
+      setProjectSaveStatus("synced");
+      setProjectStatusNotice(`Projeto "${proj.name}" carregado`);
+      isDirtyRef.current = false;
+      setProjectManagerOpen(false);
+    } else {
+      alert(res.error || "Não foi possível abrir o projeto.");
+    }
+  };
+
+  // Criar Novo Projeto Limpo
+  const handleNewProject = () => {
+    if (
+      isDirtyRef.current &&
+      !confirm("Existem alterações não salvas no projeto atual. Deseja criar um novo projeto mesmo assim?")
+    ) {
+      return;
+    }
+    const newProjId = `proj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const now = new Date().toISOString();
+    const freshProject: ProjectData = {
+      id: newProjId,
+      name: "Novo Encarte",
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+      source: { type: "manual" },
+      products: [],
+      campaign: DEFAULT_CAMPAIGN,
+      store: store || DEFAULT_STORE,
+      versionHistory: [
+        {
+          version: 1,
+          savedAt: now,
+          itemCount: 0,
+          notes: "Projeto criado em branco",
+        },
+      ],
+    };
+    setCurrentProject(freshProject);
+    setProducts([]);
+    setUndoStack([]);
+    setUnmatchedPhotos([]);
+    setCampaign(DEFAULT_CAMPAIGN);
+    try {
+      localStorage.setItem("encarte-active-project-id", newProjId);
+      localStorage.removeItem("encarte-products-v2");
+    } catch {}
+    navigateToStep("origem");
+    setProjectSaveStatus("synced");
+    setProjectStatusNotice("Novo projeto pronto");
+    isDirtyRef.current = false;
+    setProjectManagerOpen(false);
+  };
+
+  // Salvar Como Novo Projeto
+  const handleExecuteSaveAs = async () => {
+    if (!currentProject) return;
+    const nameToUse = saveAsName.trim();
+    if (!nameToUse) {
+      setSaveAsError("Digite um nome para o novo projeto.");
+      return;
+    }
+
+    setIsSavingProject(true);
+    const res = await saveProjectAsUnified(
+      {
+        ...currentProject,
+        products,
+        campaign,
+        store,
+      },
+      nameToUse,
+      {
+        onStatusChange: (status, notice) => {
+          setProjectSaveStatus(status);
+          if (notice) setProjectStatusNotice(notice);
+        },
+        onProjectSaved: (saved) => {
+          setCurrentProject(saved);
+          try {
+            localStorage.setItem("encarte-active-project-id", saved.id);
+          } catch {}
+        },
+      }
+    );
+    setIsSavingProject(false);
+
+    if (res.ok && res.newProject) {
+      setCurrentProject(res.newProject);
+      setSaveAsModalOpen(false);
+      setSaveAsName("");
+      setSaveAsError(null);
+      isDirtyRef.current = false;
+    } else {
+      setSaveAsError(res.error || "Erro ao salvar novo projeto.");
+    }
+  };
+
+  // Renomear Projeto
+  const handleRenameProject = async (newName: string) => {
+    if (!currentProject) return;
+    const res = await renameProjectUnified(currentProject.id, newName);
+    if (res.ok) {
+      setCurrentProject((prev) => (prev ? { ...prev, name: newName } : null));
+      setProjectStatusNotice(`Renomeado para "${newName}"`);
+    } else {
+      alert(res.error || "Erro ao renomear projeto.");
+    }
   };
 
   const [isBalancingImages, setIsBalancingImages] = useState(false);
@@ -1090,6 +1356,33 @@ function EncarteApp() {
         </div>
       </header>
 
+      {/* BARRA DE GERENCIAMENTO DE PROJETOS (Estilo Canva / Figma) */}
+      <ProjectTopBar
+        projectName={currentProject?.name || "Encarte Ofertas da Semana"}
+        projectId={currentProject?.id}
+        saveStatus={projectSaveStatus}
+        statusNotice={projectStatusNotice}
+        isSaving={isSavingProject}
+        hasDataSource={Boolean(currentProject?.source?.filename || currentProject?.source?.url)}
+        driveConnected={driveConnected}
+        onSave={() => handleSaveProject(false)}
+        onSaveAs={() => {
+          setSaveAsName(currentProject ? `${currentProject.name} (Cópia)` : "");
+          setSaveAsError(null);
+          setSaveAsModalOpen(true);
+        }}
+        onRename={handleRenameProject}
+        onOpenProjects={() => setProjectManagerOpen(true)}
+        onOpenVersionHistory={() => {
+          if (currentProject) {
+            setHistoryTargetProjectId(currentProject.id);
+            setVersionHistoryOpen(true);
+          }
+        }}
+        onOpenUpdateCheck={() => setUpdateCheckOpen(true)}
+        onNewProject={handleNewProject}
+      />
+
       {/* 2. ETAPAS VISÍVEIS NO TOPO (Origem, Dados, Preços, Campanha, Exportar) */}
       <EditorStepper
         currentStep={currentStep}
@@ -1109,6 +1402,23 @@ function EncarteApp() {
             : "mx-auto max-w-7xl px-4 py-6 space-y-6"
         }
       >
+        {/* Aviso preventivo de fotos faltantes do projeto restaurado */}
+        {missingPhotosNotice && (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 flex items-center justify-between text-xs text-amber-900 shadow-2xs">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+              <span>{missingPhotosNotice}</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-7 border-amber-300 bg-white hover:bg-amber-100 text-amber-900 font-bold"
+              onClick={() => navigateToStep("origem")}
+            >
+              Vincular Fotos
+            </Button>
+          </div>
+        )}
         {/* ETAPA 1: ESCOLHA DA ORIGEM (Quando na etapa de origem ou sem produtos) */}
         {currentStep === "origem" && (
           <SourceSelector
@@ -2405,6 +2715,110 @@ function EncarteApp() {
             >
               <Trash2 className="h-4 w-4 mr-1.5" />
               Sim, Zerar Dados e Começar Novo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL CANVA-STYLE DE ARQUIVOS E PROJETOS RECENTES */}
+      <ProjectManagerModal
+        open={projectManagerOpen}
+        onOpenChange={setProjectManagerOpen}
+        currentProjectId={currentProject?.id}
+        onOpenProject={handleOpenProject}
+        onNewProject={handleNewProject}
+        onViewVersionHistory={(id) => {
+          setHistoryTargetProjectId(id);
+          setVersionHistoryOpen(true);
+        }}
+        onCheckUpdates={() => setUpdateCheckOpen(true)}
+      />
+
+      {/* MODAL DE HISTÓRICO DE VERSÕES COM RESTAURAÇÃO SEGURA */}
+      <VersionHistoryModal
+        projectId={historyTargetProjectId || currentProject?.id || null}
+        open={versionHistoryOpen}
+        onOpenChange={setVersionHistoryOpen}
+        onVersionRestored={(restored) => {
+          setCurrentProject(restored);
+          setProducts(restored.products || []);
+          if (restored.campaign) setCampaign(restored.campaign);
+          if (restored.store) setStore(restored.store);
+          setSavedNotice(`Versão v${restored.version} restaurada`);
+          setProjectStatusNotice(`Versão v${restored.version} ativa`);
+          setVersionHistoryOpen(false);
+          isDirtyRef.current = false;
+        }}
+      />
+
+      {/* MODAL DE VERIFICAÇÃO DE ATUALIZAÇÕES DA PLANILHA / ORIGEM */}
+      <ProjectUpdateCheckModal
+        project={currentProject}
+        open={updateCheckOpen}
+        onOpenChange={setUpdateCheckOpen}
+        onApplyUpdates={(updated) => {
+          updateProductsState(updated);
+          setUpdateCheckOpen(false);
+          setSavedNotice("Alterações da planilha aplicadas ao encarte!");
+        }}
+      />
+
+      {/* MODAL SALVAR COMO */}
+      <Dialog open={saveAsModalOpen} onOpenChange={setSaveAsModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-neutral-900 font-bold">
+              <Copy className="h-5 w-5 text-emerald-600" />
+              Salvar Como Novo Projeto
+            </DialogTitle>
+            <DialogDescription className="text-xs text-neutral-500 pt-1">
+              Crie uma cópia independente deste encarte com um novo nome no seu Google Drive e histórico.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-3 space-y-2">
+            <Label htmlFor="saveAsInput" className="text-xs font-bold text-neutral-800">
+              Nome do Novo Projeto
+            </Label>
+            <Input
+              id="saveAsInput"
+              value={saveAsName}
+              onChange={(e) => {
+                setSaveAsName(e.target.value);
+                setSaveAsError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleExecuteSaveAs();
+                }
+              }}
+              placeholder="Ex: Encarte Ofertas de Novembro"
+              className="text-xs"
+            />
+            {saveAsError && (
+              <p className="text-xs text-red-600 font-semibold">{saveAsError}</p>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setSaveAsModalOpen(false)}
+              className="text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isSavingProject}
+              onClick={handleExecuteSaveAs}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+            >
+              {isSavingProject ? "Salvando..." : "Salvar Como"}
             </Button>
           </DialogFooter>
         </DialogContent>

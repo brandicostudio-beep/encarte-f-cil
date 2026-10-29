@@ -118,11 +118,9 @@ export interface ProductCustomStyle {
   pillRadius?: number;
   pillPadding?: number;
   priceCurrencySize?: number;
-  priceCurrencyFontWeight?: string;
   priceValueSize?: number;
   priceValueWeight?: string | number;
   priceUnitSize?: number;
-  priceUnitFontWeight?: string;
   textColor?: string;
   boxBg?: string;
   borderColor?: string;
@@ -175,23 +173,23 @@ export interface EncarteProduct {
   code: string;            // Código do produto (ex: "24657")
   name: string;            // Nome do produto em caixa alta (ex: "CAFÉ TRADICIONAL A VÁCUO")
   packaging: string;       // Embalagem formatada (ex: "PACOTE 1X24 UNID", "UNIDADE 1X320 GR")
-  packagingType?: PackagingType;
-  packagingQuantity?: string; // ex: "1X24", "18X320"
-  packagingUnit?: MeasureUnit; // ex: "UNID", "GR"
-  packagingWeight?: string;   // ex: "320 GR", "1,01 KG"
+  packagingType?: PackagingType | undefined;
+  packagingQuantity?: string | undefined; // ex: "1X24", "18X320"
+  packagingUnit?: MeasureUnit | undefined; // ex: "UNID", "GR"
+  packagingWeight?: string | undefined;   // ex: "320 GR", "1,01 KG"
   validity: string;        // Validade (ex: "15/11/2026")
   price: string;           // Preço no formato "4,99" (vazio inicialmente se não preenchido)
   unit: string;            // "UND", "CX", "PCT", "FD", "DISP"
-  unitConfirmed?: boolean; // Se a unidade foi confirmada ou ajustada manualmente
-  stock?: string;          // Estoque opcional (ex: "50 UND")
+  unitConfirmed?: boolean | undefined; // Se a unidade foi confirmada ou ajustada manualmente
+  stock?: string | undefined;          // Estoque opcional (ex: "50 UND")
   badge: BadgeType;        // Selo opcional
   image: string;           // Data URL ou URL remota
-  imageScale?: number;     // Escala / zoom óptico da foto (padrão: 1.0)
+  imageScale?: number | undefined;     // Escala / zoom óptico da foto (padrão: 1.0)
   included: boolean;       // Marcado para entrar no encarte
-  productUrl?: string;     // URL da página do produto (se disponível)
-  photoSource?: "drive" | "zip" | "upload" | "link" | "sample" | "folder"; // Origem da foto
-  photoOriginName?: string; // Nome do arquivo de foto
-  customStyle?: ProductCustomStyle; // Estilos visuais personalizados na edição final
+  productUrl?: string | undefined;     // URL da página do produto (se disponível)
+  photoSource?: ("drive" | "zip" | "upload" | "link" | "sample" | "folder") | undefined; // Origem da foto
+  photoOriginName?: string | undefined; // Nome do arquivo de foto
+  customStyle?: ProductCustomStyle | undefined; // Estilos visuais personalizados na edição final
   alternativePhotos?: {
     id: string;
     filename: string;

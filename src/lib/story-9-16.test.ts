@@ -11,6 +11,7 @@ import {
   type EncarteProduct,
   type CampaignConfig,
   type TemplateProductArea,
+  type StoreConfig,
 } from "@/types/encarte";
 
 describe("Modo de Encarte 9:16 (1080 × 1920 px) com Template PNG", () => {

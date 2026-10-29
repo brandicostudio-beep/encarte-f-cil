@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach } from "vitest";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { FinalEditor } from "./FinalEditor";

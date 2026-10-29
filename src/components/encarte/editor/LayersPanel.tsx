@@ -46,7 +46,7 @@ export const LayersPanel: React.FC<LayersPanelProps> = ({
   const [expandedProducts, setExpandedProducts] = useState<Record<string, boolean>>(() => {
     // Expand the first product or currently selected product by default
     const initial: Record<string, boolean> = {};
-    if (products.length > 0) {
+    if (products[0]) {
       initial[products[0].id] = true;
     }
     return initial;

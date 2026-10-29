@@ -35,12 +35,18 @@ export const A4Page: React.FC<A4PageProps> = ({
   const numCols = isThreeCols ? 3 : 2;
   const numRows = perPage === 12 || perPage === 8 ? 4 : 3;
 
-  const gapConfig = {
+  const gapTable = {
     12: {
       gapXClass: "gap-2",
       gapYClass: "gap-2",
       cardWidthStyle: "calc((100% - 16px) / 3)",
       rowHeightStyle: "calc((100% - 24px) / 4)",
+    },
+    10: {
+      gapXClass: "gap-2",
+      gapYClass: "gap-2",
+      cardWidthStyle: "calc((100% - 10px) / 2)",
+      rowHeightStyle: "calc((100% - 32px) / 5)",
     },
     9: {
       gapXClass: "gap-2.5",
@@ -60,7 +66,8 @@ export const A4Page: React.FC<A4PageProps> = ({
       cardWidthStyle: "calc((100% - 14px) / 2)",
       rowHeightStyle: "calc((100% - 28px) / 3)",
     },
-  }[perPage || 12];
+  };
+  const gapConfig = gapTable[perPage as keyof typeof gapTable] || gapTable[12];
 
   const rows: EncarteProduct[][] = [];
   for (let i = 0; i < count; i += numCols) {
@@ -97,7 +104,7 @@ export const A4Page: React.FC<A4PageProps> = ({
         }}
       >
         {/* Caso 1: Última página com um único produto: ocupa a página inteira, centralizado (Hero Card) */}
-        {isLastPage && count === 1 ? (
+        {isLastPage && count === 1 && products[0] ? (
           <div className="flex-1 flex items-center justify-center p-2 h-full w-full">
             <ProductCardA4
               product={products[0]}

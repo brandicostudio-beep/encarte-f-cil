@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect } from "vitest";
 import { parseSpreadsheetFile, resolveSpreadsheetHeaders, normalizeHeader } from "./spreadsheet-parser";
 import { getValidityTimestamp, sortProductsByValidityAsc } from "./encarte-helpers";
 
