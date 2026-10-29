@@ -62,8 +62,6 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
     }
   }, [product]);
 
-  if (!form) return null;
-
   const [isTrimming, setIsTrimming] = useState(false);
   const [bulkScope, setBulkScope] = useState<"page" | "all">("all");
   const [presets, setPresets] = useState<StylePreset[]>([]);
