@@ -46,7 +46,15 @@ export interface SmartGuide {
   label?: string;
 }
 
-export type ChangeScope = "product" | "page" | "all";
+export type ChangeScope = "product" | "page" | "all" | "text_type";
+
+export interface StylePreset {
+  id: string;
+  name: string;
+  elementType: TargetElementType;
+  style: Record<string, any>;
+  createdAt: string;
+}
 
 export interface PreflightIssue {
   id: string;

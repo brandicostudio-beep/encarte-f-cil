@@ -103,6 +103,33 @@ export interface ProductCustomStyle {
 
   // Marcação se foi personalizado
   isCustomized?: boolean;
+
+  // Aliases e propriedades estendidas
+  photoScale?: number;
+  photoOffsetX?: number;
+  photoOffsetY?: number;
+  photoWidth?: number;
+  photoHeight?: number;
+  photoFit?: "contain" | "cover" | "center";
+  photoRotation?: number;
+  photoOpacity?: number;
+  pillBg?: string;
+  pillText?: string;
+  pillRadius?: number;
+  pillPadding?: number;
+  priceCurrencySize?: number;
+  priceCurrencyFontWeight?: string;
+  priceValueSize?: number;
+  priceValueWeight?: string | number;
+  priceUnitSize?: number;
+  priceUnitFontWeight?: string;
+  textColor?: string;
+  boxBg?: string;
+  borderColor?: string;
+  borderWidth?: number;
+  boxRadius?: number;
+  letterSpacing?: string;
+  textTransform?: string;
 }
 
 export interface CampaignGlobalStyle {

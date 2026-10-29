@@ -220,16 +220,16 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
     stockText = rawStock.startsWith("ESTOQUE") ? rawStock : `ESTOQUE: ${rawStock}`;
   }
 
-  // Controle de escala da foto do produto (sempre contido para nunca cortar)
+  // Controle de escala da foto do produto (sempre contido para nunca cortar o card)
   const userScale =
     typeof product.imageScale === "number" && !isNaN(product.imageScale) && product.imageScale > 0
       ? product.imageScale
       : 1.0;
-  const customImageScale = cs.imageScale ?? 1.0;
-  const safePhotoScale = Math.min(1.3, Math.max(0.4, userScale * customImageScale));
+  const customImageScale = cs.imageScale ?? cs.photoScale ?? 1.0;
+  const safePhotoScale = Math.min(2.5, Math.max(0.4, Number((userScale * customImageScale).toFixed(2))));
 
-  const photoOffsetX = cs.imageOffsetX || 0;
-  const photoOffsetY = cs.imageOffsetY || 0;
+  const photoOffsetX = cs.photoOffsetX ?? cs.imageOffsetX ?? 0;
+  const photoOffsetY = cs.photoOffsetY ?? cs.imageOffsetY ?? 0;
   const boxOffsetX = cs.boxOffsetX || 0;
   const boxOffsetY = cs.boxOffsetY || 0;
 
@@ -319,16 +319,22 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
         {/* Corpo: Duas Colunas (Foto à Esquerda e Preço/Validade/Estoque à Direita) */}
         <div className="w-full flex-1 flex items-center justify-between gap-8 pt-2">
           {/* Foto à Esquerda em área quadrada fixa ampliada */}
-          <div className="w-[380px] min-w-[380px] h-[380px] bg-white flex items-center justify-center p-0 shrink-0 overflow-hidden">
+          <div
+            data-element-type="image"
+            onClick={(e) => handleSubElementClick("image", e)}
+            className={`w-[380px] min-w-[380px] max-w-[380px] h-[380px] bg-white flex items-center justify-center p-0 shrink-0 overflow-hidden relative ${getSubElementActiveClasses("image")}`}
+          >
             {product.image ? (
               <img
                 src={product.image}
                 alt={product.name}
                 style={{
-                  transform: `scale(${safePhotoScale}) translate(${photoOffsetX}px, ${photoOffsetY}px)`,
+                  transform: `scale(${safePhotoScale}) translate(${photoOffsetX}px, ${photoOffsetY}px)${cs.photoRotation ? ` rotate(${cs.photoRotation}deg)` : ""}`,
                   transformOrigin: "center center",
+                  opacity: cs.photoOpacity ?? 1,
+                  objectFit: (cs.photoFit as any) || (cs.imageFit as any) || "contain",
                 }}
-                className="w-[85%] h-[85%] max-w-[85%] max-h-[85%] object-contain block"
+                className="w-[85%] h-[85%] max-w-[85%] max-h-[85%] object-contain block select-none pointer-events-none"
                 crossOrigin="anonymous"
                 loading="eager"
               />
@@ -506,11 +512,12 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
           data-element-type="image"
           onClick={(e) => handleSubElementClick("image", e)}
           style={{
-            width: cs.photoWidth ? `${cs.photoWidth}px` : `${photoSizePx}px`,
-            minWidth: cs.photoWidth ? `${cs.photoWidth}px` : `${photoSizePx}px`,
-            height: cs.photoHeight ? `${cs.photoHeight}px` : `${photoSizePx}px`,
+            width: `${photoSizePx}px`,
+            minWidth: `${photoSizePx}px`,
+            maxWidth: `${photoSizePx}px`,
+            height: `${photoSizePx}px`,
           }}
-          className={`bg-white flex items-center justify-center p-0 shrink-0 overflow-hidden ${getSubElementActiveClasses("image")}`}
+          className={`bg-white flex items-center justify-center p-0 shrink-0 overflow-hidden relative ${getSubElementActiveClasses("image")}`}
         >
           {product.image ? (
             <img
@@ -520,9 +527,9 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
                 transform: `scale(${safePhotoScale}) translate(${photoOffsetX}px, ${photoOffsetY}px)${cs.photoRotation ? ` rotate(${cs.photoRotation}deg)` : ""}`,
                 transformOrigin: "center center",
                 opacity: cs.photoOpacity ?? 1,
-                objectFit: (cs.photoFit as any) || "contain",
+                objectFit: (cs.photoFit as any) || (cs.imageFit as any) || "contain",
               }}
-              className="w-[85%] h-[85%] max-w-[85%] max-h-[85%] object-contain block"
+              className="w-[85%] h-[85%] max-w-[85%] max-h-[85%] object-contain block select-none pointer-events-none"
               crossOrigin="anonymous"
               loading="eager"
             />

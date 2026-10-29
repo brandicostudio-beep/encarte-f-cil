@@ -603,3 +603,221 @@ describe("Editor Visual Estilo Illustrator - 10 Testes Obrigatórios", () => {
     expect(html).toContain("Exportar Mesmo Assim");
   });
 });
+
+describe("Correções de Edição Visual e Recursos Novos (Figma/Canva/Illustrator)", () => {
+  // 1. Redimensionar foto não altera dimensões do box do card
+  it("Problema 1: Redimensionar foto mantém tamanho fixo do card box e escala apenas a imagem com overflow oculto", () => {
+    const baseProduct: EncarteProduct = {
+      id: "prod-zoom-1",
+      code: "12345",
+      name: "ARROZ TIPO 1 5KG",
+      packaging: "PACOTE 5KG",
+      validity: "30/12/2026",
+      price: "24,90",
+      unit: "UND",
+      badge: "oferta",
+      image: "https://example.com/arroz.png",
+      included: true,
+      customStyle: {
+        photoScale: 1.75,
+        photoOffsetX: 10,
+        photoOffsetY: -5,
+      },
+    };
+
+    const html8 = renderToString(
+      React.createElement(ProductCard916, {
+        product: baseProduct,
+        index: 0,
+        store: DEFAULT_STORE,
+        layoutMode: "grid",
+        perPage: 8,
+      })
+    );
+
+    // O container da foto deve permanecer estritamente fixo com overflow oculto (160px para 8 produtos)
+    expect(html8).toContain("width:160px");
+    expect(html8).toContain("min-width:160px");
+    expect(html8).toContain("max-width:160px");
+    expect(html8).toContain("height:160px");
+    expect(html8).toContain("overflow-hidden");
+
+    // A imagem interna recebe a escala e o deslocamento via transform CSS
+    expect(html8).toContain("scale(1.75)");
+    expect(html8).toContain("translate(10px, -5px)");
+
+    // Para 10 produtos, o container permanece fixo em 115px sem afetar o grid
+    const html10 = renderToString(
+      React.createElement(ProductCard916, {
+        product: baseProduct,
+        index: 0,
+        store: DEFAULT_STORE,
+        layoutMode: "grid",
+        perPage: 10,
+      })
+    );
+    expect(html10).toContain("width:115px");
+    expect(html10).toContain("height:115px");
+    expect(html10).toContain("overflow-hidden");
+    expect(html10).toContain("scale(1.75)");
+  });
+
+  // 2. Slider e campo numérico de escala de foto no painel de propriedades
+  it("Problema 3: Painel de propriedades possui slider de escala e input numérico em porcentagem sincronizados", () => {
+    const { PropertiesPanel } = require("./editor/PropertiesPanel");
+    const product: EncarteProduct = {
+      id: "prod-photo-ctrl",
+      code: "9988",
+      name: "CAFE GOURMET 500G",
+      packaging: "PACOTE 500G",
+      validity: "15/08/2026",
+      price: "18,90",
+      unit: "UND",
+      badge: "oferta",
+      image: "https://example.com/cafe.png",
+      included: true,
+      customStyle: {
+        photoScale: 1.45,
+      },
+    };
+
+    const html = renderToString(
+      React.createElement(PropertiesPanel, {
+        selectedTarget: { productId: product.id, element: "image" },
+        selectedTargets: [],
+        product,
+        customStyle: product.customStyle || {},
+        globalStyle: {},
+        scope: "product",
+        onChangeScope: () => {},
+        onUpdateStyle: () => {},
+        onUpdateProductData: () => {},
+        onResetStyle: () => {},
+      })
+    );
+
+    // Deve exibir o controle deslizante de tamanho e porcentagem
+    expect(html).toContain("Tamanho da Foto");
+    expect(html).toContain("145");
+    expect(html).toContain('value="145"');
+    expect(html).toContain("Enquadramento");
+    expect(html).toContain("Horizontal (X)");
+    expect(html).toContain("Vertical (Y)");
+    expect(html).toContain("Centralizar");
+  });
+
+  // 3. Aplicação em massa com 4 escopos distintos
+  it("Problema 2: Painel suporta os 4 escopos de aplicação em massa", () => {
+    const { PropertiesPanel } = require("./editor/PropertiesPanel");
+    const product: EncarteProduct = {
+      id: "prod-scope-1",
+      code: "5544",
+      name: "LEITE INTEGRAL 1L",
+      packaging: "TETRAPAK 1L",
+      validity: "10/11/2026",
+      price: "4,79",
+      unit: "UND",
+      badge: "oferta",
+      image: "https://example.com/leite.png",
+      included: true,
+    };
+
+    const html = renderToString(
+      React.createElement(PropertiesPanel, {
+        selectedTarget: { productId: product.id, element: "name" },
+        selectedTargets: [],
+        product,
+        customStyle: {},
+        globalStyle: {},
+        scope: "text_type",
+        onChangeScope: () => {},
+        onUpdateStyle: () => {},
+        onUpdateProductData: () => {},
+        onResetStyle: () => {},
+      })
+    );
+
+    expect(html).toContain("Escopo da Alteração");
+    expect(html).toContain("Somente este item");
+    expect(html).toContain("Desta página");
+    expect(html).toContain("Todo o encarte");
+    expect(html).toContain("Textos deste tipo");
+  });
+
+  // 4. Sistema de Predefinições de Estilo (Presets)
+  it("Problema 2 (Presets): Painel disponibiliza predefinições e opção de salvar novo preset", () => {
+    const { PropertiesPanel } = require("./editor/PropertiesPanel");
+    const product: EncarteProduct = {
+      id: "prod-preset-1",
+      code: "7766",
+      name: "SABAO EM PO 1KG",
+      packaging: "CAIXA 1KG",
+      validity: "20/12/2027",
+      price: "12,99",
+      unit: "UND",
+      badge: "imperdivel",
+      image: "https://example.com/sabao.png",
+      included: true,
+    };
+
+    const html = renderToString(
+      React.createElement(PropertiesPanel, {
+        selectedTarget: { productId: product.id, element: "price" },
+        selectedTargets: [],
+        product,
+        customStyle: {},
+        globalStyle: {},
+        scope: "product",
+        onChangeScope: () => {},
+        onUpdateStyle: () => {},
+        onUpdateProductData: () => {},
+        onResetStyle: () => {},
+      })
+    );
+
+    expect(html).toContain("Predefinições");
+    expect(html).toContain("Salvar Estilo");
+    expect(html).toContain("Pílula Amarela / Preço Vermelho");
+    expect(html).toContain("Pílula Vermelha / Preço Branco");
+  });
+
+  // 5. Ações rápidas no painel: Duplicar, Copiar, Excluir
+  it("Recursos Novos: Botões de ação rápida de Duplicar, Copiar e Excluir presentes no painel", () => {
+    const { PropertiesPanel } = require("./editor/PropertiesPanel");
+    const product: EncarteProduct = {
+      id: "prod-actions-1",
+      code: "1122",
+      name: "FEIJAO CARIOCA 1KG",
+      packaging: "PACOTE 1KG",
+      validity: "25/09/2026",
+      price: "7,49",
+      unit: "UND",
+      badge: "oferta",
+      image: "https://example.com/feijao.png",
+      included: true,
+    };
+
+    const html = renderToString(
+      React.createElement(PropertiesPanel, {
+        selectedTarget: { productId: product.id, element: "box" },
+        selectedTargets: [],
+        product,
+        customStyle: {},
+        globalStyle: {},
+        scope: "product",
+        onChangeScope: () => {},
+        onUpdateStyle: () => {},
+        onUpdateProductData: () => {},
+        onResetStyle: () => {},
+        onDuplicateProduct: () => {},
+        onDeleteProduct: () => {},
+        onCopyProduct: () => {},
+      })
+    );
+
+    expect(html).toContain("Duplicar");
+    expect(html).toContain("Copiar");
+    expect(html).toContain("Excluir");
+    expect(html).toContain("Restaurar");
+  });
+});

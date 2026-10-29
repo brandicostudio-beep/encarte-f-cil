@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Type,
   Image as ImageIcon,
@@ -10,8 +10,6 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
-  AlignJustify,
-  Bold,
   RotateCw,
   Sparkles,
   RefreshCw,
@@ -28,10 +26,16 @@ import {
   AlignEndHorizontal,
   AlignHorizontalDistributeCenter,
   AlignVerticalDistributeCenter,
-  Check,
+  Copy,
+  Trash2,
+  BookmarkPlus,
+  Bookmark,
+  Plus,
+  Minus,
+  Crosshair,
 } from "lucide-react";
 import { EncarteProduct, ProductCustomStyle, CampaignGlobalStyle } from "@/types/encarte";
-import { SelectedTarget, TargetElementType, ChangeScope } from "@/types/editor";
+import { SelectedTarget, TargetElementType, ChangeScope, StylePreset } from "@/types/editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,6 +61,9 @@ interface PropertiesPanelProps {
   onUpdateStyle: (updates: Partial<ProductCustomStyle>) => void;
   onUpdateProductData: (productId: string, updates: Partial<EncarteProduct>) => void;
   onResetStyle: () => void;
+  onDuplicateProduct?: (productId: string) => void;
+  onDeleteProduct?: (productId: string) => void;
+  onCopyProduct?: (productId: string) => void;
   onAlignElements?: (type: "left" | "center" | "right" | "top" | "middle" | "bottom") => void;
   onDistributeElements?: (type: "horizontal" | "vertical") => void;
 }
@@ -83,6 +90,66 @@ const FONT_FAMILIES = [
   { value: "Arial, sans-serif", label: "Arial (Padrão)" },
 ];
 
+// Presets padrão de fábrica por tipo de elemento
+const DEFAULT_PRESETS: StylePreset[] = [
+  {
+    id: "def-name-bold",
+    name: "Nome Impacto (34px Bold)",
+    elementType: "name",
+    style: { nameFontSize: 34, nameFontWeight: "700", nameAlign: "center", textTransform: "uppercase" },
+    createdAt: "default",
+  },
+  {
+    id: "def-name-compact",
+    name: "Nome Compacto (28px Medium)",
+    elementType: "name",
+    style: { nameFontSize: 28, nameFontWeight: "500", nameAlign: "center" },
+    createdAt: "default",
+  },
+  {
+    id: "def-price-yellow-red",
+    name: "Pílula Amarela / Preço Vermelho",
+    elementType: "price",
+    style: { pillBg: "#FFDE00", pillText: "#E51E2B", pillRadius: 9999, priceValueWeight: 700 },
+    createdAt: "default",
+  },
+  {
+    id: "def-price-red-white",
+    name: "Pílula Vermelha / Preço Branco",
+    elementType: "price",
+    style: { pillBg: "#E51E2B", pillText: "#FFFFFF", pillRadius: 9999, priceValueWeight: 700 },
+    createdAt: "default",
+  },
+  {
+    id: "def-price-green",
+    name: "Pílula Verde Oferta",
+    elementType: "price",
+    style: { pillBg: "#10B981", pillText: "#FFFFFF", pillRadius: 12, priceValueWeight: 800 },
+    createdAt: "default",
+  },
+  {
+    id: "def-photo-zoom100",
+    name: "Foto Padrão (100% Contida)",
+    elementType: "image",
+    style: { imageScale: 1.0, photoScale: 1.0, photoFit: "contain", imageOffsetX: 0, imageOffsetY: 0, photoRotation: 0 },
+    createdAt: "default",
+  },
+  {
+    id: "def-photo-zoom120",
+    name: "Foto Destaque (120% Zoom)",
+    elementType: "image",
+    style: { imageScale: 1.2, photoScale: 1.2, photoFit: "contain", photoRotation: 0 },
+    createdAt: "default",
+  },
+  {
+    id: "def-box-clean",
+    name: "Box Branco Padrão (Borda 1px)",
+    elementType: "box",
+    style: { boxBg: "#FFFFFF", borderColor: "#D9D9D9", borderWidth: 1, boxRadius: 8, showSeparator: true },
+    createdAt: "default",
+  },
+];
+
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   selectedTarget,
   selectedTargets,
@@ -94,15 +161,58 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   onUpdateStyle,
   onUpdateProductData,
   onResetStyle,
+  onDuplicateProduct,
+  onDeleteProduct,
+  onCopyProduct,
   onAlignElements,
   onDistributeElements,
 }) => {
   const [activeTab, setActiveTab] = useState<"style" | "data">("style");
-  const [lockAspect, setLockAspect] = useState(true);
+  const [newPresetName, setNewPresetName] = useState("");
+  const [showSavePreset, setShowSavePreset] = useState(false);
+  const [userPresets, setUserPresets] = useState<StylePreset[]>(() => {
+    try {
+      const saved = localStorage.getItem("encarte_style_presets_v1");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const activeElement: TargetElementType = selectedTarget?.element || "box";
 
-  // Eyedropper API handler
+  // Salva presets do usuário no localStorage
+  const savePresetToStorage = (updated: StylePreset[]) => {
+    setUserPresets(updated);
+    try {
+      localStorage.setItem("encarte_style_presets_v1", JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleCreatePreset = () => {
+    if (!newPresetName.trim()) return;
+    const newPreset: StylePreset = {
+      id: `preset-${Date.now()}`,
+      name: newPresetName.trim(),
+      elementType: activeElement,
+      style: { ...customStyle },
+      createdAt: new Date().toISOString(),
+    };
+    savePresetToStorage([...userPresets, newPreset]);
+    setNewPresetName("");
+    setShowSavePreset(false);
+  };
+
+  const handleDeletePreset = (id: string) => {
+    savePresetToStorage(userPresets.filter((p) => p.id !== id));
+  };
+
+  const availablePresets = [
+    ...DEFAULT_PRESETS.filter((p) => p.elementType === activeElement),
+    ...userPresets.filter((p) => p.elementType === activeElement),
+  ];
+
+  // Eyedropper API
   const handlePickColor = async (targetField: "textColor" | "pillBg" | "pillText" | "boxBg" | "borderColor") => {
     if (typeof window !== "undefined" && "EyeDropper" in window) {
       try {
@@ -111,9 +221,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         if (result?.sRGBHex) {
           onUpdateStyle({ [targetField]: result.sRGBHex });
         }
-      } catch {
-        // User canceled or unsupported
-      }
+      } catch {}
     }
   };
 
@@ -131,13 +239,21 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     );
   }
 
-  // Min font size checks
+  // Escala atual da foto (garante compatibilidade entre imageScale e photoScale)
+  const currentPhotoScale = customStyle.photoScale ?? customStyle.imageScale ?? 1.0;
+  const currentPhotoScalePct = Math.round(currentPhotoScale * 100);
+  const currentPhotoOffsetX = customStyle.photoOffsetX ?? customStyle.imageOffsetX ?? 0;
+  const currentPhotoOffsetY = customStyle.photoOffsetY ?? customStyle.imageOffsetY ?? 0;
+
+  // Fonte atual
   const currentFontSize = customStyle.nameFontSize || 26;
   const isFontTooSmall = currentFontSize < 16;
 
+  const isTextElement = ["name", "header", "price", "validity", "stock"].includes(activeElement);
+
   return (
     <div className="flex flex-col h-full bg-card border-l border-border select-none text-xs">
-      {/* Top Scope Selector */}
+      {/* 1. SELETOR DE ESCOPO COM 4 OPÇÕES CLARAS */}
       <div className="p-3 border-b border-border bg-muted/30 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
@@ -155,44 +271,57 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           </Button>
         </div>
 
-        <div className="grid grid-cols-3 gap-1 bg-muted p-1 rounded-md">
+        <div className="grid grid-cols-2 gap-1 bg-muted p-1 rounded-md">
           <button
             type="button"
             onClick={() => onChangeScope("product")}
-            className={`py-1 text-[11px] rounded font-medium transition-all ${
+            className={`py-1 px-1.5 text-[11px] rounded font-medium transition-all text-center ${
               scope === "product"
-                ? "bg-background text-foreground shadow-xs font-semibold"
+                ? "bg-background text-foreground shadow-xs font-bold"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            Este produto
+            Somente este item
           </button>
           <button
             type="button"
             onClick={() => onChangeScope("page")}
-            className={`py-1 text-[11px] rounded font-medium transition-all ${
+            className={`py-1 px-1.5 text-[11px] rounded font-medium transition-all text-center ${
               scope === "page"
-                ? "bg-background text-foreground shadow-xs font-semibold"
+                ? "bg-background text-foreground shadow-xs font-bold"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            Esta página
+            Desta página
           </button>
           <button
             type="button"
             onClick={() => onChangeScope("all")}
-            className={`py-1 text-[11px] rounded font-medium transition-all ${
+            className={`py-1 px-1.5 text-[11px] rounded font-medium transition-all text-center ${
               scope === "all"
-                ? "bg-background text-foreground shadow-xs font-semibold"
+                ? "bg-background text-foreground shadow-xs font-bold"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            Campanha
+            Todo o encarte
+          </button>
+          <button
+            type="button"
+            disabled={!isTextElement}
+            onClick={() => onChangeScope("text_type")}
+            className={`py-1 px-1.5 text-[11px] rounded font-medium transition-all text-center disabled:opacity-40 ${
+              scope === "text_type"
+                ? "bg-background text-foreground shadow-xs font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            title="Aplica estilo a todos os textos do mesmo tipo em todo o encarte"
+          >
+            Textos deste tipo
           </button>
         </div>
       </div>
 
-      {/* Alignment Toolbar (Illustrator style) */}
+      {/* 2. BARRA DE ALINHAMENTO E DISTRIBUIÇÃO */}
       {onAlignElements && (
         <div className="px-3 py-2 border-b border-border flex items-center justify-between gap-1 bg-muted/10">
           <div className="flex items-center gap-0.5">
@@ -282,7 +411,115 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         </div>
       )}
 
-      {/* Tabs: Estilo vs Dados do Produto */}
+      {/* 3. AÇÕES RÁPIDAS NO PRODUTO (Duplicar, Copiar, Excluir) */}
+      <div className="px-3 py-1.5 border-b border-border flex items-center justify-between gap-1 bg-muted/20">
+        <div className="flex items-center gap-1">
+          {onDuplicateProduct && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onDuplicateProduct(product.id)}
+              className="h-6 px-2 text-[10px]"
+              title="Duplicar este produto na página atual (Ctrl+D)"
+            >
+              <Copy className="w-3 h-3 mr-1" />
+              Duplicar
+            </Button>
+          )}
+          {onCopyProduct && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onCopyProduct(product.id)}
+              className="h-6 px-2 text-[10px]"
+              title="Copiar produto (Ctrl+C)"
+            >
+              Copiar
+            </Button>
+          )}
+        </div>
+
+        {onDeleteProduct && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDeleteProduct(product.id)}
+            className="h-6 px-1.5 text-[10px] text-destructive hover:bg-destructive/10"
+            title="Excluir este produto (Delete)"
+          >
+            <Trash2 className="w-3 h-3 mr-1" />
+            Excluir
+          </Button>
+        )}
+      </div>
+
+      {/* 4. PREDEFINIÇÕES DE ESTILO (PRESETS) */}
+      <div className="p-2.5 border-b border-border bg-card space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+            <Bookmark className="w-3 h-3 text-primary" />
+            Predefinições ({availablePresets.length})
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowSavePreset(!showSavePreset)}
+            className="h-5 px-1 text-[10px] text-primary"
+          >
+            <BookmarkPlus className="w-3 h-3 mr-1" />
+            Salvar Estilo
+          </Button>
+        </div>
+
+        {showSavePreset && (
+          <div className="flex items-center gap-1 pt-1 pb-1">
+            <Input
+              value={newPresetName}
+              onChange={(e) => setNewPresetName(e.target.value)}
+              placeholder="Nome da predefinição..."
+              className="h-6 text-[10px]"
+            />
+            <Button
+              size="sm"
+              onClick={handleCreatePreset}
+              className="h-6 px-2 text-[10px]"
+            >
+              Salvar
+            </Button>
+          </div>
+        )}
+
+        {availablePresets.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-0.5">
+            {availablePresets.slice(0, 4).map((p) => (
+              <div
+                key={p.id}
+                className="flex items-center bg-muted/60 border border-border rounded px-1.5 py-0.5 group"
+              >
+                <button
+                  type="button"
+                  onClick={() => onUpdateStyle(p.style)}
+                  className="text-[10px] font-medium text-foreground hover:text-primary transition-colors truncate max-w-[120px]"
+                  title={`Aplicar: ${p.name}`}
+                >
+                  {p.name}
+                </button>
+                {p.createdAt !== "default" && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePreset(p.id)}
+                    className="ml-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 5. TABS: PROPRIEDADES vs DADOS DO PRODUTO */}
       <Tabs
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as any)}
@@ -301,9 +538,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           </TabsList>
         </div>
 
-        {/* TAB 1: PROPERTIES / STYLES */}
+        {/* TAB 1: PROPRIEDADES VISUAIS */}
         <TabsContent value="style" className="flex-1 overflow-y-auto p-3 space-y-4 m-0">
-          {/* Active target banner */}
+          {/* Banner do elemento ativo */}
           <div className="flex items-center justify-between pb-2 border-b border-border">
             <div className="flex items-center gap-1.5 font-semibold text-foreground">
               {activeElement === "box" && <Square className="w-4 h-4 text-primary" />}
@@ -326,10 +563,236 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             </Badge>
           </div>
 
-          {/* 1. TEXT PROPERTIES (Nome, Código, Validade, etc.) */}
+          {/* ============================================================== */}
+          {/* 1. PROPRIEDADES DA FOTO (RESTAURA SLIDER + NÃO ALTERA O BOX) */}
+          {/* ============================================================== */}
+          {activeElement === "image" && (
+            <div className="space-y-3.5">
+              {/* Slider de Escala / Tamanho da Foto */}
+              <div className="space-y-1.5 bg-muted/20 p-2.5 rounded-lg border border-border">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[11px] font-bold text-foreground">
+                    Tamanho da Foto (Zoom / Escala)
+                  </Label>
+                  <span className="text-xs font-mono font-bold text-primary">
+                    {currentPhotoScalePct}%
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-7 w-7 text-xs shrink-0"
+                    onClick={() => {
+                      const newScale = Math.max(0.4, Number((currentPhotoScale - 0.05).toFixed(2)));
+                      onUpdateStyle({ imageScale: newScale, photoScale: newScale });
+                    }}
+                    title="Diminuir tamanho da foto"
+                  >
+                    <Minus className="w-3.5 h-3.5" />
+                  </Button>
+
+                  <Slider
+                    value={[currentPhotoScalePct]}
+                    min={40}
+                    max={250}
+                    step={5}
+                    onValueChange={([val]) => {
+                      const newScale = val / 100;
+                      onUpdateStyle({ imageScale: newScale, photoScale: newScale });
+                    }}
+                    className="flex-1"
+                  />
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-7 w-7 text-xs shrink-0"
+                    onClick={() => {
+                      const newScale = Math.min(2.5, Number((currentPhotoScale + 0.05).toFixed(2)));
+                      onUpdateStyle({ imageScale: newScale, photoScale: newScale });
+                    }}
+                    title="Aumentar tamanho da foto"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </Button>
+
+                  <div className="flex items-center shrink-0 w-16">
+                    <Input
+                      type="number"
+                      min={40}
+                      max={250}
+                      value={currentPhotoScalePct}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        if (!isNaN(val)) {
+                          const clamped = Math.max(0.4, Math.min(2.5, val / 100));
+                          onUpdateStyle({ imageScale: clamped, photoScale: clamped });
+                        }
+                      }}
+                      className="h-7 text-xs text-center px-1 font-mono"
+                    />
+                    <span className="text-[10px] text-muted-foreground ml-1">%</span>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-muted-foreground leading-tight pt-1">
+                  O tamanho do box do card permanece estritamente fixo. A foto é recortada com segurança dentro da área reservada.
+                </p>
+              </div>
+
+              {/* Ajuste de Posição / Centralização da Foto (Pan X / Pan Y) */}
+              <div className="space-y-2 bg-muted/20 p-2.5 rounded-lg border border-border">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[11px] font-bold text-foreground">
+                    Posição da Foto no Box
+                  </Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+                    onClick={() =>
+                      onUpdateStyle({
+                        photoOffsetX: 0,
+                        imageOffsetX: 0,
+                        photoOffsetY: 0,
+                        imageOffsetY: 0,
+                      })
+                    }
+                    title="Centralizar foto perfeitamente"
+                  >
+                    <Crosshair className="w-3 h-3 mr-1" />
+                    Centralizar
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>Horizontal (X)</span>
+                      <span className="font-mono">{currentPhotoOffsetX}px</span>
+                    </div>
+                    <Slider
+                      value={[currentPhotoOffsetX]}
+                      min={-80}
+                      max={80}
+                      step={2}
+                      onValueChange={([val]) =>
+                        onUpdateStyle({ photoOffsetX: val, imageOffsetX: val })
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>Vertical (Y)</span>
+                      <span className="font-mono">{currentPhotoOffsetY}px</span>
+                    </div>
+                    <Slider
+                      value={[currentPhotoOffsetY]}
+                      min={-80}
+                      max={80}
+                      step={2}
+                      onValueChange={([val]) =>
+                        onUpdateStyle({ photoOffsetY: val, imageOffsetY: val })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Enquadramento (Fit Mode) */}
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">Enquadramento da Imagem</Label>
+                <Select
+                  value={customStyle.photoFit || customStyle.imageFit || "contain"}
+                  onValueChange={(val: any) =>
+                    onUpdateStyle({ photoFit: val, imageFit: val })
+                  }
+                >
+                  <SelectTrigger className="h-7 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="contain" className="text-xs">
+                      Conter (Proporcional, sem cortar o produto)
+                    </SelectItem>
+                    <SelectItem value="cover" className="text-xs">
+                      Preencher (Cover / Corte controlado)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Rotação & Opacidade */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <Label className="text-[10px] text-muted-foreground">Rotação</Label>
+                    <span className="text-[10px] font-mono">{customStyle.photoRotation || 0}°</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Slider
+                      value={[customStyle.photoRotation || 0]}
+                      min={-180}
+                      max={180}
+                      step={5}
+                      onValueChange={([val]) => onUpdateStyle({ photoRotation: val })}
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 p-0"
+                      title="Resetar rotação"
+                      onClick={() => onUpdateStyle({ photoRotation: 0 })}
+                    >
+                      <RotateCw className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <Label className="text-[10px] text-muted-foreground">Opacidade</Label>
+                    <span className="text-[10px] font-mono">
+                      {Math.round((customStyle.photoOpacity ?? 1) * 100)}%
+                    </span>
+                  </div>
+                  <Slider
+                    value={[(customStyle.photoOpacity ?? 1) * 100]}
+                    min={20}
+                    max={100}
+                    step={5}
+                    onValueChange={([val]) => onUpdateStyle({ photoOpacity: val / 100 })}
+                  />
+                </div>
+              </div>
+
+              {/* Botão Remover Fundo com IA */}
+              <div className="pt-2 border-t border-border">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs text-primary border-primary/30 hover:bg-primary/10"
+                  onClick={() => {
+                    onUpdateStyle({ photoFit: "contain", imageFit: "contain" });
+                  }}
+                >
+                  <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                  Recortar Fundo da Foto (IA)
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ============================================================== */}
+          {/* 2. PROPRIEDADES DE TEXTO (NOME, CÓDIGO, CABEÇALHO) */}
+          {/* ============================================================== */}
           {(activeElement === "name" || activeElement === "validity" || activeElement === "stock") && (
             <div className="space-y-3">
-              {/* Font Warning */}
+              {/* Aviso de Fonte */}
               {isFontTooSmall && activeElement === "name" && (
                 <div className="p-2 rounded bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 flex items-start gap-1.5 text-[11px]">
                   <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -340,7 +803,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 </div>
               )}
 
-              {/* Font Family */}
+              {/* Família da Fonte */}
               <div className="space-y-1">
                 <Label className="text-[11px] text-muted-foreground">Família da Fonte</Label>
                 <Select
@@ -360,7 +823,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 </Select>
               </div>
 
-              {/* Font Size & Weight */}
+              {/* Tamanho e Peso */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <Label className="text-[11px] text-muted-foreground">Tamanho</Label>
@@ -406,7 +869,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   <Label className="text-[11px] text-muted-foreground">Peso</Label>
                   <Select
                     value={String(customStyle.nameFontWeight || 700)}
-                    onValueChange={(val) => onUpdateStyle({ nameFontWeight: Number(val) })}
+                    onValueChange={(val) => onUpdateStyle({ nameFontWeight: val })}
                   >
                     <SelectTrigger className="h-7 text-xs">
                       <SelectValue placeholder="Peso" />
@@ -424,33 +887,39 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 </div>
               </div>
 
-              {/* Text Align */}
+              {/* Alinhamento */}
               <div className="space-y-1">
                 <Label className="text-[11px] text-muted-foreground">Alinhamento</Label>
                 <div className="flex rounded-md border border-input p-0.5 bg-muted/20">
                   <button
                     type="button"
-                    onClick={() => onUpdateStyle({ nameTextAlign: "left" })}
+                    onClick={() => onUpdateStyle({ nameAlign: "left" })}
                     className={`flex-1 py-1 flex justify-center rounded ${
-                      (customStyle.nameTextAlign || "center") === "left" ? "bg-background shadow-xs text-primary font-bold" : "text-muted-foreground"
+                      (customStyle.nameAlign || "center") === "left"
+                        ? "bg-background shadow-xs text-primary font-bold"
+                        : "text-muted-foreground"
                     }`}
                   >
                     <AlignLeft className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
-                    onClick={() => onUpdateStyle({ nameTextAlign: "center" })}
+                    onClick={() => onUpdateStyle({ nameAlign: "center" })}
                     className={`flex-1 py-1 flex justify-center rounded ${
-                      (customStyle.nameTextAlign || "center") === "center" ? "bg-background shadow-xs text-primary font-bold" : "text-muted-foreground"
+                      (customStyle.nameAlign || "center") === "center"
+                        ? "bg-background shadow-xs text-primary font-bold"
+                        : "text-muted-foreground"
                     }`}
                   >
                     <AlignCenter className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
-                    onClick={() => onUpdateStyle({ nameTextAlign: "right" })}
+                    onClick={() => onUpdateStyle({ nameAlign: "right" })}
                     className={`flex-1 py-1 flex justify-center rounded ${
-                      (customStyle.nameTextAlign || "center") === "right" ? "bg-background shadow-xs text-primary font-bold" : "text-muted-foreground"
+                      (customStyle.nameAlign || "center") === "right"
+                        ? "bg-background shadow-xs text-primary font-bold"
+                        : "text-muted-foreground"
                     }`}
                   >
                     <AlignRight className="w-3.5 h-3.5" />
@@ -458,7 +927,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 </div>
               </div>
 
-              {/* Color */}
+              {/* Cor do Texto */}
               <div className="space-y-1.5 pt-1">
                 <div className="flex items-center justify-between">
                   <Label className="text-[11px] text-muted-foreground">Cor do Texto</Label>
@@ -468,44 +937,44 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                       size="sm"
                       onClick={() => handlePickColor("textColor")}
                       className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
-                      title="Conta-gotas da tela"
                     >
                       <Pipette className="w-3 h-3 mr-1" />
                       Conta-gotas
                     </Button>
                   )}
                 </div>
-                {/* Palette */}
                 <div className="flex flex-wrap gap-1.5 items-center">
                   {TEMPLATE_COLORS.map((c) => (
                     <button
                       key={c}
                       type="button"
-                      onClick={() => onUpdateStyle({ textColor: c })}
+                      onClick={() => onUpdateStyle({ textColor: c, nameColor: c })}
                       style={{ backgroundColor: c }}
                       className={`w-5 h-5 rounded-full border border-border/80 transition-transform ${
-                        customStyle.textColor === c ? "scale-125 ring-2 ring-primary ring-offset-1" : "hover:scale-110"
+                        (customStyle.textColor || customStyle.nameColor) === c
+                          ? "scale-125 ring-2 ring-primary ring-offset-1"
+                          : "hover:scale-110"
                       }`}
                     />
                   ))}
                   <div className="flex items-center gap-1 ml-auto">
                     <input
                       type="color"
-                      value={customStyle.textColor || "#111827"}
-                      onChange={(e) => onUpdateStyle({ textColor: e.target.value })}
+                      value={customStyle.textColor || customStyle.nameColor || "#111827"}
+                      onChange={(e) => onUpdateStyle({ textColor: e.target.value, nameColor: e.target.value })}
                       className="w-5 h-5 rounded cursor-pointer border border-border p-0"
                     />
                     <Input
                       type="text"
-                      value={customStyle.textColor || "#111827"}
-                      onChange={(e) => onUpdateStyle({ textColor: e.target.value })}
+                      value={customStyle.textColor || customStyle.nameColor || "#111827"}
+                      onChange={(e) => onUpdateStyle({ textColor: e.target.value, nameColor: e.target.value })}
                       className="h-6 w-16 text-[10px] uppercase font-mono px-1"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Text Transform & Letter Spacing */}
+              {/* Capitalização e Espaçamento */}
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <div className="space-y-1">
                   <Label className="text-[11px] text-muted-foreground">Capitalização</Label>
@@ -544,10 +1013,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             </div>
           )}
 
-          {/* 2. PRICE PILL PROPERTIES */}
+          {/* ============================================================== */}
+          {/* 3. PROPRIEDADES DA PÍLULA DE PREÇO */}
+          {/* ============================================================== */}
           {activeElement === "price" && (
             <div className="space-y-3">
-              {/* Colors: Background and Text */}
+              {/* Fundo da Pílula */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label className="text-[11px] text-muted-foreground">Fundo da Pílula</Label>
@@ -568,31 +1039,33 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     <button
                       key={c}
                       type="button"
-                      onClick={() => onUpdateStyle({ pillBg: c })}
+                      onClick={() => onUpdateStyle({ pillBg: c, pillBgColor: c })}
                       style={{ backgroundColor: c }}
                       className={`w-5 h-5 rounded-full border border-border/80 transition-transform ${
-                        customStyle.pillBg === c ? "scale-125 ring-2 ring-primary ring-offset-1" : "hover:scale-110"
+                        (customStyle.pillBg || customStyle.pillBgColor) === c
+                          ? "scale-125 ring-2 ring-primary ring-offset-1"
+                          : "hover:scale-110"
                       }`}
                     />
                   ))}
                   <div className="flex items-center gap-1 ml-auto">
                     <input
                       type="color"
-                      value={customStyle.pillBg || "#FFDE00"}
-                      onChange={(e) => onUpdateStyle({ pillBg: e.target.value })}
+                      value={customStyle.pillBg || customStyle.pillBgColor || "#E30613"}
+                      onChange={(e) => onUpdateStyle({ pillBg: e.target.value, pillBgColor: e.target.value })}
                       className="w-5 h-5 rounded cursor-pointer border border-border p-0"
                     />
                     <Input
                       type="text"
-                      value={customStyle.pillBg || "#FFDE00"}
-                      onChange={(e) => onUpdateStyle({ pillBg: e.target.value })}
+                      value={customStyle.pillBg || customStyle.pillBgColor || "#E30613"}
+                      onChange={(e) => onUpdateStyle({ pillBg: e.target.value, pillBgColor: e.target.value })}
                       className="h-6 w-16 text-[10px] uppercase font-mono px-1"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Text color of pill */}
+              {/* Cor do Preço */}
               <div className="space-y-1.5 pt-1">
                 <Label className="text-[11px] text-muted-foreground">Cor do Preço</Label>
                 <div className="flex flex-wrap gap-1.5 items-center">
@@ -600,41 +1073,42 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     <button
                       key={c}
                       type="button"
-                      onClick={() => onUpdateStyle({ pillText: c })}
+                      onClick={() => onUpdateStyle({ pillText: c, pillTextColor: c })}
                       style={{ backgroundColor: c }}
                       className={`w-5 h-5 rounded-full border border-border/80 transition-transform ${
-                        customStyle.pillText === c ? "scale-125 ring-2 ring-primary ring-offset-1" : "hover:scale-110"
+                        (customStyle.pillText || customStyle.pillTextColor) === c
+                          ? "scale-125 ring-2 ring-primary ring-offset-1"
+                          : "hover:scale-110"
                       }`}
                     />
                   ))}
                   <div className="flex items-center gap-1 ml-auto">
                     <input
                       type="color"
-                      value={customStyle.pillText || "#E51E2B"}
-                      onChange={(e) => onUpdateStyle({ pillText: e.target.value })}
+                      value={customStyle.pillText || customStyle.pillTextColor || "#FFE600"}
+                      onChange={(e) => onUpdateStyle({ pillText: e.target.value, pillTextColor: e.target.value })}
                       className="w-5 h-5 rounded cursor-pointer border border-border p-0"
                     />
                     <Input
                       type="text"
-                      value={customStyle.pillText || "#E51E2B"}
-                      onChange={(e) => onUpdateStyle({ pillText: e.target.value })}
+                      value={customStyle.pillText || customStyle.pillTextColor || "#FFE600"}
+                      onChange={(e) => onUpdateStyle({ pillText: e.target.value, pillTextColor: e.target.value })}
                       className="h-6 w-16 text-[10px] uppercase font-mono px-1"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Price Sizes: Currency, Main Value, Unit */}
+              {/* Proporções do Preço */}
               <div className="space-y-2 pt-2 border-t border-border">
                 <Label className="text-[11px] font-semibold text-foreground">Proporções do Preço</Label>
-                
                 <div className="grid grid-cols-3 gap-2">
                   <div className="space-y-1">
                     <Label className="text-[10px] text-muted-foreground">"R$" (px)</Label>
                     <Input
                       type="number"
-                      value={customStyle.priceCurrencySize || 22}
-                      onChange={(e) => onUpdateStyle({ priceCurrencySize: Number(e.target.value) || 22 })}
+                      value={customStyle.priceCurrencySize || 23}
+                      onChange={(e) => onUpdateStyle({ priceCurrencySize: Number(e.target.value) || 23 })}
                       className="h-7 text-xs text-center"
                     />
                   </div>
@@ -642,8 +1116,11 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     <Label className="text-[10px] text-muted-foreground">Valor (px)</Label>
                     <Input
                       type="number"
-                      value={customStyle.priceValueSize || 46}
-                      onChange={(e) => onUpdateStyle({ priceValueSize: Number(e.target.value) || 46 })}
+                      value={customStyle.priceFontSize || customStyle.priceValueSize || 43}
+                      onChange={(e) => {
+                        const val = Number(e.target.value) || 43;
+                        onUpdateStyle({ priceFontSize: val, priceValueSize: val });
+                      }}
                       className="h-7 text-xs text-center font-bold"
                     />
                   </div>
@@ -661,8 +1138,10 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 <div className="space-y-1 pt-1">
                   <Label className="text-[11px] text-muted-foreground">Peso do Valor</Label>
                   <Select
-                    value={String(customStyle.priceValueWeight || 700)}
-                    onValueChange={(val) => onUpdateStyle({ priceValueWeight: Number(val) })}
+                    value={String(customStyle.priceFontWeight || customStyle.priceValueWeight || 700)}
+                    onValueChange={(val) =>
+                      onUpdateStyle({ priceFontWeight: val, priceValueWeight: val })
+                    }
                   >
                     <SelectTrigger className="h-7 text-xs">
                       <SelectValue placeholder="Peso" />
@@ -677,18 +1156,15 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 </div>
               </div>
 
-              {/* Pill Corner Radius & Padding */}
+              {/* Arredondamento da Pílula */}
               <div className="space-y-2 pt-2 border-t border-border">
-                <div className="flex justify-between items-center">
-                  <Label className="text-[11px] text-muted-foreground">Arredondamento</Label>
-                  <span className="text-[10px] font-mono">{customStyle.pillRadius ?? 9999}px</span>
-                </div>
+                <Label className="text-[11px] text-muted-foreground">Arredondamento</Label>
                 <div className="grid grid-cols-3 gap-1">
                   <Button
                     variant="outline"
                     size="sm"
                     className={`h-6 text-[10px] ${customStyle.pillRadius === 4 ? "bg-primary/20 border-primary" : ""}`}
-                    onClick={() => onUpdateStyle({ pillRadius: 4 })}
+                    onClick={() => onUpdateStyle({ pillRadius: 4, pillBorderRadius: 4 })}
                   >
                     Reto (4px)
                   </Button>
@@ -696,7 +1172,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     variant="outline"
                     size="sm"
                     className={`h-6 text-[10px] ${customStyle.pillRadius === 12 ? "bg-primary/20 border-primary" : ""}`}
-                    onClick={() => onUpdateStyle({ pillRadius: 12 })}
+                    onClick={() => onUpdateStyle({ pillRadius: 12, pillBorderRadius: 12 })}
                   >
                     Médio (12px)
                   </Button>
@@ -704,7 +1180,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     variant="outline"
                     size="sm"
                     className={`h-6 text-[10px] ${(customStyle.pillRadius ?? 9999) >= 999 ? "bg-primary/20 border-primary" : ""}`}
-                    onClick={() => onUpdateStyle({ pillRadius: 9999 })}
+                    onClick={() => onUpdateStyle({ pillRadius: 9999, pillBorderRadius: 9999 })}
                   >
                     Total (Pílula)
                   </Button>
@@ -713,137 +1189,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             </div>
           )}
 
-          {/* 3. PHOTO / IMAGE PROPERTIES */}
-          {activeElement === "image" && (
-            <div className="space-y-3">
-              {/* Dimensions */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <Label className="text-[11px] text-muted-foreground">Dimensões da Área</Label>
-                  <button
-                    type="button"
-                    onClick={() => setLockAspect(!lockAspect)}
-                    className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
-                  >
-                    {lockAspect ? <Lock className="w-3 h-3 text-primary" /> : <Unlock className="w-3 h-3" />}
-                    {lockAspect ? "Proporção Travada" : "Livre"}
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-0.5">
-                    <Label className="text-[10px] text-muted-foreground">Largura (px)</Label>
-                    <Input
-                      type="number"
-                      value={customStyle.photoWidth || 200}
-                      onChange={(e) => {
-                        const w = Number(e.target.value) || 200;
-                        if (lockAspect) {
-                          const currentW = customStyle.photoWidth || 200;
-                          const currentH = customStyle.photoHeight || 200;
-                          const ratio = currentH / currentW;
-                          onUpdateStyle({ photoWidth: w, photoHeight: Math.round(w * ratio) });
-                        } else {
-                          onUpdateStyle({ photoWidth: w });
-                        }
-                      }}
-                      className="h-7 text-xs text-center"
-                    />
-                  </div>
-                  <div className="space-y-0.5">
-                    <Label className="text-[10px] text-muted-foreground">Altura (px)</Label>
-                    <Input
-                      type="number"
-                      value={customStyle.photoHeight || 200}
-                      onChange={(e) => onUpdateStyle({ photoHeight: Number(e.target.value) || 200 })}
-                      className="h-7 text-xs text-center"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Fit Mode */}
-              <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Encaixe da Imagem</Label>
-                <Select
-                  value={customStyle.photoFit || "contain"}
-                  onValueChange={(val: any) => onUpdateStyle({ photoFit: val })}
-                >
-                  <SelectTrigger className="h-7 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="contain" className="text-xs">Conter (Sem cortar produto)</SelectItem>
-                    <SelectItem value="cover" className="text-xs">Preencher caixa (Cover)</SelectItem>
-                    <SelectItem value="center" className="text-xs">Corte Centralizado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Rotation & Opacity */}
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center">
-                    <Label className="text-[10px] text-muted-foreground">Rotação</Label>
-                    <span className="text-[10px] font-mono">{customStyle.photoRotation || 0}°</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Slider
-                      value={[customStyle.photoRotation || 0]}
-                      min={-180}
-                      max={180}
-                      step={5}
-                      onValueChange={([val]) => onUpdateStyle({ photoRotation: val })}
-                      className="flex-1"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 p-0"
-                      title="Resetar rotação"
-                      onClick={() => onUpdateStyle({ photoRotation: 0 })}
-                    >
-                      <RotateCw className="w-3 h-3" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center">
-                    <Label className="text-[10px] text-muted-foreground">Opacidade</Label>
-                    <span className="text-[10px] font-mono">{Math.round((customStyle.photoOpacity ?? 1) * 100)}%</span>
-                  </div>
-                  <Slider
-                    value={[(customStyle.photoOpacity ?? 1) * 100]}
-                    min={20}
-                    max={100}
-                    step={5}
-                    onValueChange={([val]) => onUpdateStyle({ photoOpacity: val / 100 })}
-                  />
-                </div>
-              </div>
-
-              {/* AI Background Removal */}
-              <div className="pt-2 border-t border-border">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-xs text-primary border-primary/30 hover:bg-primary/10"
-                  onClick={() => {
-                    // Trigger trim background or mock cutout
-                    onUpdateStyle({ photoFit: "contain" });
-                  }}
-                >
-                  <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                  Recortar Fundo da Foto (IA)
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* 4. PRODUCT BOX PROPERTIES */}
+          {/* ============================================================== */}
+          {/* 4. PROPRIEDADES DO BOX DO PRODUTO */}
+          {/* ============================================================== */}
           {activeElement === "box" && (
             <div className="space-y-3">
-              {/* Box Background */}
+              {/* Fundo do Box */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label className="text-[11px] text-muted-foreground">Fundo do Box</Label>
@@ -864,31 +1215,33 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                     <button
                       key={c}
                       type="button"
-                      onClick={() => onUpdateStyle({ boxBg: c })}
+                      onClick={() => onUpdateStyle({ boxBg: c, boxBgColor: c })}
                       style={{ backgroundColor: c }}
                       className={`w-5 h-5 rounded-full border border-border/80 transition-transform ${
-                        customStyle.boxBg === c ? "scale-125 ring-2 ring-primary ring-offset-1" : "hover:scale-110"
+                        (customStyle.boxBg || customStyle.boxBgColor) === c
+                          ? "scale-125 ring-2 ring-primary ring-offset-1"
+                          : "hover:scale-110"
                       }`}
                     />
                   ))}
                   <div className="flex items-center gap-1 ml-auto">
                     <input
                       type="color"
-                      value={customStyle.boxBg || "#FFFFFF"}
-                      onChange={(e) => onUpdateStyle({ boxBg: e.target.value })}
+                      value={customStyle.boxBg || customStyle.boxBgColor || "#FFFFFF"}
+                      onChange={(e) => onUpdateStyle({ boxBg: e.target.value, boxBgColor: e.target.value })}
                       className="w-5 h-5 rounded cursor-pointer border border-border p-0"
                     />
                     <Input
                       type="text"
-                      value={customStyle.boxBg || "#FFFFFF"}
-                      onChange={(e) => onUpdateStyle({ boxBg: e.target.value })}
+                      value={customStyle.boxBg || customStyle.boxBgColor || "#FFFFFF"}
+                      onChange={(e) => onUpdateStyle({ boxBg: e.target.value, boxBgColor: e.target.value })}
                       className="h-6 w-16 text-[10px] uppercase font-mono px-1"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Border Color & Width */}
+              {/* Borda do Box */}
               <div className="space-y-1.5 pt-1">
                 <Label className="text-[11px] text-muted-foreground">Borda do Box</Label>
                 <div className="flex items-center gap-2">
@@ -897,18 +1250,23 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                       <button
                         key={c}
                         type="button"
-                        onClick={() => onUpdateStyle({ borderColor: c })}
+                        onClick={() => onUpdateStyle({ borderColor: c, boxBorderColor: c })}
                         style={{ backgroundColor: c }}
                         className={`w-4 h-4 rounded-full border border-border/80 transition-transform ${
-                          customStyle.borderColor === c ? "scale-125 ring-2 ring-primary" : ""
+                          (customStyle.borderColor || customStyle.boxBorderColor) === c
+                            ? "scale-125 ring-2 ring-primary"
+                            : ""
                         }`}
                       />
                     ))}
                   </div>
                   <div className="w-20">
                     <Select
-                      value={String(customStyle.borderWidth ?? 1)}
-                      onValueChange={(val) => onUpdateStyle({ borderWidth: Number(val) })}
+                      value={String(customStyle.borderWidth ?? customStyle.boxBorderWidth ?? 1)}
+                      onValueChange={(val) => {
+                        const num = Number(val);
+                        onUpdateStyle({ borderWidth: num, boxBorderWidth: num });
+                      }}
                     >
                       <SelectTrigger className="h-6 text-[10px]">
                         <SelectValue />
@@ -924,46 +1282,29 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 </div>
               </div>
 
-              {/* Corner Radius & Shadow */}
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <div className="space-y-1">
-                  <Label className="text-[11px] text-muted-foreground">Arredondamento</Label>
-                  <Select
-                    value={String(customStyle.boxRadius ?? 8)}
-                    onValueChange={(val) => onUpdateStyle({ boxRadius: Number(val) })}
-                  >
-                    <SelectTrigger className="h-7 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0" className="text-xs">0px (Reto)</SelectItem>
-                      <SelectItem value="8" className="text-xs">8px (Padrão)</SelectItem>
-                      <SelectItem value="16" className="text-xs">16px (Suave)</SelectItem>
-                      <SelectItem value="24" className="text-xs">24px (Amplo)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-[11px] text-muted-foreground">Sombra</Label>
-                  <Select
-                    value={customStyle.boxShadow || "sm"}
-                    onValueChange={(val: any) => onUpdateStyle({ boxShadow: val })}
-                  >
-                    <SelectTrigger className="h-7 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none" className="text-xs">Sem Sombra</SelectItem>
-                      <SelectItem value="sm" className="text-xs">Leve (sm)</SelectItem>
-                      <SelectItem value="md" className="text-xs">Média (md)</SelectItem>
-                      <SelectItem value="lg" className="text-xs">Forte (lg)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* Cantos Arredondados */}
+              <div className="space-y-1 pt-1">
+                <Label className="text-[11px] text-muted-foreground">Arredondamento</Label>
+                <Select
+                  value={String(customStyle.boxRadius ?? customStyle.boxBorderRadius ?? 8)}
+                  onValueChange={(val) => {
+                    const num = Number(val);
+                    onUpdateStyle({ boxRadius: num, boxBorderRadius: num });
+                  }}
+                >
+                  <SelectTrigger className="h-7 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0" className="text-xs">0px (Reto)</SelectItem>
+                    <SelectItem value="8" className="text-xs">8px (Padrão)</SelectItem>
+                    <SelectItem value="16" className="text-xs">16px (Suave)</SelectItem>
+                    <SelectItem value="24" className="text-xs">24px (Amplo)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              {/* Separator Line */}
+              {/* Linha Divisória */}
               <div className="pt-2 border-t border-border flex items-center justify-between">
                 <Label className="text-[11px] text-muted-foreground">Linha Divisória Foto/Texto</Label>
                 <Button
@@ -979,7 +1320,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           )}
         </TabsContent>
 
-        {/* TAB 2: PRODUCT DATA (Edit directly without returning to spreadsheet) */}
+        {/* TAB 2: DADOS DO PRODUTO (Edição direta de valores) */}
         <TabsContent value="data" className="flex-1 overflow-y-auto p-3 space-y-3 m-0">
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Nome do Produto</Label>
@@ -1002,8 +1343,8 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             <div className="space-y-1">
               <Label className="text-[11px] text-muted-foreground">Embalagem</Label>
               <Input
-                value={product.packageInfo || ""}
-                onChange={(e) => onUpdateProductData(product.id, { packageInfo: e.target.value })}
+                value={product.packaging || ""}
+                onChange={(e) => onUpdateProductData(product.id, { packaging: e.target.value })}
                 className="h-8 text-xs"
                 placeholder="Ex: 500g, 1L"
               />
@@ -1014,10 +1355,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             <div className="space-y-1">
               <Label className="text-[11px] text-muted-foreground">Preço (R$)</Label>
               <Input
-                type="number"
-                step="0.01"
+                type="text"
                 value={product.price || ""}
-                onChange={(e) => onUpdateProductData(product.id, { price: parseFloat(e.target.value) || 0 })}
+                onChange={(e) => onUpdateProductData(product.id, { price: e.target.value })}
                 className="h-8 text-xs font-bold text-primary"
               />
             </div>
@@ -1034,8 +1374,8 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Data de Validade</Label>
             <Input
-              value={product.expiryDate || ""}
-              onChange={(e) => onUpdateProductData(product.id, { expiryDate: e.target.value })}
+              value={product.validity || ""}
+              onChange={(e) => onUpdateProductData(product.id, { validity: e.target.value })}
               className="h-8 text-xs"
               placeholder="DD/MM/AAAA"
             />
@@ -1044,8 +1384,8 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Texto do Estoque</Label>
             <Input
-              value={product.stockText || ""}
-              onChange={(e) => onUpdateProductData(product.id, { stockText: e.target.value })}
+              value={product.stock || ""}
+              onChange={(e) => onUpdateProductData(product.id, { stock: e.target.value })}
               className="h-8 text-xs"
               placeholder="Ex: Últimas 15 unidades"
             />

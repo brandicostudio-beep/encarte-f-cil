@@ -126,6 +126,7 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
   } | null>(null);
   const isMarqueeRef = useRef(false);
   const marqueeOriginRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const clipboardProductRef = useRef<EncarteProduct | null>(null);
 
   // History stack (up to 100 states)
   const [history, setHistory] = useState<HistoryState[]>([]);
@@ -253,6 +254,20 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
         });
         recordChange(updated, campaign);
       } else if (scope === "page") {
+        const pageProductIds = new Set(pageProducts.map((p) => p.id));
+        const updated = products.map((p) => {
+          if (pageProductIds.has(p.id)) {
+            return {
+              ...p,
+              customStyle: {
+                ...(p.customStyle || {}),
+                ...updates,
+                isCustomized: true,
+              },
+            };
+          }
+          return p;
+        });
         const nextPageStyles = {
           ...(campaign.pageStyles || {}),
           [activePage]: {
@@ -260,17 +275,120 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
             ...updates,
           },
         };
-        recordChange(products, { ...campaign, pageStyles: nextPageStyles });
+        recordChange(updated, { ...campaign, pageStyles: nextPageStyles });
       } else if (scope === "all") {
+        const updated = products.map((p) => ({
+          ...p,
+          customStyle: {
+            ...(p.customStyle || {}),
+            ...updates,
+            isCustomized: true,
+          },
+        }));
         const nextGlobalStyle: CampaignGlobalStyle = {
           ...(campaign.globalStyle || {}),
           ...updates,
         };
-        recordChange(products, { ...campaign, globalStyle: nextGlobalStyle });
+        recordChange(updated, { ...campaign, globalStyle: nextGlobalStyle });
+      } else if (scope === "text_type") {
+        const updated = products.map((p) => ({
+          ...p,
+          customStyle: {
+            ...(p.customStyle || {}),
+            ...updates,
+            isCustomized: true,
+          },
+        }));
+        recordChange(updated, campaign);
       }
     },
-    [scope, selectedProductId, products, campaign, activePage, recordChange]
+    [scope, selectedProductId, products, campaign, activePage, pageProducts, recordChange]
   );
+
+  // Duplicate product
+  const handleDuplicateProduct = useCallback(
+    (productId?: string) => {
+      const targetId = productId || selectedProductId;
+      if (!targetId) return;
+      const target = products.find((p) => p.id === targetId);
+      if (!target) return;
+
+      const duplicated: EncarteProduct = {
+        ...target,
+        id: `prod_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        name: `${target.name} (Cópia)`,
+        customStyle: target.customStyle ? { ...target.customStyle } : undefined,
+      };
+
+      const targetIdx = products.findIndex((p) => p.id === targetId);
+      const updated = [...products];
+      updated.splice(targetIdx + 1, 0, duplicated);
+
+      recordChange(updated, campaign);
+      setSelectedProductId(duplicated.id);
+      setSelectedElement("box");
+    },
+    [products, campaign, selectedProductId, recordChange]
+  );
+
+  // Delete product
+  const handleDeleteProduct = useCallback(
+    (productId?: string) => {
+      const targetId = productId || selectedProductId;
+      if (!targetId) return;
+
+      const updated = products.map((p) =>
+        p.id === targetId ? { ...p, included: false } : p
+      );
+      recordChange(updated, campaign);
+
+      const remaining = updated.filter((p) => p.included);
+      if (remaining.length > 0) {
+        setSelectedProductId(remaining[0].id);
+      } else {
+        setSelectedProductId(null);
+      }
+      setSelectedElement("box");
+    },
+    [products, campaign, selectedProductId, recordChange]
+  );
+
+  // Copy product
+  const handleCopyProduct = useCallback(
+    (productId?: string) => {
+      const targetId = productId || selectedProductId;
+      if (!targetId) return;
+      const target = products.find((p) => p.id === targetId);
+      if (target) {
+        clipboardProductRef.current = JSON.parse(JSON.stringify(target));
+      }
+    },
+    [products, selectedProductId]
+  );
+
+  // Paste product
+  const handlePasteProduct = useCallback(() => {
+    if (!clipboardProductRef.current) return;
+    const pasted: EncarteProduct = {
+      ...clipboardProductRef.current,
+      id: `prod_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      name: `${clipboardProductRef.current.name} (Colado)`,
+      included: true,
+    };
+
+    const targetStart = (activePage - 1) * perPage;
+    const targetProductAtStart = flyerProducts[targetStart];
+    const insertIdx = targetProductAtStart
+      ? products.findIndex((p) => p.id === targetProductAtStart.id)
+      : products.length;
+
+    const updated = [...products];
+    updated.splice(Math.max(0, insertIdx), 0, pasted);
+
+    recordChange(updated, campaign);
+    setSelectedProductId(pasted.id);
+    setSelectedElement("box");
+  }, [flyerProducts, activePage, perPage, products, campaign, recordChange]);
 
   // Update direct product data fields
   const handleUpdateProductData = (productId: string, updates: Partial<EncarteProduct>) => {
@@ -408,9 +526,23 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
     if (!selectedProductId) return;
 
     if (selectedElement === "image") {
+      const origW = currentBoundingBox?.width || 160;
+      const ratio = origW > 0 ? newBox.width / origW : 1.0;
+      const currentScale = currentCustom.photoScale ?? currentCustom.imageScale ?? 1.0;
+      const newScale = Math.max(0.4, Math.min(2.5, Number((currentScale * ratio).toFixed(2))));
+
+      const dx = currentBoundingBox ? newBox.x - currentBoundingBox.x : 0;
+      const dy = currentBoundingBox ? newBox.y - currentBoundingBox.y : 0;
+      const currentOffX = currentCustom.photoOffsetX ?? currentCustom.imageOffsetX ?? 0;
+      const currentOffY = currentCustom.photoOffsetY ?? currentCustom.imageOffsetY ?? 0;
+
       updateCustomStyle({
-        photoWidth: Math.round(newBox.width),
-        photoHeight: Math.round(newBox.height),
+        photoScale: newScale,
+        imageScale: newScale,
+        photoOffsetX: Math.round(currentOffX + dx),
+        photoOffsetY: Math.round(currentOffY + dy),
+        imageOffsetX: Math.round(currentOffX + dx),
+        imageOffsetY: Math.round(currentOffY + dy),
         photoRotation: newBox.rotation,
       });
     } else if (selectedElement === "price") {
@@ -504,10 +636,31 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
         }));
         setSelectedTargets(allTargets);
       }
-      // Deselect all: Ctrl+D or Esc
-      else if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") || e.key === "Escape") {
+      // Duplicate: Ctrl+D
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        handleDuplicateProduct();
+      }
+      // Copy: Ctrl+C
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        handleCopyProduct();
+      }
+      // Paste: Ctrl+V
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
+        e.preventDefault();
+        handlePasteProduct();
+      }
+      // Delete: Delete or Backspace
+      else if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        handleDeleteProduct();
+      }
+      // Deselect all: Esc
+      else if (e.key === "Escape") {
         e.preventDefault();
         setSelectedTargets([]);
+        setSelectedProductId(null);
         setSelectedElement(null);
       }
       // Arrow keys (1px or 10px with Shift)
@@ -561,6 +714,10 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
     selectedProductId,
     currentCustom,
     updateCustomStyle,
+    handleDuplicateProduct,
+    handleDeleteProduct,
+    handleCopyProduct,
+    handlePasteProduct,
   ]);
 
   // Mouse wheel zoom centered on cursor
@@ -1223,6 +1380,9 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
             onUpdateStyle={updateCustomStyle}
             onUpdateProductData={handleUpdateProductData}
             onResetStyle={handleResetProduct}
+            onDuplicateProduct={handleDuplicateProduct}
+            onDeleteProduct={handleDeleteProduct}
+            onCopyProduct={handleCopyProduct}
             onAlignElements={(type) => {
               if (type === "left") updateCustomStyle({ nameTextAlign: "left" });
               if (type === "center") updateCustomStyle({ nameTextAlign: "center" });
