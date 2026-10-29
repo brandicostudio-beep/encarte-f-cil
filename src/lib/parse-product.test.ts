@@ -397,4 +397,32 @@ describe("encarte-helpers", () => {
     expect(isDateExpired("01/01/2020")).toBe(true);
     expect(isDateExpired("01/01/2099")).toBe(false);
   });
+
+  it("extrai corretamente informações de página de produto (nome, preço, foto, embalagem)", () => {
+    const htmlSample = `
+      <html>
+        <head>
+          <meta property="og:title" content="Café Pilão Tradicional 500g" />
+          <meta property="og:image" content="https://loja.com.br/fotos/cafe-pilao-500g.jpg" />
+          <meta property="og:price:amount" content="16.90" />
+        </head>
+        <body>
+          <h1 class="product-name">Café Pilão Tradicional 500g</h1>
+          <span class="price">R$ 16,90</span>
+          <div class="embalagem">1X500 GR</div>
+        </body>
+      </html>
+    `;
+    const parsed = parseProductHtml(htmlSample, "https://loja.com.br/produto/12345");
+    expect(parsed.name).toContain("Café Pilão Tradicional 500g");
+    expect(parsed.price).toBe("16,90");
+    expect(parsed.imageUrl).toBe("https://loja.com.br/fotos/cafe-pilao-500g.jpg");
+
+    // Derivação automática de embalagem e unidade a partir do nome/descrição
+    const pack = parsePackaging(parsed.name);
+    expect(pack?.unidadeMedida).toBe("GR");
+    expect(pack?.label).toBe("500 GR");
+    const unitDeriv = deriveSaleUnit(pack?.label, undefined, parsed.name);
+    expect(unitDeriv.unit).toBe("UND");
+  });
 });

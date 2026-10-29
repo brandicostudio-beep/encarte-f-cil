@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { getClientSession, clearClientSession } from "@/lib/auth-constants";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { extractCategoryProducts } from "@/lib/product.functions";
+import { extractCategoryProducts, extractProduct } from "@/lib/product.functions";
 import type {
   EncarteProduct,
   StoreConfig,
@@ -91,6 +91,10 @@ import {
   Trash2,
   AlertCircle,
   LogOut,
+  Link2,
+  Loader2,
+  Globe,
+  Copy,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -249,7 +253,12 @@ function EncarteApp() {
     stock: "",
     badge: "nenhum" as BadgeType,
     image: "",
+    productUrl: "",
   });
+  const [productUrlInput, setProductUrlInput] = useState("");
+  const [isFetchingUrl, setIsFetchingUrl] = useState(false);
+  const [fetchUrlError, setFetchUrlError] = useState<string | null>(null);
+  const [fetchUrlSuccess, setFetchUrlSuccess] = useState<string | null>(null);
 
   // Carregar dados salvos no localStorage com sanitização defensiva e retrocompatibilidade
   useEffect(() => {
@@ -836,21 +845,93 @@ function EncarteApp() {
     updateProductsState(updated);
   };
 
+  const handleFetchProductFromUrl = async () => {
+    const urlToFetch = productUrlInput.trim();
+    if (!urlToFetch) {
+      setFetchUrlError("Insira um link válido do produto.");
+      return;
+    }
+    if (!/^https?:\/\//i.test(urlToFetch)) {
+      setFetchUrlError("O link precisa começar com http:// ou https://");
+      return;
+    }
+
+    setIsFetchingUrl(true);
+    setFetchUrlError(null);
+    setFetchUrlSuccess(null);
+
+    try {
+      const res = await extractProduct({ data: { url: urlToFetch } });
+      if (!res.ok) {
+        setFetchUrlError(res.error || "Não foi possível puxar os dados deste link.");
+        return;
+      }
+
+      const { product, warning } = res;
+      if (!product || (!product.name && !product.price && !product.image)) {
+        setFetchUrlError("Não encontramos dados suficientes no link. Preencha manualmente.");
+        return;
+      }
+
+      // Tentar extrair código da URL se o campo código estiver vazio
+      let inferredCode = newProd.code.trim();
+      if (!inferredCode) {
+        const codeMatch =
+          urlToFetch.match(/\b(?:p|produto|item|sku|cod|codigo|id)[/-_]?(\d+)\b/i) ||
+          urlToFetch.match(/-(\d+)(?:\.html|\/|\?|$)/) ||
+          urlToFetch.match(/\/(\d{3,8})(?:[/?#]|$)/);
+        if (codeMatch && codeMatch[1]) {
+          inferredCode = codeMatch[1];
+        }
+      }
+
+      const name = product.name ? product.name.trim().toUpperCase() : newProd.name;
+      const packaging = product.packaging || newProd.packaging || "1 UN";
+      const derivedUnit = deriveSaleUnit(packaging, newProd.unit, name);
+      const price = product.price ? formatPrice(product.price) : newProd.price;
+      const image = product.image || newProd.image;
+
+      setNewProd((prev) => ({
+        ...prev,
+        code: inferredCode || prev.code,
+        name,
+        packaging,
+        unit: derivedUnit.unit,
+        price,
+        image,
+        productUrl: urlToFetch,
+      }));
+
+      setFetchUrlSuccess("Dados e foto puxados com sucesso do link!");
+      if (warning) {
+        console.warn("Aviso ao puxar produto:", warning);
+      }
+    } catch (err) {
+      console.error("Erro ao puxar produto do link:", err);
+      setFetchUrlError("Erro de conexão ao acessar o link informado.");
+    } finally {
+      setIsFetchingUrl(false);
+    }
+  };
+
   const handleAddManualProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProd.name.trim()) return;
 
+    const derivedUnit = deriveSaleUnit(newProd.packaging, newProd.unit, newProd.name);
     const created: EncarteProduct = {
-      id: `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       code: newProd.code.trim() || String(products.length + 10001),
       name: newProd.name.trim().toUpperCase(),
       packaging: newProd.packaging.trim().toUpperCase() || "1 UN",
       validity: newProd.validity.trim(),
       price: formatPrice(newProd.price),
-      unit: newProd.unit.trim().toUpperCase() || "UND",
-      stock: newProd.stock.trim() ? evaluateStockExpression(newProd.stock.trim(), newProd.unit) : "",
+      unit: derivedUnit.unit,
+      unitConfirmed: true,
+      stock: newProd.stock.trim() ? evaluateStockExpression(newProd.stock.trim(), derivedUnit.unit) : "",
       badge: newProd.badge,
       image: newProd.image.trim(),
+      productUrl: newProd.productUrl || "",
       included: true,
     };
 
@@ -865,7 +946,11 @@ function EncarteApp() {
       stock: "",
       badge: "nenhum",
       image: "",
+      productUrl: "",
     });
+    setProductUrlInput("");
+    setFetchUrlError(null);
+    setFetchUrlSuccess(null);
     setAddManualOpen(false);
   };
 
@@ -2265,17 +2350,112 @@ function EncarteApp() {
 
       {/* 4. Cadastro Manual de Produto */}
       <Dialog open={addManualOpen} onOpenChange={setAddManualOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base font-bold">
               Cadastrar Produto Manualmente
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Preencha código, descrição e dados para adicionar à lista.
+              Preencha código, descrição e dados, ou cole o link do produto para puxar as informações automaticamente.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleAddManualProduct} className="space-y-3 py-2">
+          {/* Opção de Puxar Dados por Link / URL */}
+          <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 space-y-2 mt-1">
+            <div className="flex items-center justify-between">
+              <label htmlFor="productLinkInput" className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                <Link2 className="h-3.5 w-3.5 text-blue-600" />
+                Puxar dados por link da loja / produto
+              </label>
+              <span className="text-[10px] text-blue-700 font-medium">Opcional</span>
+            </div>
+
+            <div className="flex gap-2">
+              <Input
+                id="productLinkInput"
+                type="url"
+                placeholder="Cole o link do produto (ex: https://loja.com/produto/...)"
+                value={productUrlInput}
+                onChange={(e) => {
+                  setProductUrlInput(e.target.value);
+                  setFetchUrlError(null);
+                  setFetchUrlSuccess(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleFetchProductFromUrl();
+                  }
+                }}
+                disabled={isFetchingUrl}
+                className="text-xs h-9 bg-white border-blue-300 focus-visible:ring-blue-500"
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={isFetchingUrl || !productUrlInput.trim()}
+                onClick={handleFetchProductFromUrl}
+                className="min-h-[36px] bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shrink-0 shadow-2xs"
+              >
+                {isFetchingUrl ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    Puxando...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-3.5 w-3.5 mr-1.5" />
+                    Puxar Dados
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {fetchUrlSuccess && (
+              <div className="flex items-center gap-1.5 text-[11px] text-emerald-800 font-semibold bg-emerald-50 border border-emerald-300 rounded px-2.5 py-1">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <span>{fetchUrlSuccess}</span>
+              </div>
+            )}
+
+            {fetchUrlError && (
+              <div className="flex items-center gap-1.5 text-[11px] text-red-800 font-medium bg-red-50 border border-red-300 rounded px-2.5 py-1">
+                <AlertCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />
+                <span>{fetchUrlError}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Miniatura da foto se tiver sido puxada ou inserida */}
+          {newProd.image && (
+            <div className="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 p-2.5 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <img
+                  src={newProd.image}
+                  alt="Foto do produto"
+                  className="h-11 w-11 object-contain rounded-md border bg-white p-0.5 shadow-2xs"
+                />
+                <div>
+                  <p className="text-xs font-bold text-neutral-800 flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                    Foto vinculada com sucesso
+                  </p>
+                  <p className="text-[10px] text-neutral-500">Pronta para o encarte</p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 h-8 font-medium"
+                onClick={() => setNewProd((prev) => ({ ...prev, image: "" }))}
+              >
+                Remover Foto
+              </Button>
+            </div>
+          )}
+
+          <form onSubmit={handleAddManualProduct} className="space-y-3 pt-1">
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs font-semibold">Código (Texto)</label>
@@ -2312,9 +2492,9 @@ function EncarteApp() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs font-semibold">Preço (R$)</label>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2">
+                <label className="text-xs font-semibold">Preço de Venda (R$)</label>
                 <Input
                   placeholder="Ex: 14,90"
                   value={newProd.price}
@@ -2323,6 +2503,25 @@ function EncarteApp() {
                   }
                 />
               </div>
+              <div>
+                <label className="text-xs font-semibold">Medida</label>
+                <select
+                  value={newProd.unit}
+                  onChange={(e) =>
+                    setNewProd({ ...newProd, unit: e.target.value })
+                  }
+                  className="w-full rounded-md border bg-white px-2 py-2 text-xs font-semibold"
+                >
+                  <option value="UND">UND</option>
+                  <option value="CX">CX</option>
+                  <option value="PCT">PCT</option>
+                  <option value="FD">FD</option>
+                  <option value="DISP">DISP</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs font-semibold">Validade</label>
                 <Input
@@ -2333,9 +2532,6 @@ function EncarteApp() {
                   }
                 />
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs font-semibold">Estoque (Opcional)</label>
                 <Input
@@ -2354,21 +2550,22 @@ function EncarteApp() {
                   }}
                 />
               </div>
-              <div>
-                <label className="text-xs font-semibold">Selo</label>
-                <select
-                  value={newProd.badge}
-                  onChange={(e) =>
-                    setNewProd({ ...newProd, badge: e.target.value as BadgeType })
-                  }
-                  className="w-full rounded-md border bg-white px-2 py-2 text-xs"
-                >
-                  <option value="nenhum">Sem selo</option>
-                  <option value="oferta">OFERTA</option>
-                  <option value="leve">LEVE JÁ</option>
-                  <option value="imperdivel">IMPERDÍVEL</option>
-                </select>
-              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold">Selo Promocional</label>
+              <select
+                value={newProd.badge}
+                onChange={(e) =>
+                  setNewProd({ ...newProd, badge: e.target.value as BadgeType })
+                }
+                className="w-full rounded-md border bg-white px-2 py-2 text-xs"
+              >
+                <option value="nenhum">Sem selo</option>
+                <option value="oferta">OFERTA</option>
+                <option value="leve">LEVE JÁ</option>
+                <option value="imperdivel">IMPERDÍVEL</option>
+              </select>
             </div>
 
             <DialogFooter className="pt-2">
@@ -2379,7 +2576,9 @@ function EncarteApp() {
               >
                 Cancelar
               </Button>
-              <Button type="submit">Cadastrar</Button>
+              <Button type="submit" className="bg-red-600 hover:bg-red-700 text-white font-bold">
+                Cadastrar
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

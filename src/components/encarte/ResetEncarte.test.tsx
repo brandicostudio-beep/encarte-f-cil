@@ -116,4 +116,32 @@ describe("Novo Encarte e Zerar Dados (ResetEncarte)", () => {
       );
     }).not.toThrow();
   });
+  it("Todos os ícones e elementos JSX da rota index estão devidamente importados sem ReferenceError", () => {
+    const fs = require("fs");
+    const LucideIcons = require("lucide-react");
+    const code = fs.readFileSync("src/routes/index.tsx", "utf-8");
+
+    const tags = new Set([...code.matchAll(/<([A-Z][A-Za-z0-9_]*)/g)].map((m: any) => m[1]));
+    const imported = new Set();
+    const re = /import\s+\{([^}]+)\}\s+from\s+["']lucide-react["']/g;
+    let m;
+    while ((m = re.exec(code)) !== null) {
+      m[1].split(",").forEach((id: string) => {
+        const clean = id.trim().split(/\s+as\s+/)[0].trim();
+        if (clean) imported.add(clean);
+      });
+    }
+
+    const missingIcons: string[] = [];
+    for (const tag of tags) {
+      if (LucideIcons[tag] && !imported.has(tag)) {
+        const isLocal = new RegExp(`(?:const|function|class)\\s+${tag}\\b`).test(code);
+        if (!isLocal) {
+          missingIcons.push(tag);
+        }
+      }
+    }
+
+    expect(missingIcons).toEqual([]);
+  });
 });
