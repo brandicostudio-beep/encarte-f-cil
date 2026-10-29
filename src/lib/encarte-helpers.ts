@@ -81,43 +81,252 @@ export function sortProductsByValidityAsc<T extends { validity?: string; code?: 
   });
 }
 
+export interface ParsedSpreadsheetItem {
+  code: string;
+  price: string;
+  productName?: string;
+}
+
 /**
- * Processa texto copiado de planilha (Excel / Google Sheets) com colunas [código, preço].
+ * Processa texto colado de planilha (Excel / Google Sheets) ou copiado
+ * diretamente do site da Cescom (blocos com código, embalagem e preço).
  */
-export function parseSpreadsheetPrices(rawText: string): { code: string; price: string }[] {
-  if (!rawText) return [];
-  const lines = rawText.split(/\r?\n/);
-  const results: { code: string; price: string }[] = [];
+export function parseSpreadsheetPrices(rawText: string): ParsedSpreadsheetItem[] {
+  if (!rawText || !rawText.trim()) return [];
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
+  const rawLines = rawText.split(/\r?\n/).map((l) => l.trim());
+  const nonEmptyLines = rawLines.filter(Boolean);
+  if (nonEmptyLines.length === 0) return [];
 
-    // Detectar separador (Tab, Ponto e vírgula, Vírgula se houver padrão código,preço, ou barra vertical)
-    let parts: string[] = [];
-    if (trimmed.includes("\t")) {
-      parts = trimmed.split("\t");
-    } else if (trimmed.includes(";")) {
-      parts = trimmed.split(";");
-    } else if (trimmed.includes("|")) {
-      parts = trimmed.split("|");
-    } else {
-      // Tentar separar por espaço ou vírgula
-      const match = trimmed.match(/^([A-Za-z0-9_-]+)[\s,]+(.+)$/);
-      if (match) {
-        parts = [match[1] ?? "", match[2] ?? ""];
-      } else {
-        parts = [trimmed];
+  // 1. Verificar se é texto copiado do site da Cescom (possui "Código:", "Cód:", ou blocos verticais)
+  const hasCescomPatterns = nonEmptyLines.some(
+    (l) =>
+      /(?:código|cód|cod)[:.\s]+\d{3,8}\b/i.test(l) ||
+      /\b(?:pacote|fardo|caixa|display|unidade)\s*\d*\)\s*.*[-–—]\s*R\$/i.test(l) ||
+      (/^validade[:\s]/i.test(l) && nonEmptyLines.some((l2) => /^r\$\s*[\d.,]+/i.test(l2)))
+  );
+
+  if (hasCescomPatterns) {
+    return parseCescomTextBlocks(rawLines);
+  }
+
+  // 2. Formato tabular (Excel, Sheets, CSV, linhas separadas por tab, ponto-e-vírgula ou pipe)
+  const isTabular = nonEmptyLines.some(
+    (l) => l.includes("\t") || l.includes(";") || (l.includes("|") && !l.includes("R$"))
+  );
+
+  if (isTabular) {
+    const results: ParsedSpreadsheetItem[] = [];
+    const seenCodes = new Set<string>();
+
+    for (const line of nonEmptyLines) {
+      let parts: string[] = [];
+      if (line.includes("\t")) parts = line.split("\t");
+      else if (line.includes(";")) parts = line.split(";");
+      else if (line.includes("|")) parts = line.split("|");
+
+      parts = parts.map((p) => p.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        let code = "";
+        let price = "";
+        let name = "";
+
+        // Tentar identificar código, preço e nome em qualquer coluna
+        for (let i = 0; i < parts.length; i++) {
+          const col = parts[i];
+          const cleanCol = col.replace(/^['"#]+/, "").trim();
+
+          // Código
+          if (!code && /^\d{3,8}$/.test(cleanCol)) {
+            code = cleanCol;
+          } else if (!code && /^(?:cod|cód|item|sku)[:.\s]*(\d+)/i.test(col)) {
+            code = col.match(/^(?:cod|cód|item|sku)[:.\s]*(\d+)/i)![1];
+          }
+          // Preço (contém R$, formato monetário ou número decimal)
+          else if (
+            !price &&
+            (col.includes("R$") || /^\d+[.,]\d{2}$/.test(col) || (/^\d+$/.test(col) && i > 0 && i === parts.length - 1))
+          ) {
+            const formatted = formatPrice(col);
+            if (formatted) price = formatted;
+          }
+          // Nome do produto (texto sem cifrão, maior que 3 caracteres)
+          else if (!name && col.length > 3 && !col.includes("R$") && !/^\d+$/.test(col)) {
+            name = col;
+          }
+        }
+
+        // Fallbacks posicionais caso não tenha identificado por padrão
+        if (!code && parts[0]) {
+          const fallbackCode = parts[0].replace(/^['"#]+/, "").trim();
+          if (/^\d+$/.test(fallbackCode)) code = fallbackCode;
+        }
+        if (!price && parts[parts.length - 1]) {
+          const formatted = formatPrice(parts[parts.length - 1]);
+          if (formatted) price = formatted;
+        }
+
+        // Ignorar linha de cabeçalho
+        if (code && price && code.toLowerCase() !== "codigo" && code.toLowerCase() !== "cod") {
+          const key = code.toLowerCase();
+          if (!seenCodes.has(key)) {
+            seenCodes.add(key);
+            const item: ParsedSpreadsheetItem = { code, price };
+            if (name) item.productName = name;
+            results.push(item);
+          }
+        }
       }
     }
 
-    if (parts.length >= 2) {
-      const code = (parts[0] ?? "").trim().replace(/^['"#]+/, "");
-      // O preço pode ser a segunda parte ou conter caracteres monetários
-      const rawPrice = (parts[1] ?? "").trim();
-      const formatted = formatPrice(rawPrice);
-      if (code && formatted) {
-        results.push({ code, price: formatted });
+    if (results.length > 0) return results;
+  }
+
+  // 3. Fallback linha a linha simples: código espaço preço ou hífen
+  const simpleResults: ParsedSpreadsheetItem[] = [];
+  const seen = new Set<string>();
+
+  for (const line of nonEmptyLines) {
+    const match = line.match(/^([A-Za-z0-9_-]+)[\s,–—-]+(?:R\$\s*)?([\d.,]+)$/);
+    if (match && match[1] && match[2]) {
+      const code = match[1].replace(/^['"#]+/, "").trim();
+      const formatted = formatPrice(match[2]);
+      if (code && formatted && /^\d{3,8}$/.test(code)) {
+        const key = code.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          simpleResults.push({ code, price: formatted });
+        }
+      }
+    }
+  }
+
+  if (simpleResults.length > 0) return simpleResults;
+
+  // 4. Se ainda não retornou, tentar análise estruturada de blocos Cescom
+  return parseCescomTextBlocks(rawLines);
+}
+
+/**
+ * Analisa blocos de texto multilinha copiados do site da Cescom.
+ * Regras estritas:
+ * - O preço é o R$ grande ao lado da primeira embalagem (ex: 23396 = R$ 23,26, 19559 = R$ 6,75).
+ * - Linhas "Unidade: R$ X" soltas NÃO são usadas como preço.
+ * - Produtos com uma única embalagem (ex: 21620, 11793) são lidos corretamente.
+ * - Códigos repetidos são deduplicados.
+ */
+function parseCescomTextBlocks(lines: string[]): ParsedSpreadsheetItem[] {
+  const results: ParsedSpreadsheetItem[] = [];
+  const seenCodes = new Set<string>();
+
+  // Encontrar onde cada produto é marcado pelo código
+  const codeIndices: { index: number; code: string }[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const codeMatch = line.match(/(?:código|cód|cod|item|sku)[:.\s]+(\d{3,8})\b/i);
+    if (codeMatch && codeMatch[1]) {
+      codeIndices.push({ index: i, code: codeMatch[1] });
+    }
+  }
+
+  // Se não achou "Código: XXX", procurar linhas de código isolado
+  if (codeIndices.length === 0) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^\d{4,8}$/.test(line)) {
+        codeIndices.push({ index: i, code: line });
+      }
+    }
+  }
+
+  if (codeIndices.length === 0) return [];
+
+  for (let c = 0; c < codeIndices.length; c++) {
+    const current = codeIndices[c];
+    const nextIndex = c + 1 < codeIndices.length ? codeIndices[c + 1].index : lines.length;
+    const prevIndex = c > 0 ? codeIndices[c - 1].index : 0;
+
+    // Linhas antes do código para extrair o Nome do Produto
+    const linesBefore = lines
+      .slice(prevIndex === 0 && c === 0 ? 0 : Math.max(0, current.index - 5), current.index)
+      .filter(Boolean);
+
+    let productName = "";
+    for (let j = linesBefore.length - 1; j >= 0; j--) {
+      const lb = linesBefore[j];
+      if (/^validade/i.test(lb) || /^ean/i.test(lb) || /^c[oó]d/i.test(lb) || lb.includes("R$")) continue;
+      if (lb.length >= 3 && !lb.startsWith("http")) {
+        productName = lb;
+        break;
+      }
+    }
+
+    // Linhas a partir do código até o próximo produto
+    const blockLines = lines.slice(current.index, nextIndex);
+
+    let price = "";
+
+    // Passo 1: Verificar se há opção de embalagem com " - R$ " (ex.: "(PACOTE 1) 1X24 UNID - R$ 23,26")
+    for (const bl of blockLines) {
+      // REGRA: Linhas "Unidade: R$ X" soltas NÃO são usadas como preço
+      if (/^unidade:\s*r\$/i.test(bl) || /^preço\s+por\s+unidade/i.test(bl) || /^por\s+unidade/i.test(bl)) {
+        continue;
+      }
+
+      const embalagemMatch =
+        bl.match(/[-–—]\s*R\$\s*([\d.,]+)/i) ||
+        bl.match(/\b(?:\d+X\d+\s*(?:GR|G|KG|ML|L|UNID|UN))\s*[-–—]\s*R\$\s*([\d.,]+)/i);
+
+      if (embalagemMatch && embalagemMatch[1]) {
+        const formatted = formatPrice(embalagemMatch[1]);
+        if (formatted) {
+          price = formatted;
+          break; // O preço é da PRIMEIRA embalagem!
+        }
+      }
+    }
+
+    // Passo 2: Se não encontrou na linha de embalagem, procurar linha com R$ grande
+    if (!price) {
+      for (const bl of blockLines) {
+        // REGRA: Ignorar linhas "Unidade: R$ X"
+        if (/^unidade:\s*r\$/i.test(bl) || /^preço\s+por\s+unidade/i.test(bl) || /por\s+unidade/i.test(bl)) {
+          continue;
+        }
+
+        const bigPriceMatch = bl.match(/^R\$\s*([\d.,]+)$/i) || bl.match(/\bR\$\s*([\d.,]+)\b/i);
+        if (bigPriceMatch && bigPriceMatch[1]) {
+          const formatted = formatPrice(bigPriceMatch[1]);
+          if (formatted) {
+            price = formatted;
+            break;
+          }
+        }
+      }
+    }
+
+    // Passo 3: Produto com única embalagem ou valor numérico decimal isolado
+    if (!price) {
+      for (const bl of blockLines) {
+        if (/^unidade/i.test(bl) || /^ean/i.test(bl) || /^validade/i.test(bl) || /^c[oó]d/i.test(bl)) continue;
+        if (/^\d{1,4}[.,]\d{2}$/.test(bl)) {
+          const formatted = formatPrice(bl);
+          if (formatted) {
+            price = formatted;
+            break;
+          }
+        }
+      }
+    }
+
+    // Salvar produto se tiver código e preço válidos
+    if (current.code && price) {
+      const codeKey = current.code.toLowerCase();
+      if (!seenCodes.has(codeKey)) {
+        seenCodes.add(codeKey);
+        const item: ParsedSpreadsheetItem = { code: current.code, price };
+        if (productName) item.productName = productName;
+        results.push(item);
       }
     }
   }
