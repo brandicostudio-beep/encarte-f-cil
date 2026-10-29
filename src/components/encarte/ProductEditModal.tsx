@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { EncarteProduct, BadgeType } from "@/types/encarte";
 import { BADGE_LABELS } from "@/types/encarte";
-import { formatPrice, parsePackaging, deriveSaleUnit } from "@/lib/parse-product";
+import { formatPrice, parsePackaging, deriveSaleUnit, SALE_UNITS } from "@/lib/parse-product";
 import { Package, Upload, Trash2, Scissors, ZoomIn, ZoomOut, RotateCcw, Layers } from "lucide-react";
 import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
 
@@ -35,7 +35,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
           ...product,
           unit: product.unit
             ? product.unit.trim().toUpperCase()
-            : deriveSaleUnit(product.packaging).unit,
+            : deriveSaleUnit(product.packaging, undefined, product.name, product.unitConfirmed).unit,
         }
       : null
   );
@@ -52,7 +52,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
             ...product,
             unit: product.unit
               ? product.unit.trim().toUpperCase()
-              : deriveSaleUnit(product.packaging).unit,
+              : deriveSaleUnit(product.packaging, undefined, product.name, product.unitConfirmed).unit,
           }
         : null
     );
@@ -64,7 +64,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
         ...product,
         unit: product.unit
           ? product.unit.trim().toUpperCase()
-          : deriveSaleUnit(product.packaging).unit,
+          : deriveSaleUnit(product.packaging, undefined, product.name, product.unitConfirmed).unit,
       });
     }
   }, [product]);
@@ -169,7 +169,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                 value={form.packaging || ""}
                 onChange={(e) => {
                   const newPack = e.target.value;
-                  const suggested = deriveSaleUnit(newPack).unit;
+                  const suggested = deriveSaleUnit(newPack, undefined, form.name).unit;
                   setForm({
                     ...form,
                     packaging: newPack,
@@ -208,15 +208,38 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               />
             </div>
             <div>
-              <Label htmlFor="unit">Unidade de Venda</Label>
+              <div className="flex items-center justify-between mb-1">
+                <Label htmlFor="unit">Unidade de Medida</Label>
+                <span className="text-[10px] text-muted-foreground font-semibold">5 medidas</span>
+              </div>
+              <div className="flex items-center gap-1 mb-2 flex-wrap">
+                {SALE_UNITS.map((u) => {
+                  const isSelected = form.unit === u.value;
+                  return (
+                    <button
+                      key={u.value}
+                      type="button"
+                      onClick={() => setForm({ ...form, unit: u.value, unitConfirmed: true })}
+                      className={`px-2 py-1 text-xs rounded-md font-bold transition-all ${
+                        isSelected
+                          ? "bg-red-600 text-white shadow-xs"
+                          : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200 border border-neutral-300"
+                      }`}
+                      title={u.fullLabel}
+                    >
+                      {u.label}
+                    </button>
+                  );
+                })}
+              </div>
               <Input
                 id="unit"
                 value={form.unit || ""}
-                onChange={(e) => setForm({ ...form, unit: e.target.value.toUpperCase() })}
-                placeholder="Ex: UND, CX, PCT"
+                onChange={(e) => setForm({ ...form, unit: e.target.value.toUpperCase(), unitConfirmed: true })}
+                placeholder="Ex: UND, CX, PCT, FD, DISP"
               />
               <p className="text-[11px] text-muted-foreground mt-1">
-                Sugerido pela embalagem ({deriveSaleUnit(form.packaging).unit}). Pode ser corrigido manualmente.
+                Sugerido: {deriveSaleUnit(form.packaging, undefined, form.name).unit}. As 5 medidas suportadas: Unidade (UND), Caixa (CX), Pacote (PCT), Fardo (FD) e Display (DISP).
               </p>
             </div>
           </div>

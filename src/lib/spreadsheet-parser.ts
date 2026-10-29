@@ -115,7 +115,14 @@ export function resolveSpreadsheetHeaders(headerKeys: string[]): {
     return n === "dtval" || n.includes("validade") || n.includes("vencimento") || n === "val" || n.includes("dtvenc");
   });
 
-  return { codeKey, nameKey, packagingKey, stockKey, priceKey, validityKey };
+  // 7. Unidade explícita se houver na planilha (ex: UN, UND, UNIDADE, MEDIDA)
+  const unitKey = headerKeys.find((k) => {
+    const n = normalizeHeader(k);
+    if (n.includes("preco") || n.includes("valor") || n.includes("total")) return false;
+    return n === "un" || n === "und" || n === "unidade" || n === "medida" || n === "unid" || n === "un_medida";
+  });
+
+  return { codeKey, nameKey, packagingKey, stockKey, priceKey, validityKey, unitKey };
 }
 
 /**
@@ -215,7 +222,7 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
   // Identificar mapeamento de colunas com regras semânticas estritas
   const sampleRow = rows[0] || {};
   const headerKeys = Object.keys(sampleRow);
-  const { codeKey, nameKey, packagingKey, stockKey, priceKey, validityKey } = resolveSpreadsheetHeaders(headerKeys);
+  const { codeKey, nameKey, packagingKey, stockKey, priceKey, validityKey, unitKey } = resolveSpreadsheetHeaders(headerKeys);
 
   const validProducts: EncarteProduct[] = [];
   const errors: { line: number; message: string; raw?: any }[] = [];
@@ -283,6 +290,9 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
     // Preço de venda formatado em moeda (ex: "3" -> "3,00", "24,9" -> "24,90", "4,27" -> "4,27")
     const rawPrice = priceKey ? formatPrice(row[priceKey]) : "";
 
+    const rawUnit = unitKey ? String(row[unitKey] || "").trim() : undefined;
+    const derived = deriveSaleUnit(packaging, rawUnit, name);
+
     validProducts.push({
       id: `prod-${code}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       code,
@@ -290,7 +300,8 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
       packaging: packaging || "",
       validity: validity || "",
       price: rawPrice || "",
-      unit: deriveSaleUnit(packaging, undefined, name).unit,
+      unit: derived.unit,
+      unitConfirmed: Boolean(rawUnit),
       stock,
       badge: "nenhum",
       image: "",

@@ -198,7 +198,7 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
   const effectivePriceFontSize = cs.priceFontSize || ps.priceFontSize || gs.priceFontSize || defaultPriceFontSize;
 
   // 4. Unidade de venda derivada da primeira palavra da embalagem (ex: CX, PCT, UND, FD)
-  const unitLabel = deriveSaleUnit(product?.packaging, product?.unit).unit;
+  const unitLabel = deriveSaleUnit(product?.packaging, product?.unit, product?.name, product?.unitConfirmed).unit;
 
   // 4. Validade e Estoque: se vazio, a faixa some e o espaço é redistribuído
   const validityText =

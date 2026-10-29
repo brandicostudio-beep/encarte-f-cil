@@ -294,8 +294,10 @@ function EncarteApp() {
             unit: deriveSaleUnit(
               String(p?.packaging ?? p?.embalagem ?? ""),
               p?.unit || p?.unidade,
-              String(p?.name ?? p?.nome ?? p?.descricao ?? "")
+              String(p?.name ?? p?.nome ?? p?.descricao ?? ""),
+              p?.unitConfirmed
             ).unit,
+            unitConfirmed: Boolean(p?.unitConfirmed),
             stock: String(p?.stock ?? p?.estoque ?? ""),
             badge: p?.badge || p?.selo || "nenhum",
             image: String(p?.image ?? p?.foto ?? p?.imageUrl ?? ""),
@@ -549,6 +551,13 @@ function EncarteApp() {
     updateProductsState(updated);
   };
 
+  const handleUnitChange = (id: string, newUnit: string) => {
+    const updated = products.map((p) =>
+      p.id === id ? { ...p, unit: newUnit, unitConfirmed: true } : p
+    );
+    updateProductsState(updated);
+  };
+
   const handleToggleIncluded = (id: string, included: boolean) => {
     const updated = products.map((p) =>
       p.id === id ? { ...p, included } : p
@@ -683,7 +692,7 @@ function EncarteApp() {
     } else if (activeIssueFilter === "missing_packaging") {
       result = result.filter((p) => !p?.packaging || String(p.packaging).trim() === "");
     } else if (activeIssueFilter === "missing_unit") {
-      result = result.filter((p) => !deriveSaleUnit(p?.packaging, p?.unit).hasUnitWord);
+      result = result.filter((p) => !p?.unitConfirmed && !deriveSaleUnit(p?.packaging, p?.unit, p?.name).hasUnitWord);
     } else if (activeIssueFilter === "expired") {
       result = result.filter((p) => isDateExpired(p?.validity || ""));
     } else if (activeIssueFilter === "excluded") {
@@ -1292,6 +1301,7 @@ function EncarteApp() {
                   <ReviewTable
                     products={filteredProducts}
                     onPriceChange={handlePriceChange}
+                    onUnitChange={handleUnitChange}
                     onToggleIncluded={handleToggleIncluded}
                     onEditProduct={(p) => setEditProduct(p)}
                     onDeleteProduct={handleDeleteProduct}

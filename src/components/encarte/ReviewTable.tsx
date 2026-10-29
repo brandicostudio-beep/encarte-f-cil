@@ -1,7 +1,7 @@
 import React, { useRef } from "react";
 import type { EncarteProduct } from "@/types/encarte";
 import { isDateExpired } from "@/lib/encarte-helpers";
-import { formatPrice, deriveSaleUnit } from "@/lib/parse-product";
+import { formatPrice, deriveSaleUnit, SALE_UNITS } from "@/lib/parse-product";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -18,6 +18,7 @@ import {
 interface ReviewTableProps {
   products: EncarteProduct[];
   onPriceChange: (id: string, price: string) => void;
+  onUnitChange?: (id: string, unit: string) => void;
   onToggleIncluded: (id: string, included: boolean) => void;
   onEditProduct: (product: EncarteProduct) => void;
   onDeleteProduct: (id: string) => void;
@@ -26,6 +27,7 @@ interface ReviewTableProps {
 export const ReviewTable: React.FC<ReviewTableProps> = ({
   products = [],
   onPriceChange,
+  onUnitChange,
   onToggleIncluded,
   onEditProduct,
   onDeleteProduct,
@@ -116,7 +118,7 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
               const hasPrice = Boolean(p?.price && String(p.price).trim() !== "");
               const hasPhoto = Boolean(p?.image && String(p.image).trim() !== "");
               const hasPackaging = Boolean(p?.packaging && String(p.packaging).trim() !== "");
-              const unitCheck = deriveSaleUnit(p?.packaging, p?.unit, p?.name);
+              const unitCheck = deriveSaleUnit(p?.packaging, p?.unit, p?.name, p?.unitConfirmed);
 
               // Diagnóstico de pendências com cor E texto explícito (Acessibilidade)
               const issues: { type: string; label: string; className: string }[] = [];
@@ -141,7 +143,7 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                   className: "bg-orange-100 text-orange-900 border-orange-300",
                 });
               }
-              if (!unitCheck.hasUnitWord) {
+              if (!unitCheck.hasUnitWord && !p?.unitConfirmed) {
                 issues.push({
                   type: "unit",
                   label: "Sem unidade",
@@ -355,18 +357,32 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                         onChange={(e) => onPriceChange(p.id, e.target.value)}
                         onBlur={(e) => handlePriceBlur(p.id, e.target.value)}
                         onKeyDown={(e) => handlePriceKeyDown(e, idx)}
-                        className={`w-full min-h-[44px] pl-8 pr-12 text-xs font-mono font-bold rounded-lg border transition-colors focus:outline-hidden focus:ring-2 ${
+                        className={`w-full min-h-[44px] pl-8 pr-16 text-xs font-mono font-bold rounded-lg border transition-colors focus:outline-hidden focus:ring-2 ${
                           !hasPrice
                             ? "bg-amber-50/80 border-amber-400 text-amber-950 placeholder:text-amber-500 focus:ring-amber-500"
                             : "bg-white border-neutral-300 text-neutral-900 focus:ring-red-600 focus:border-red-600"
                         }`}
                       />
-                      <span
-                        className="absolute right-2 top-1/2 -translate-y-1/2 font-mono font-bold text-[10px] text-neutral-600 uppercase pointer-events-none bg-neutral-100 px-1.5 py-0.5 rounded border border-neutral-200"
-                        title={`Unidade de venda: ${unitCheck.unit}`}
+                      <select
+                        aria-label={`Unidade de venda para ${p.name}`}
+                        value={unitCheck.unit}
+                        onChange={(e) => {
+                          const newU = e.target.value;
+                          if (onUnitChange) {
+                            onUnitChange(p.id, newU);
+                          } else {
+                            onEditProduct({ ...p, unit: newU, unitConfirmed: true });
+                          }
+                        }}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 font-mono font-bold text-[10px] text-neutral-800 uppercase bg-neutral-100 hover:bg-neutral-200 border border-neutral-300 rounded px-1.5 py-1 cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-red-600 transition-colors shadow-2xs"
+                        title="Alterar unidade de medida (UND, CX, PCT, FD, DISP)"
                       >
-                        {unitCheck.unit}
-                      </span>
+                        {SALE_UNITS.map((u) => (
+                          <option key={u.value} value={u.value}>
+                            {u.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </td>
 

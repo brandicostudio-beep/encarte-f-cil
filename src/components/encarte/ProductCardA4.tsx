@@ -25,7 +25,7 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
   const [reais, centavos] = String(product?.price || "0,00").replace(".", ",").split(",");
 
   // Unidade de venda derivada da embalagem
-  const saleUnit = deriveSaleUnit(product?.packaging, product?.unit).unit;
+  const saleUnit = deriveSaleUnit(product?.packaging, product?.unit, product?.name, product?.unitConfirmed).unit;
 
   // Cores institucionais
   const primaryColor = store?.primaryColor || DESIGN_TOKENS.colors.primary;

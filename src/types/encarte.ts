@@ -181,7 +181,8 @@ export interface EncarteProduct {
   packagingWeight?: string;   // ex: "320 GR", "1,01 KG"
   validity: string;        // Validade (ex: "15/11/2026")
   price: string;           // Preço no formato "4,99" (vazio inicialmente se não preenchido)
-  unit: string;            // "UND" ou "KG"
+  unit: string;            // "UND", "CX", "PCT", "FD", "DISP"
+  unitConfirmed?: boolean; // Se a unidade foi confirmada ou ajustada manualmente
   stock?: string;          // Estoque opcional (ex: "50 UND")
   badge: BadgeType;        // Selo opcional
   image: string;           // Data URL ou URL remota

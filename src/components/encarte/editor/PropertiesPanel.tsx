@@ -35,6 +35,7 @@ import {
   Crosshair,
 } from "lucide-react";
 import { EncarteProduct, ProductCustomStyle, CampaignGlobalStyle } from "@/types/encarte";
+import { SALE_UNITS } from "@/lib/parse-product";
 import { SelectedTarget, TargetElementType, ChangeScope, StylePreset } from "@/types/editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1362,11 +1363,31 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-[11px] text-muted-foreground">Unidade</Label>
+              <Label className="text-[11px] text-muted-foreground">Unidade de Medida</Label>
+              <div className="flex items-center gap-1 flex-wrap mb-1">
+                {SALE_UNITS.map((u) => {
+                  const isSelected = (product.unit || "UND") === u.value;
+                  return (
+                    <button
+                      key={u.value}
+                      type="button"
+                      onClick={() => onUpdateProductData(product.id, { unit: u.value, unitConfirmed: true })}
+                      className={`px-1.5 py-0.5 text-[10px] rounded font-bold transition-all ${
+                        isSelected
+                          ? "bg-red-600 text-white shadow-2xs"
+                          : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200 border border-neutral-300"
+                      }`}
+                      title={u.fullLabel}
+                    >
+                      {u.label}
+                    </button>
+                  );
+                })}
+              </div>
               <Input
                 value={product.unit || "UND"}
-                onChange={(e) => onUpdateProductData(product.id, { unit: e.target.value.toUpperCase() })}
-                className="h-8 text-xs uppercase"
+                onChange={(e) => onUpdateProductData(product.id, { unit: e.target.value.toUpperCase(), unitConfirmed: true })}
+                className="h-7 text-xs uppercase font-bold"
               />
             </div>
           </div>

@@ -8,6 +8,8 @@ import {
   getThumbnailFallbackUrl,
   parsePackaging,
   deriveSaleUnit,
+  SALE_UNITS,
+  normalizeSaleUnit,
 } from "./parse-product";
 import { parseSpreadsheetPrices, isDateExpired } from "./encarte-helpers";
 import type { CampaignConfig } from "@/types/encarte";
@@ -241,6 +243,50 @@ describe("Item 2 - Embalagem, unidade, pacote e gramatura", () => {
     expect(deriveSaleUnit("23 GR", "CX")).toEqual({ unit: "CX", hasUnitWord: false });
     expect(deriveSaleUnit("PACOTE 1X24", "KG")).toEqual({ unit: "KG", hasUnitWord: true });
   });
+  it("suporta as 5 medidas oficiais do varejo: Caixa, Pacote, Display, Unidade e Fardo", () => {
+    // 1. Constante oficial SALE_UNITS
+    const unitCodes = SALE_UNITS.map((u) => u.value);
+    expect(unitCodes).toEqual(["UND", "CX", "PCT", "FD", "DISP"]);
+
+    // 2. Normalização de variações para as 5 medidas canônicas
+    expect(normalizeSaleUnit("CAIXA")).toBe("CX");
+    expect(normalizeSaleUnit("CX")).toBe("CX");
+    expect(normalizeSaleUnit("PACOTE")).toBe("PCT");
+    expect(normalizeSaleUnit("PCT")).toBe("PCT");
+    expect(normalizeSaleUnit("PC")).toBe("PCT");
+    expect(normalizeSaleUnit("FARDO")).toBe("FD");
+    expect(normalizeSaleUnit("FD")).toBe("FD");
+    expect(normalizeSaleUnit("FRD")).toBe("FD");
+    expect(normalizeSaleUnit("DISPLAY")).toBe("DISP");
+    expect(normalizeSaleUnit("DISP")).toBe("DISP");
+    expect(normalizeSaleUnit("DSP")).toBe("DISP");
+    expect(normalizeSaleUnit("UNIDADE")).toBe("UND");
+    expect(normalizeSaleUnit("UNID")).toBe("UND");
+    expect(normalizeSaleUnit("UND")).toBe("UND");
+    expect(normalizeSaleUnit("UN")).toBe("UND");
+
+    // 3. Reconhecimento na embalagem
+    expect(deriveSaleUnit("DISPLAY 12X").unit).toBe("DISP");
+    expect(deriveSaleUnit("DISP 24 UN").unit).toBe("DISP");
+    expect(deriveSaleUnit("DSP 16 UNID").unit).toBe("DISP");
+    expect(deriveSaleUnit("FARDO 12X1L").unit).toBe("FD");
+    expect(deriveSaleUnit("FD 6X2L").unit).toBe("FD");
+    expect(deriveSaleUnit("PACOTE 500G").unit).toBe("PCT");
+    expect(deriveSaleUnit("CAIXA 20X500 GR").unit).toBe("CX");
+    expect(deriveSaleUnit("UNIDADE 1X153 GR").unit).toBe("UND");
+
+    // 4. Reconhecimento no nome do produto
+    expect(deriveSaleUnit("", undefined, "CHICLETE TRIDENT DISPLAY 12UN").unit).toBe("DISP");
+    expect(deriveSaleUnit("", undefined, "REFRIGERANTE COCA COLA FARDO C/ 6").unit).toBe("FD");
+    expect(deriveSaleUnit("", undefined, "BISCOITO DORI PACOTE 500G").unit).toBe("PCT");
+    expect(deriveSaleUnit("", undefined, "CUSCUZ MARATA 20X500 GR").unit).toBe("CX");
+
+    // 5. Unidade confirmada manualmente resolve pendência
+    expect(deriveSaleUnit("23 GR", "CX", undefined, true)).toEqual({ unit: "CX", hasUnitWord: true });
+    expect(deriveSaleUnit("23 GR", "DISP", undefined, true)).toEqual({ unit: "DISP", hasUnitWord: true });
+    expect(deriveSaleUnit("23 GR", "FD", undefined, true)).toEqual({ unit: "FD", hasUnitWord: true });
+  });
+
 });
 
 describe("Item 6 - Testes de Paginação e Layout A4", () => {

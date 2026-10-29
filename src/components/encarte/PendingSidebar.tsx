@@ -46,7 +46,7 @@ export const PendingSidebar: React.FC<PendingSidebarProps> = ({
   const missingPhoto = safeProducts.filter((p) => !p?.image || String(p.image).trim() === "");
   const ambiguousPhoto = safeProducts.filter((p) => Boolean(p?.alternativePhotos && p.alternativePhotos.length > 0));
   const missingPackaging = safeProducts.filter((p) => !p?.packaging || String(p.packaging).trim() === "");
-  const missingUnit = safeProducts.filter((p) => !deriveSaleUnit(p?.packaging, p?.unit).hasUnitWord);
+  const missingUnit = safeProducts.filter((p) => !p?.unitConfirmed && !deriveSaleUnit(p?.packaging, p?.unit, p?.name).hasUnitWord);
   const expired = safeProducts.filter((p) => isDateExpired(p?.validity || ""));
   const excluded = safeProducts.filter((p) => !p?.included);
 

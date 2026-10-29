@@ -51,36 +51,68 @@ export interface DerivedSaleUnit {
 }
 
 /**
- * Deriva a unidade de venda a partir da primeira palavra da embalagem do produto.
- * Mapeamento pela primeira palavra da embalagem:
- * - UNIDADE ou UNID → UND
+ * As 5 medidas oficiais do varejo: Caixa (CX), Pacote (PCT), Display (DISP), Unidade (UND) e Fardo (FD).
+ */
+export const SALE_UNITS = [
+  { value: "UND", label: "UND", fullName: "Unidade", fullLabel: "Unidade (UND)" },
+  { value: "CX", label: "CX", fullName: "Caixa", fullLabel: "Caixa (CX)" },
+  { value: "PCT", label: "PCT", fullName: "Pacote", fullLabel: "Pacote (PCT)" },
+  { value: "FD", label: "FD", fullName: "Fardo", fullLabel: "Fardo (FD)" },
+  { value: "DISP", label: "DISP", fullName: "Display", fullLabel: "Display (DISP)" },
+] as const;
+
+export type SaleUnitValue = (typeof SALE_UNITS)[number]["value"];
+
+/**
+ * Normaliza qualquer variação de texto para uma das 5 unidades canônicas ou mantém customizada.
+ */
+export function normalizeSaleUnit(unit?: string | null): string {
+  const u = (unit || "").trim().toUpperCase();
+  if (!u) return "UND";
+  if (/^CXA?$|^CAIXA$/.test(u)) return "CX";
+  if (/^PCTE?$|^PC$|^PACOTE$/.test(u)) return "PCT";
+  if (/^FD$|^FARDO$|^FRD$/.test(u)) return "FD";
+  if (/^DISP$|^DSP$|^DISPLAY$|^DP$/.test(u)) return "DISP";
+  if (/^UND?$|^UN$|^UNIDADE$|^UNID$/.test(u)) return "UND";
+  return u;
+}
+
+/**
+ * Deriva a unidade de venda a partir da embalagem e/ou do nome do produto.
+ * Suporta as 5 medidas oficiais: Caixa (CX), Pacote (PCT), Display (DISP), Unidade (UND) e Fardo (FD).
  * - CAIXA ou CX → CX
  * - PACOTE ou PCT → PCT
- * - Outras palavras (ex.: FARDO, BALDE, SACHÊ, BANDEJA, POTE, GARRAFA, LATA): usa a própria palavra abreviada em caixa alta.
- * Exemplos:
- * - "CAIXA 30X120 GR" → CX
- * - "PACOTE 1X24 UNID" → PCT
- * - "UNIDADE 1X110 ML" → UND
- * - "UNIDADE 1X1,01 KG" → UND
- * Se a embalagem não tiver palavra de unidade (ex.: "23 GR", "500G", "1X24"):
- * - Retorna unit: "UND" e hasUnitWord: false (para inclusão automática na lista de pendências).
- * Se explicitUnit for fornecido e editado pelo usuário, respeita a escolha manual.
+ * - DISPLAY, DISP ou DSP → DISP
+ * - UNIDADE ou UNID → UND
+ * - FARDO ou FD → FD
+ * - Multiplicador > 1X (ex.: "20X500 GR") → CX
+ * - Multiplicador 1X (ex.: "1X234 ML", "1X153 GR") → UND
+ * - Se manualUnit for fornecido e confirmado, respeita a escolha manual.
  */
 export function deriveSaleUnit(
   packaging?: string | null,
   explicitUnit?: string | null,
-  productName?: string | null
+  productName?: string | null,
+  unitConfirmed?: boolean
 ): DerivedSaleUnit {
   const cleanPack = (packaging || "").trim();
   const cleanName = (productName || "").trim();
-  const manualUnit = (explicitUnit || "").trim().toUpperCase();
+  const manualUnit = explicitUnit ? normalizeSaleUnit(explicitUnit) : "";
+
+  // Se o usuário confirmou manualmente a unidade (ex: select na tabela, modal ou painel)
+  if (unitConfirmed && manualUnit) {
+    return {
+      unit: manualUnit,
+      hasUnitWord: true,
+    };
+  }
 
   // 1. Se não há embalagem, tentar extrair padrão do nome se disponível
   let textToAnalyze = cleanPack;
   if (!textToAnalyze && cleanName) {
     const fromName =
       cleanName.match(/\b(\d+\s*[Xx]\s*[\d.,]+\s*(?:GR?|KG|ML|L|LT|UNID?|UN|G)?)\b/i) ||
-      cleanName.match(/\b(CAIXA|FARDO|PACOTE|UNIDADE|CX|FD|PCT|UND)\b/i);
+      cleanName.match(/\b(CAIXA|FARDO|PACOTE|DISPLAY|UNIDADE|CX|FD|PCT|DISP|DSP|UND)\b/i);
     if (fromName) {
       textToAnalyze = fromName[0];
     }
@@ -97,14 +129,17 @@ export function deriveSaleUnit(
   const stripped = textToAnalyze.replace(/^[([{\s]+/, "").trim();
   const firstWord = stripped.split(/[\s\-_/()[\]{}!?:;,.]+/)[0]?.toUpperCase() || "";
 
-  // 2. Palavras de unidade explícitas no início (ex.: "FARDO 9X24", "PACOTE 1X24", "CAIXA 12X1")
-  if (/^FARDO$|^FD$/.test(firstWord) || /\b(FARDO|FD)\b/i.test(stripped)) {
+  // 2. Palavras de unidade explícitas no início ou texto (ex.: "FARDO 9X24", "PACOTE 1X24", "CAIXA 12X1", "DISPLAY 12X")
+  if (/^FARDO$|^FD$|^FRD$/.test(firstWord) || /\b(FARDO|FD)\b/i.test(stripped) || /\b(FARDO)\b/i.test(cleanName)) {
     return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "FD", hasUnitWord: true };
   }
-  if (/^PACOTE$|^PCTE?$|^PC$|^PCT$/.test(firstWord) || /\b(PACOTE|PCT)\b/i.test(stripped)) {
+  if (/^DISPLAY$|^DISP$|^DSP$|^DP$/.test(firstWord) || /\b(DISPLAY|DISP|DSP)\b/i.test(stripped) || /\b(DISPLAY)\b/i.test(cleanName)) {
+    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "DISP", hasUnitWord: true };
+  }
+  if (/^PACOTE$|^PCTE?$|^PC$|^PCT$/.test(firstWord) || /\b(PACOTE|PCT)\b/i.test(stripped) || /\b(PACOTE)\b/i.test(cleanName)) {
     return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "PCT", hasUnitWord: true };
   }
-  if (/^CAIXA$|^CXA?$|^CX$/.test(firstWord) || /\b(CAIXA|CX)\b/i.test(stripped)) {
+  if (/^CAIXA$|^CXA?$|^CX$/.test(firstWord) || /\b(CAIXA|CX)\b/i.test(stripped) || /\b(CAIXA)\b/i.test(cleanName)) {
     return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "CX", hasUnitWord: true };
   }
   if (/^BALDE$|^BLD$/.test(firstWord) || /\b(BALDE|BLD)\b/i.test(stripped)) {
@@ -125,9 +160,6 @@ export function deriveSaleUnit(
   if (/^LATA$|^LT$/.test(firstWord)) {
     return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "LT", hasUnitWord: true };
   }
-  if (/^DISPLAY$|^DISP$|^DP$/.test(firstWord) || /\b(DISPLAY|DISP)\b/i.test(stripped)) {
-    return { unit: manualUnit && manualUnit !== "UND" ? manualUnit : "DSP", hasUnitWord: true };
-  }
 
   // 3. Multiplicador com X: ex.: "20X500 GR", "1X234 ML", "10X1 KG", "1X1,01KG", "30X120 GR", "12X1 LT"
   // Regra do Varejo / Atacado / Distribuição:
@@ -139,7 +171,7 @@ export function deriveSaleUnit(
 
   if (multiplierMatch) {
     const qty = parseFloat(multiplierMatch[1].replace(",", "."));
-    // Se o usuário selecionou manualmente uma unidade customizada diferente de UND e CX (ex: PCT, FD, KG), respeita
+    // Se o usuário selecionou manualmente uma unidade customizada diferente de UND e CX (ex: PCT, FD, DISP, KG), respeita
     if (manualUnit && manualUnit !== "UND" && manualUnit !== "CX") {
       return { unit: manualUnit, hasUnitWord: true };
     }
