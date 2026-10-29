@@ -34,6 +34,54 @@ export function isDateExpired(dateStr: string): boolean {
 }
 
 /**
+ * Converte string de data no formato dd/mm/aaaa ou aaaa-mm-dd para timestamp em ms.
+ * Retorna Infinity se a data for inválida ou vazia, garantindo que itens sem data fiquem no final na ordenação crescente.
+ */
+export function getValidityTimestamp(dateStr?: string | null): number {
+  if (!dateStr || typeof dateStr !== "string") return Infinity;
+  const clean = dateStr.trim();
+  if (!clean) return Infinity;
+
+  let day: number, month: number, year: number;
+
+  const brMatch = clean.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (brMatch) {
+    day = parseInt(brMatch[1] ?? "0", 10);
+    month = parseInt(brMatch[2] ?? "0", 10) - 1;
+    year = parseInt(brMatch[3] ?? "0", 10);
+    if (year < 100) year += 2000;
+  } else {
+    const isoMatch = clean.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
+    if (isoMatch) {
+      year = parseInt(isoMatch[1] ?? "0", 10);
+      month = parseInt(isoMatch[2] ?? "0", 10) - 1;
+      day = parseInt(isoMatch[3] ?? "0", 10);
+    } else {
+      return Infinity;
+    }
+  }
+
+  const d = new Date(year, month, day);
+  const t = d.getTime();
+  return isNaN(t) ? Infinity : t;
+}
+
+/**
+ * Ordena produtos da validade mais próxima para a mais longa (ordem crescente de vencimento).
+ * Itens sem validade ficam ao final. Mantém ordenação secundária por código numérico.
+ */
+export function sortProductsByValidityAsc<T extends { validity?: string; code?: string }>(products: T[]): T[] {
+  return [...products].sort((a, b) => {
+    const tA = getValidityTimestamp(a?.validity);
+    const tB = getValidityTimestamp(b?.validity);
+    if (tA !== tB) return tA - tB;
+    const codeA = String(a?.code ?? "");
+    const codeB = String(b?.code ?? "");
+    return codeA.localeCompare(codeB, undefined, { numeric: true });
+  });
+}
+
+/**
  * Processa texto copiado de planilha (Excel / Google Sheets) com colunas [código, preço].
  */
 export function parseSpreadsheetPrices(rawText: string): { code: string; price: string }[] {

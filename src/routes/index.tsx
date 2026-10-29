@@ -21,6 +21,8 @@ import {
 import {
   isDateExpired,
   getSampleProducts,
+  getValidityTimestamp,
+  sortProductsByValidityAsc,
 } from "@/lib/encarte-helpers";
 import { formatPrice, deriveSaleUnit } from "@/lib/parse-product";
 import { DESIGN_TOKENS } from "@/lib/design-tokens";
@@ -93,7 +95,7 @@ export const Route = createFileRoute("/")({
   component: EncarteApp,
 });
 
-type SortOption = "code-asc" | "code-desc" | "name-asc" | "name-desc";
+type SortOption = "validity-asc" | "validity-desc" | "code-asc" | "code-desc" | "name-asc" | "name-desc";
 
 function EncarteApp() {
   const navigate = useNavigate();
@@ -160,7 +162,7 @@ function EncarteApp() {
   // Filtros e Ordenação da Tabela
   const [searchQuery, setSearchQuery] = useState("");
   const [activeIssueFilter, setActiveIssueFilter] = useState<IssueFilter>("all");
-  const [sortBy, setSortBy] = useState<SortOption>("code-asc");
+  const [sortBy, setSortBy] = useState<SortOption>("validity-asc");
 
   // Modais
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false);
@@ -441,12 +443,13 @@ function EncarteApp() {
     setCompletedSteps((prev) => new Set([...prev, "origem", "dados"]));
     navigateToStep("precos");
 
-    // 2. Persistir lista de produtos no estado de forma resiliente
+    // 2. Persistir lista de produtos no estado de forma resiliente (ordenados por validade)
+    const sorted = sortProductsByValidityAsc(loaded);
     try {
-      updateProductsState(loaded);
+      updateProductsState(sorted);
     } catch (err) {
       console.warn("Aviso ao atualizar produtos:", err);
-      setProducts(loaded);
+      setProducts(sorted);
     }
   };
 
@@ -607,6 +610,18 @@ function EncarteApp() {
       const nameA = String(a?.name ?? "");
       const nameB = String(b?.name ?? "");
 
+      if (sortBy === "validity-asc") {
+        const tA = getValidityTimestamp(a?.validity);
+        const tB = getValidityTimestamp(b?.validity);
+        if (tA !== tB) return tA - tB;
+        return codeA.localeCompare(codeB, undefined, { numeric: true });
+      }
+      if (sortBy === "validity-desc") {
+        const tA = getValidityTimestamp(a?.validity);
+        const tB = getValidityTimestamp(b?.validity);
+        if (tA !== tB) return tB - tA;
+        return codeA.localeCompare(codeB, undefined, { numeric: true });
+      }
       if (sortBy === "code-asc") return codeA.localeCompare(codeB, undefined, { numeric: true });
       if (sortBy === "code-desc") return codeB.localeCompare(codeA, undefined, { numeric: true });
       if (sortBy === "name-asc") return nameA.localeCompare(nameB);
@@ -677,6 +692,18 @@ function EncarteApp() {
       const nameA = String(a?.name ?? "");
       const nameB = String(b?.name ?? "");
 
+      if (sortBy === "validity-asc") {
+        const tA = getValidityTimestamp(a?.validity);
+        const tB = getValidityTimestamp(b?.validity);
+        if (tA !== tB) return tA - tB;
+        return codeA.localeCompare(codeB, undefined, { numeric: true });
+      }
+      if (sortBy === "validity-desc") {
+        const tA = getValidityTimestamp(a?.validity);
+        const tB = getValidityTimestamp(b?.validity);
+        if (tA !== tB) return tB - tA;
+        return codeA.localeCompare(codeB, undefined, { numeric: true });
+      }
       if (sortBy === "code-asc") return codeA.localeCompare(codeB, undefined, { numeric: true });
       if (sortBy === "code-desc") return codeB.localeCompare(codeA, undefined, { numeric: true });
       if (sortBy === "name-asc") return nameA.localeCompare(nameB);
@@ -1192,15 +1219,34 @@ function EncarteApp() {
                 <div className="space-y-4">
                   {/* Barra de Ferramentas da Tabela */}
                   <div className="rounded-xl border bg-white p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="relative w-full sm:w-72">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
-                      <Input
-                        placeholder="Buscar por código ou descrição..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-9 text-xs min-h-[44px]"
-                        aria-label="Buscar produtos na tabela"
-                      />
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+                      <div className="relative w-full sm:w-72">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                        <Input
+                          placeholder="Buscar por código ou descrição..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="pl-9 text-xs min-h-[44px]"
+                          aria-label="Buscar produtos na tabela"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-xs text-neutral-600">
+                        <span className="font-semibold text-neutral-700 whitespace-nowrap text-[11px]">Ordem:</span>
+                        <select
+                          value={sortBy}
+                          onChange={(e) => setSortBy(e.target.value as SortOption)}
+                          className="h-[44px] px-2.5 py-1 text-xs font-medium rounded-lg border border-neutral-300 bg-white text-neutral-800 shadow-xs focus:outline-none focus:ring-2 focus:ring-red-500"
+                          aria-label="Ordenar produtos"
+                        >
+                          <option value="validity-asc">📅 Validade (Mais Próxima → Mais Longa)</option>
+                          <option value="validity-desc">📅 Validade (Mais Longa → Mais Próxima)</option>
+                          <option value="code-asc">🔢 Código (Crescente)</option>
+                          <option value="code-desc">🔢 Código (Decrescente)</option>
+                          <option value="name-asc">🔤 Nome (A → Z)</option>
+                          <option value="name-desc">🔤 Nome (Z → A)</option>
+                        </select>
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap justify-end">

@@ -1,5 +1,6 @@
 import type { EncarteProduct } from "@/types/encarte";
 import { formatPrice, deriveSaleUnit } from "./parse-product";
+import { sortProductsByValidityAsc } from "./encarte-helpers";
 
 export interface SpreadsheetValidationResult {
   success: boolean;
@@ -297,9 +298,12 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
     });
   });
 
+  // Ordena produtos da data de validade mais próxima para a mais longa (vencimento crescente)
+  const sortedValidProducts = sortProductsByValidityAsc(validProducts);
+
   return {
     success: errors.length === 0,
-    validProducts,
+    validProducts: sortedValidProducts,
     errors,
     totalRows: rows.length,
     identifiedColumns: {

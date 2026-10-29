@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { parseSpreadsheetFile, resolveSpreadsheetHeaders, normalizeHeader } from "./spreadsheet-parser";
+import { getValidityTimestamp, sortProductsByValidityAsc } from "./encarte-helpers";
 
 const USER_WINTHOR_CSV = `CODPROD;DESCRICAO;EMBALAGEM;DTVAL;DIASAVENCER;PRAZOVAL;%TOLERANCIA;QTRESERV;QTDISP_WMS;QTEST_WINTHOR;QTVENDMES;QTVENDMES1;QTVENDMES2;QTVENDMES3;PREO_VENDA;PREO_TOTAL;STATUS;:DATAINICIAL;:DATAFINAL;CODCOMPRADOR;NOME
 11782;MOLHO P/SALADA LIZA LIMAO;1X234 ML;04/11/2026;6;240;80;0;43;43;5;22;12;11;3;129;NORMAL;29/10/2026;29/01/2027;21338;MARIANA DIPRE
@@ -220,5 +221,58 @@ describe("Leitor de Planilhas e Mapeamento de Colunas (WinThor / ERP)", () => {
     expect(normalizeHeader("PREO_VENDA")).toBe("preovenda");
     expect(normalizeHeader("DESCRICÃO")).toBe("descricao");
     expect(normalizeHeader("CÓDIGO")).toBe("codigo");
+  });
+
+  it("Ordena produtos no encarte da validade mais próxima para a mais longa", async () => {
+    // CSV com 4 produtos desordenados cronologicamente
+    const unorderedCsv = `CODPROD;DESCRICAO;EMBALAGEM;DTVAL;QTDISP_WMS;PREO_VENDA
+101;PRODUTO VENCE MAIO 2027;1X1 UNID;15/05/2027;10;5,00
+102;PRODUTO VENCE AMANHA;1X1 UNID;01/11/2026;20;2,50
+103;PRODUTO SEM VALIDADE;1X1 UNID;;5;10,00
+104;PRODUTO VENCE DEZEMBRO 2026;1X1 UNID;25/12/2026;15;4,00`;
+
+    const file = new File([unorderedCsv], "teste_validade.csv", { type: "text/csv" });
+    const result = await parseSpreadsheetFile(file);
+
+    expect(result.success).toBe(true);
+    expect(result.validProducts.length).toBe(4);
+
+    // 1º deve ser o que vence mais próximo (01/11/2026)
+    expect(result.validProducts[0].code).toBe("102");
+    expect(result.validProducts[0].validity).toBe("01/11/2026");
+
+    // 2º deve ser dezembro (25/12/2026)
+    expect(result.validProducts[1].code).toBe("104");
+    expect(result.validProducts[1].validity).toBe("25/12/2026");
+
+    // 3º deve ser maio de 2027 (15/05/2027)
+    expect(result.validProducts[2].code).toBe("101");
+    expect(result.validProducts[2].validity).toBe("15/05/2027");
+
+    // 4º produto sem validade fica ao final
+    expect(result.validProducts[3].code).toBe("103");
+    expect(result.validProducts[3].validity).toBe("");
+  });
+
+  it("getValidityTimestamp e sortProductsByValidityAsc convertem datas e garantem ordenação cronológica crescente", () => {
+    const list = [
+      { code: "A", validity: "29/01/2027" },
+      { code: "B", validity: "04/11/2026" },
+      { code: "C", validity: "" },
+      { code: "D", validity: "23/01/2027" },
+      { code: "E", validity: "12/11/2026" },
+    ];
+
+    const sorted = sortProductsByValidityAsc(list);
+    const codesInOrder = sorted.map((p) => p.code);
+
+    // 04/11/2026 -> 12/11/2026 -> 23/01/2027 -> 29/01/2027 -> sem data
+    expect(codesInOrder).toEqual(["B", "E", "D", "A", "C"]);
+
+    // Valida getValidityTimestamp com data vazia ou inválida
+    expect(getValidityTimestamp("")).toBe(Infinity);
+    expect(getValidityTimestamp(null)).toBe(Infinity);
+    expect(getValidityTimestamp("invalido")).toBe(Infinity);
+    expect(getValidityTimestamp("04/11/2026")).toBeLessThan(getValidityTimestamp("29/01/2027"));
   });
 });
