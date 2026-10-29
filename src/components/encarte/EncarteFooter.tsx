@@ -50,12 +50,11 @@ export const EncarteFooter: React.FC<EncarteFooterProps> = ({
           </div>
         </div>
 
-        {/* Nota Legal Central (opcional) */}
-        {store.legalNotice ? (
-          <p className="hidden md:block max-w-[420px] text-[7pt] text-neutral-400 truncate uppercase leading-tight">
-            {store.legalNotice}
-          </p>
-        ) : null}
+        {/* Nota Legal Central */}
+        <p className="hidden md:block max-w-[420px] text-[7pt] text-neutral-400 truncate uppercase leading-tight">
+          {store.legalNotice ||
+            "Ofertas válidas enquanto durarem os estoques. Imagens meramente ilustrativas."}
+        </p>
 
         {/* Pílula: Página X de Y */}
         <div

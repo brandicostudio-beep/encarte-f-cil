@@ -1,7 +1,7 @@
 import React from "react";
-import { Check, ChevronRight, RotateCcw } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 
-export type EditorStep = "origem" | "dados" | "precos" | "campanha" | "edicao_final" | "exportar";
+export type EditorStep = "origem" | "dados" | "precos" | "campanha" | "exportar";
 
 interface StepConfig {
   id: EditorStep;
@@ -11,10 +11,10 @@ interface StepConfig {
 
 const STEPS: StepConfig[] = [
   { id: "origem", title: "1. Origem", shortDesc: "Planilha ou Link" },
-  { id: "precos", title: "2. Preços", shortDesc: "Revisão e Valores" },
-  { id: "campanha", title: "3. Campanha", shortDesc: "Textos & Loja" },
-  { id: "edicao_final", title: "4. Edição Final", shortDesc: "Ajustes Visuais" },
-  { id: "exportar", title: "5. Exportar", shortDesc: "PNG & Impressão" },
+  { id: "dados", title: "2. Dados", shortDesc: "Fotos & Validação" },
+  { id: "precos", title: "3. Preços", shortDesc: "Revisão e Valores" },
+  { id: "campanha", title: "4. Campanha", shortDesc: "Textos & Loja" },
+  { id: "exportar", title: "5. Exportar", shortDesc: "PDF & Impressão" },
 ];
 
 interface EditorStepperProps {
@@ -24,7 +24,6 @@ interface EditorStepperProps {
   savedNotice?: string;
   hasUndo?: boolean;
   onUndo?: () => void;
-  onReset?: () => void;
 }
 
 export const EditorStepper: React.FC<EditorStepperProps> = ({
@@ -34,7 +33,6 @@ export const EditorStepper: React.FC<EditorStepperProps> = ({
   savedNotice = "Salvo agora há pouco",
   hasUndo = false,
   onUndo,
-  onReset,
 }) => {
   const currentIndex = STEPS.findIndex((s) => s.id === currentStep);
 
@@ -101,20 +99,8 @@ export const EditorStepper: React.FC<EditorStepperProps> = ({
           })}
         </nav>
 
-        {/* Indicador de Salvamento Automático, Novo Encarte & Desfazer */}
-        <div className="flex items-center gap-2 shrink-0 self-end md:self-center text-xs">
-          {onReset && (
-            <button
-              type="button"
-              onClick={onReset}
-              className="min-h-[44px] px-2.5 py-1 text-xs font-semibold text-neutral-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-red-600"
-              title="Iniciar novo encarte e zerar dados atuais"
-            >
-              <RotateCcw className="h-3.5 w-3.5 text-neutral-500" />
-              <span>Novo Encarte</span>
-            </button>
-          )}
-
+        {/* Indicador de Salvamento Automático & Ação de Desfazer */}
+        <div className="flex items-center gap-3 shrink-0 self-end md:self-center text-xs">
           {hasUndo && onUndo && (
             <button
               type="button"

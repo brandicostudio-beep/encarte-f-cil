@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { EncarteProduct, BadgeType } from "@/types/encarte";
 import { BADGE_LABELS } from "@/types/encarte";
-import { formatPrice, parsePackaging, deriveSaleUnit } from "@/lib/parse-product";
+import { formatPrice, parsePackaging } from "@/lib/parse-product";
 import { Package, Upload, Trash2, Scissors, ZoomIn, ZoomOut, RotateCcw, Layers } from "lucide-react";
 import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
 
@@ -21,6 +21,30 @@ interface ProductEditModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (updated: EncarteProduct) => void;
+  /** Aplica ajustes de estilo (escala da foto, selo, unidade) em massa */
+  onApplyBulk?: (
+    scope: "page" | "all",
+    changes: { imageScale?: number; badge?: BadgeType; unit?: string }
+  ) => void;
+}
+
+interface StylePreset {
+  name: string;
+  imageScale: number;
+  badge: BadgeType;
+  unit: string;
+}
+
+const PRESETS_KEY = "encarte-style-presets";
+
+function loadPresets(): StylePreset[] {
+  try {
+    const raw = localStorage.getItem(PRESETS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 export const ProductEditModal: React.FC<ProductEditModalProps> = ({
@@ -28,46 +52,77 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
   open,
   onOpenChange,
   onSave,
+  onApplyBulk,
 }) => {
-  const [form, setForm] = useState<EncarteProduct | null>(() =>
-    product
-      ? {
-          ...product,
-          unit: product.unit
-            ? product.unit.trim().toUpperCase()
-            : deriveSaleUnit(product.packaging).unit,
-        }
-      : null
-  );
-  const [isTrimming, setIsTrimming] = useState(false);
-  const [prevProduct, setPrevProduct] = useState<EncarteProduct | null>(product);
-
-  // Sincroniza o formulário de imediato quando o produto selecionado muda,
-  // mantendo rigorosamente a mesma contagem e ordem de hooks em todas as renderizações
-  if (product !== prevProduct) {
-    setPrevProduct(product);
-    setForm(
-      product
-        ? {
-            ...product,
-            unit: product.unit
-              ? product.unit.trim().toUpperCase()
-              : deriveSaleUnit(product.packaging).unit,
-          }
-        : null
-    );
-  }
+  const [form, setForm] = useState<EncarteProduct | null>(null);
 
   useEffect(() => {
     if (product) {
-      setForm({
-        ...product,
-        unit: product.unit
-          ? product.unit.trim().toUpperCase()
-          : deriveSaleUnit(product.packaging).unit,
-      });
+      setForm({ ...product });
     }
   }, [product]);
+
+  const [isTrimming, setIsTrimming] = useState(false);
+  const [bulkScope, setBulkScope] = useState<"page" | "all">("all");
+  const [presets, setPresets] = useState<StylePreset[]>([]);
+  const [presetName, setPresetName] = useState("");
+
+  useEffect(() => {
+    if (open) setPresets(loadPresets());
+  }, [open]);
+
+  const handleScaleSlider = (value: number) => {
+    const next = Math.min(2.0, Math.max(0.5, Number(value.toFixed(2))));
+    setForm((prev) => (prev ? { ...prev, imageScale: next } : null));
+  };
+
+  const handleSavePreset = () => {
+    if (!form || !presetName.trim()) return;
+    const next: StylePreset = {
+      name: presetName.trim(),
+      imageScale: typeof form.imageScale === "number" ? form.imageScale : 1.0,
+      badge: form.badge,
+      unit: form.unit,
+    };
+    const updated = [...presets.filter((p) => p.name !== next.name), next];
+    setPresets(updated);
+    try {
+      localStorage.setItem(PRESETS_KEY, JSON.stringify(updated));
+    } catch {
+      /* armazenamento cheio: ignora */
+    }
+    setPresetName("");
+  };
+
+  const handleApplyPreset = (preset: StylePreset) => {
+    setForm((prev) =>
+      prev
+        ? { ...prev, imageScale: preset.imageScale, badge: preset.badge, unit: preset.unit }
+        : null
+    );
+  };
+
+  const handleDeletePreset = (name: string) => {
+    const updated = presets.filter((p) => p.name !== name);
+    setPresets(updated);
+    try {
+      localStorage.setItem(PRESETS_KEY, JSON.stringify(updated));
+    } catch {
+      /* ignora */
+    }
+  };
+
+  const handleBulkApply = () => {
+    if (!form || !onApplyBulk) return;
+    onApplyBulk(bulkScope, {
+      imageScale: typeof form.imageScale === "number" ? form.imageScale : 1.0,
+      badge: form.badge,
+      unit: form.unit,
+    });
+  };
+
+  // Hooks acima — o retorno antecipado precisa ficar depois de todos eles
+  if (!form) return null;
 
   const handleFile = (file: File) => {
     const reader = new FileReader();
@@ -106,24 +161,19 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form) return;
-    const parsedPack = parsePackaging(form.packaging || "");
+    const parsedPack = parsePackaging(form.packaging);
     onSave({
       ...form,
-      packaging: (form.packaging || "").trim(),
+      packaging: form.packaging.trim(),
       packagingType: parsedPack?.tipo,
       packagingQuantity: parsedPack?.quantidade,
       packagingUnit: parsedPack?.unidadeMedida,
       packagingWeight: parsedPack?.gramatura,
-      price: formatPrice(form.price || ""),
+      price: formatPrice(form.price),
       imageScale: typeof form.imageScale === "number" ? form.imageScale : 1.0,
     });
     onOpenChange(false);
   };
-
-  // Retorno condicional executado com segurança somente APÓS a declaração de todos os hooks
-  if (!open || !form) {
-    return null;
-  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -157,7 +207,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               <Label htmlFor="code">Código / SKU</Label>
               <Input
                 id="code"
-                value={form.code || ""}
+                value={form.code}
                 onChange={(e) => setForm({ ...form, code: e.target.value })}
                 placeholder="Ex: 24657"
               />
@@ -166,16 +216,8 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               <Label htmlFor="packaging">Embalagem</Label>
               <Input
                 id="packaging"
-                value={form.packaging || ""}
-                onChange={(e) => {
-                  const newPack = e.target.value;
-                  const suggested = deriveSaleUnit(newPack).unit;
-                  setForm({
-                    ...form,
-                    packaging: newPack,
-                    unit: form.unit && form.unit !== "UND" ? form.unit : suggested,
-                  });
-                }}
+                value={form.packaging}
+                onChange={(e) => setForm({ ...form, packaging: e.target.value })}
                 placeholder="Ex: 1X10 GR ou 500G"
               />
             </div>
@@ -186,7 +228,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
             <Label htmlFor="name">Nome do Produto (em caixa-alta)</Label>
             <Input
               id="name"
-              value={form.name || ""}
+              value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value.toUpperCase() })}
               placeholder="Ex: BISCOITO RECHEADO CHOCOLATE"
               required
@@ -202,22 +244,19 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               <Label htmlFor="price">Preço de Venda (R$)</Label>
               <Input
                 id="price"
-                value={form.price || ""}
+                value={form.price}
                 onChange={(e) => setForm({ ...form, price: e.target.value })}
                 placeholder="Ex: 4,99"
               />
             </div>
             <div>
-              <Label htmlFor="unit">Unidade de Venda</Label>
+              <Label htmlFor="unit">Unidade</Label>
               <Input
                 id="unit"
-                value={form.unit || ""}
+                value={form.unit}
                 onChange={(e) => setForm({ ...form, unit: e.target.value.toUpperCase() })}
-                placeholder="Ex: UND, CX, PCT"
+                placeholder="UND ou KG"
               />
-              <p className="text-[11px] text-muted-foreground mt-1">
-                Sugerido pela embalagem ({deriveSaleUnit(form.packaging).unit}). Pode ser corrigido manualmente.
-              </p>
             </div>
           </div>
 
@@ -227,7 +266,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               <Label htmlFor="validity">Data de Validade</Label>
               <Input
                 id="validity"
-                value={form.validity || ""}
+                value={form.validity}
                 onChange={(e) => setForm({ ...form, validity: e.target.value })}
                 placeholder="dd/mm/aaaa"
               />
@@ -295,7 +334,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               )}
             </div>
             <div className="flex items-start gap-4">
-              <div className="h-20 w-20 rounded-xl border bg-white flex items-center justify-center shrink-0">
+              <div className="h-20 w-20 rounded-xl border bg-neutral-50 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
                 {form.image ? (
                   <img
                     src={form.image}
@@ -314,7 +353,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               <div className="flex-1 space-y-2">
                 <Input
                   placeholder="URL direta da imagem"
-                  value={form.image && form.image.startsWith("data:") ? "" : form.image || ""}
+                  value={form.image.startsWith("data:") ? "" : form.image}
                   onChange={(e) => setForm({ ...form, image: e.target.value })}
                   className="text-xs"
                 />
@@ -405,6 +444,37 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                       <Scissors className="h-3.5 w-3.5 mr-1 text-indigo-600" />
                       {isTrimming ? "Recortando..." : "Recortar Bordas Brancas (Auto-Trim)"}
                     </Button>
+
+                    {/* Barra deslizante + campo numérico, sincronizados com os botões e a prévia */}
+                    <div className="flex items-center gap-2 w-full pt-1">
+                      <input
+                        type="range"
+                        min={50}
+                        max={200}
+                        step={1}
+                        value={Math.round((form.imageScale || 1.0) * 100)}
+                        onChange={(e) => handleScaleSlider(Number(e.target.value) / 100)}
+                        className="flex-1 h-2 accent-red-600 cursor-pointer"
+                        aria-label="Tamanho da foto (porcentagem)"
+                      />
+                      <Input
+                        type="number"
+                        min={50}
+                        max={200}
+                        step={1}
+                        value={Math.round((form.imageScale || 1.0) * 100)}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          if (!isNaN(v)) handleScaleSlider(v / 100);
+                        }}
+                        className="w-20 h-7 text-xs text-center"
+                        aria-label="Tamanho da foto em porcentagem"
+                      />
+                      <span className="text-xs font-bold text-neutral-600">%</span>
+                    </div>
+                    <p className="text-[10.5px] text-neutral-500 w-full">
+                      O box do card nunca muda de tamanho: só a foto é ampliada dentro dele, com recorte automático.
+                    </p>
                   </div>
                 )}
 
@@ -481,6 +551,91 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Ajustes em Massa e Predefinições de Estilo */}
+          {onApplyBulk && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-2.5">
+              <div className="text-xs font-bold text-amber-900 uppercase tracking-wide">
+                Aplicar estes ajustes em massa
+              </div>
+              <p className="text-[11px] text-neutral-600 leading-tight">
+                Aplica o tamanho da foto, o selo e a unidade deste item a outros produtos. Nenhum outro item é alterado sem você escolher o escopo aqui.
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={bulkScope}
+                  onChange={(e) => setBulkScope(e.target.value as "page" | "all")}
+                  className="h-8 rounded-md border border-amber-300 bg-white px-2 text-xs font-medium"
+                  aria-label="Escopo da aplicação em massa"
+                >
+                  <option value="page">Todos os produtos desta página</option>
+                  <option value="all">Todos os produtos do encarte</option>
+                </select>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleBulkApply}
+                  className="h-8 text-xs bg-white border-amber-300 text-amber-900 hover:bg-amber-100"
+                >
+                  <Layers className="h-3.5 w-3.5 mr-1" />
+                  Aplicar em massa
+                </Button>
+              </div>
+
+              {/* Predefinições salvas */}
+              <div className="pt-1.5 border-t border-amber-200 space-y-1.5">
+                <div className="text-[11px] font-bold text-amber-900 uppercase tracking-wide">
+                  Predefinições de estilo
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    value={presetName}
+                    onChange={(e) => setPresetName(e.target.value)}
+                    placeholder="Nome da predefinição (ex: Foto grande)"
+                    className="h-8 text-xs bg-white"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleSavePreset}
+                    disabled={!presetName.trim()}
+                    className="h-8 text-xs bg-white shrink-0"
+                  >
+                    Salvar
+                  </Button>
+                </div>
+                {presets.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {presets.map((preset) => (
+                      <span
+                        key={preset.name}
+                        className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-white px-2 py-1 text-[11px] font-medium"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleApplyPreset(preset)}
+                          className="hover:text-amber-800"
+                          title={`Aplicar: foto ${Math.round(preset.imageScale * 100)}%, selo ${BADGE_LABELS[preset.badge]}, unidade ${preset.unit}`}
+                        >
+                          {preset.name}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePreset(preset.name)}
+                          className="text-neutral-400 hover:text-red-600"
+                          aria-label={`Excluir predefinição ${preset.name}`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <DialogFooter className="pt-2">
             <Button

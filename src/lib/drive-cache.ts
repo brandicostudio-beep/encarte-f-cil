@@ -1,7 +1,6 @@
 /**
  * Gerenciador de cache local de fotos baixadas do Google Drive / Nuvem Lovable.
- * Armazena fotos em memória e IndexedDB para nunca esgotar a cota de 5MB do localStorage.
- * Valida a data de modificação (modifiedTime) e associa pelo código do produto.
+ * Armazena fotos usando o código do produto como chave e valida a data de modificação (modifiedTime).
  */
 
 export interface CachedDrivePhoto {
@@ -13,115 +12,84 @@ export interface CachedDrivePhoto {
   filename: string;
 }
 
-const memoryPhotoCache = new Map<string, CachedDrivePhoto>();
+const CACHE_KEY_PREFIX = "encarte_drive_photo_v2_";
+const CACHE_INDEX_KEY = "encarte_drive_photo_index_v2";
 
-const IDB_NAME = "encarte_drive_cache_db";
-const IDB_STORE = "drive_photos";
-const IDB_VERSION = 1;
+const memoryStorage = new Map<string, string>();
 
-function getIndexedDB(): IDBFactory | null {
-  if (typeof window !== "undefined" && window.indexedDB) {
-    return window.indexedDB;
+interface SimpleStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+function safeLocalStorage(): SimpleStorage | null {
+  if (typeof window !== "undefined" && window.localStorage) {
+    return window.localStorage;
   }
-  return null;
-}
-
-let dbPromise: Promise<IDBDatabase | null> | null = null;
-
-function openIdb(): Promise<IDBDatabase | null> {
-  const idb = getIndexedDB();
-  if (!idb) return Promise.resolve(null);
-  if (dbPromise) return dbPromise;
-
-  dbPromise = new Promise((resolve) => {
-    try {
-      const req = idb.open(IDB_NAME, IDB_VERSION);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains(IDB_STORE)) {
-          db.createObjectStore(IDB_STORE, { keyPath: "code" });
-        }
-      };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
-    } catch {
-      resolve(null);
-    }
-  });
-
-  return dbPromise;
-}
-
-// Limpa chaves legadas pesadas do localStorage para liberar a cota de 5MB imediatamente
-if (typeof window !== "undefined" && window.localStorage) {
-  try {
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < window.localStorage.length; i++) {
-      const k = window.localStorage.key(i);
-      if (k && (k.startsWith("encarte_drive_photo_v2_") || k === "encarte_drive_photo_index_v2")) {
-        keysToRemove.push(k);
-      }
-    }
-    for (const k of keysToRemove) {
-      window.localStorage.removeItem(k);
-    }
-  } catch {}
-
-  // Carrega do IndexedDB para a memória ao iniciar
-  openIdb().then((db) => {
-    if (!db) return;
-    try {
-      const tx = db.transaction(IDB_STORE, "readonly");
-      const store = tx.objectStore(IDB_STORE);
-      const req = store.getAll();
-      req.onsuccess = () => {
-        if (Array.isArray(req.result)) {
-          for (const item of req.result) {
-            if (item && item.code) {
-              memoryPhotoCache.set(item.code.toLowerCase().trim(), item);
-            }
-          }
-        }
-      };
-    } catch {}
-  });
+  if (typeof globalThis !== "undefined" && (globalThis as unknown as { localStorage?: SimpleStorage }).localStorage) {
+    return (globalThis as unknown as { localStorage: SimpleStorage }).localStorage;
+  }
+  return {
+    getItem: (k: string) => memoryStorage.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      memoryStorage.set(k, v);
+    },
+    removeItem: (k: string) => {
+      memoryStorage.delete(k);
+    },
+  };
 }
 
 /**
  * Retorna o índice de códigos de produtos atualmente em cache.
  */
 export function getCachedPhotoCodes(): string[] {
-  return Array.from(memoryPhotoCache.keys());
+  const ls = safeLocalStorage();
+  if (!ls) return [];
+  try {
+    const raw = ls.getItem(CACHE_INDEX_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
 }
 
 /**
  * Busca uma foto em cache pelo código do produto.
  */
 export function getCachedPhoto(code: string): CachedDrivePhoto | null {
-  if (!code) return null;
-  const norm = code.toLowerCase().trim();
-  return memoryPhotoCache.get(norm) ?? null;
+  const ls = safeLocalStorage();
+  if (!ls || !code) return null;
+  try {
+    const key = `${CACHE_KEY_PREFIX}${code.toLowerCase().trim()}`;
+    const raw = ls.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw) as CachedDrivePhoto;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Salva uma foto em cache usando o código do produto como chave.
  */
 export function setCachedPhoto(entry: CachedDrivePhoto): void {
-  if (!entry || !entry.code) return;
-  const norm = entry.code.toLowerCase().trim();
-  memoryPhotoCache.set(norm, entry);
+  const ls = safeLocalStorage();
+  if (!ls || !entry.code) return;
+  try {
+    const normCode = entry.code.toLowerCase().trim();
+    const key = `${CACHE_KEY_PREFIX}${normCode}`;
+    ls.setItem(key, JSON.stringify(entry));
 
-  // Persiste no IndexedDB de forma assíncrona sem tocar no localStorage
-  openIdb().then((db) => {
-    if (!db) return;
-    try {
-      const tx = db.transaction(IDB_STORE, "readwrite");
-      const store = tx.objectStore(IDB_STORE);
-      store.put({ ...entry, code: norm });
-    } catch (err) {
-      console.warn("Aviso ao persistir foto no IndexedDB:", err);
-    }
-  });
+    // Atualiza índice de chaves
+    const codes = new Set(getCachedPhotoCodes());
+    codes.add(normCode);
+    ls.setItem(CACHE_INDEX_KEY, JSON.stringify(Array.from(codes)));
+  } catch (err) {
+    // Se estourar a cota de localStorage, limpa entradas mais antigas
+    console.warn("Aviso ao salvar cache de foto:", err);
+  }
 }
 
 /**
@@ -155,30 +123,15 @@ export function isPhotoCacheValid(
  * Limpa todo o cache de fotos do Drive.
  */
 export function clearDrivePhotoCache(): void {
-  memoryPhotoCache.clear();
-
-  // Limpa localStorage legado se houver
-  if (typeof window !== "undefined" && window.localStorage) {
-    try {
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < window.localStorage.length; i++) {
-        const k = window.localStorage.key(i);
-        if (k && (k.startsWith("encarte_drive_photo_v2_") || k === "encarte_drive_photo_index_v2")) {
-          keysToRemove.push(k);
-        }
-      }
-      for (const k of keysToRemove) {
-        window.localStorage.removeItem(k);
-      }
-    } catch {}
+  const ls = safeLocalStorage();
+  if (!ls) return;
+  try {
+    const codes = getCachedPhotoCodes();
+    for (const code of codes) {
+      ls.removeItem(`${CACHE_KEY_PREFIX}${code}`);
+    }
+    ls.removeItem(CACHE_INDEX_KEY);
+  } catch {
+    // Silencioso
   }
-
-  // Limpa IndexedDB
-  openIdb().then((db) => {
-    if (!db) return;
-    try {
-      const tx = db.transaction(IDB_STORE, "readwrite");
-      tx.objectStore(IDB_STORE).clear();
-    } catch {}
-  });
 }

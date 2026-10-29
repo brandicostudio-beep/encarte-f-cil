@@ -1,5 +1,5 @@
 import type { EncarteProduct } from "@/types/encarte";
-import { formatPrice, deriveSaleUnit } from "./parse-product";
+import { formatPrice } from "./parse-product";
 
 export interface SpreadsheetValidationResult {
   success: boolean;
@@ -211,10 +211,10 @@ export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValid
       id: `prod-${code}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       code,
       name,
-      packaging: packaging || "",
+      packaging: packaging || "1 UN",
       validity,
       price: rawPrice || "", // Preço vazio inicialmente
-      unit: deriveSaleUnit(packaging).unit,
+      unit: packaging.toLowerCase().includes("kg") ? "KG" : "UND",
       stock,
       badge: "nenhum",
       image: "",

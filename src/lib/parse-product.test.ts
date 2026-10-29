@@ -7,7 +7,6 @@ import {
   parseCategoryHtml,
   getThumbnailFallbackUrl,
   parsePackaging,
-  deriveSaleUnit,
 } from "./parse-product";
 import { parseSpreadsheetPrices, isDateExpired } from "./encarte-helpers";
 import type { CampaignConfig } from "@/types/encarte";
@@ -194,38 +193,6 @@ describe("Item 2 - Embalagem, unidade, pacote e gramatura", () => {
     expect(parsePackaging("99000233960789611001222300000001")).toBeNull();
     expect(parsePackaging("")).toBeNull();
     expect(parsePackaging(undefined)).toBeNull();
-  });
-
-  it("deriveSaleUnit deriva a unidade de venda pela primeira palavra da embalagem conforme regras de negócio", () => {
-    // 1. "CAIXA" ou "CX" -> "CX"
-    expect(deriveSaleUnit("CAIXA 30X120 GR")).toEqual({ unit: "CX", hasUnitWord: true });
-    expect(deriveSaleUnit("CX 12 UN")).toEqual({ unit: "CX", hasUnitWord: true });
-
-    // 2. "PACOTE" ou "PCT" -> "PCT"
-    expect(deriveSaleUnit("PACOTE 1X24 UNID")).toEqual({ unit: "PCT", hasUnitWord: true });
-    expect(deriveSaleUnit("PCT 500 GR")).toEqual({ unit: "PCT", hasUnitWord: true });
-
-    // 3. "UNIDADE" ou "UNID" -> "UND"
-    expect(deriveSaleUnit("UNIDADE 1X110 ML")).toEqual({ unit: "UND", hasUnitWord: true });
-    expect(deriveSaleUnit("UNIDADE 1X1,01 KG")).toEqual({ unit: "UND", hasUnitWord: true });
-    expect(deriveSaleUnit("UNID 1 UN")).toEqual({ unit: "UND", hasUnitWord: true });
-
-    // 4. Outras palavras abreviadas
-    expect(deriveSaleUnit("FARDO 9X24 UNID")).toEqual({ unit: "FD", hasUnitWord: true });
-    expect(deriveSaleUnit("BALDE 5L")).toEqual({ unit: "BLD", hasUnitWord: true });
-    expect(deriveSaleUnit("SACHÊ 120 GR")).toEqual({ unit: "SCH", hasUnitWord: true });
-    expect(deriveSaleUnit("SACHE 50G")).toEqual({ unit: "SCH", hasUnitWord: true });
-
-    // 5. Sem palavra de unidade: retorna UND e hasUnitWord: false (para entrar na lista de pendências)
-    expect(deriveSaleUnit("23 GR")).toEqual({ unit: "UND", hasUnitWord: false });
-    expect(deriveSaleUnit("1X24 UNID")).toEqual({ unit: "UND", hasUnitWord: false });
-    expect(deriveSaleUnit("500G")).toEqual({ unit: "UND", hasUnitWord: false });
-    expect(deriveSaleUnit("")).toEqual({ unit: "UND", hasUnitWord: false });
-    expect(deriveSaleUnit(undefined)).toEqual({ unit: "UND", hasUnitWord: false });
-
-    // 6. Respeita correção manual se fornecida pelo usuário
-    expect(deriveSaleUnit("23 GR", "CX")).toEqual({ unit: "CX", hasUnitWord: false });
-    expect(deriveSaleUnit("PACOTE 1X24", "KG")).toEqual({ unit: "KG", hasUnitWord: true });
   });
 });
 

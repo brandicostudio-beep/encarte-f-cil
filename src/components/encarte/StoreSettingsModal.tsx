@@ -217,10 +217,10 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
 
             <div>
               <Label className="block mb-2 font-semibold">
-                Produtos por página (Padrão: 10 produtos - 2×5)
+                Produtos por página (Padrão: 12)
               </Label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {([10, 8, 12, 6] as ProductsPerPageOption[]).map((opt) => (
+                {([12, 9, 8, 6] as ProductsPerPageOption[]).map((opt) => (
                   <button
                     key={opt}
                     type="button"
@@ -235,13 +235,13 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
                   >
                     <div className="text-sm font-bold">{opt} produtos</div>
                     <div className="text-[10px] opacity-80">
-                      {opt === 10
-                        ? "2x5 (Padrão 9:16)"
+                      {opt === 12
+                        ? "3x4 (vertical)"
+                        : opt === 9
+                        ? "3x3 (vertical)"
                         : opt === 8
-                        ? "2x4 (Mais espaço)"
-                        : opt === 12
-                        ? "3x4 (Grade 12)"
-                        : "2x3 (Destaque)"}
+                        ? "2x4 (horizontal)"
+                        : "2x3 (horizontal)"}
                     </div>
                   </button>
                 ))}
@@ -461,22 +461,6 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
                 />
               </div>
             </div>
-
-            <div className="flex items-center space-x-2 pt-2 border-t mt-2">
-              <Checkbox
-                id="modal-block-export-photo"
-                checked={campForm.blockExportWithoutPhoto || false}
-                onCheckedChange={(checked) =>
-                  setCampForm((prev) => ({
-                    ...prev,
-                    blockExportWithoutPhoto: Boolean(checked),
-                  }))
-                }
-              />
-              <Label htmlFor="modal-block-export-photo" className="text-xs cursor-pointer font-medium text-neutral-800">
-                Bloquear exportação se houver produto sem foto (por padrão desmarcado: exibe "SEM FOTO")
-              </Label>
-            </div>
           </div>
 
           {/* Seção 3: Dados da Loja */}
@@ -488,33 +472,34 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="store-name">Nome da Loja (Opcional)</Label>
+                <Label htmlFor="store-name">Nome da Loja</Label>
                 <Input
                   id="store-name"
                   value={storeForm.name}
                   onChange={(e) => setStoreForm({ ...storeForm, name: e.target.value })}
-                  placeholder="Opcional"
+                  placeholder="Ex: Supermercado Popular"
+                  required
                 />
               </div>
 
               <div>
-                <Label htmlFor="store-phone">Telefone / WhatsApp (Opcional)</Label>
+                <Label htmlFor="store-phone">Telefone / WhatsApp</Label>
                 <Input
                   id="store-phone"
                   value={storeForm.phone}
                   onChange={(e) => setStoreForm({ ...storeForm, phone: e.target.value })}
-                  placeholder="Opcional"
+                  placeholder="Ex: (11) 99999-8888"
                 />
               </div>
             </div>
 
             <div>
-              <Label htmlFor="store-address">Endereço Completo (Opcional)</Label>
+              <Label htmlFor="store-address">Endereço Completo</Label>
               <Input
                 id="store-address"
                 value={storeForm.address}
                 onChange={(e) => setStoreForm({ ...storeForm, address: e.target.value })}
-                placeholder="Opcional"
+                placeholder="Ex: Av. Brasil, 1500 - Centro"
               />
             </div>
 
@@ -628,7 +613,7 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
 
             {/* Nota Legal */}
             <div>
-              <Label htmlFor="legal-notice">Nota Legal do Rodapé (Opcional)</Label>
+              <Label htmlFor="legal-notice">Nota Legal do Rodapé</Label>
               <Textarea
                 id="legal-notice"
                 rows={2}
@@ -636,7 +621,7 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
                 onChange={(e) =>
                   setStoreForm({ ...storeForm, legalNotice: e.target.value })
                 }
-                placeholder="Opcional: deixe em branco se não quiser exibir texto no rodapé"
+                placeholder="Ex: Ofertas válidas enquanto durarem os estoques..."
                 className="text-xs"
               />
             </div>

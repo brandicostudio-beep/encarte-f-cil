@@ -4,7 +4,6 @@ import { BADGE_LABELS } from "@/types/encarte";
 import { DESIGN_TOKENS } from "@/lib/design-tokens";
 import { Package } from "lucide-react";
 import { calculateOpticalScale } from "@/lib/image-normalizer";
-import { deriveSaleUnit } from "@/lib/parse-product";
 
 interface ProductCardA4Props {
   product: EncarteProduct;
@@ -23,9 +22,6 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
 
   // Preço formatado com segurança para qualquer formato (string ou número)
   const [reais, centavos] = String(product?.price || "0,00").replace(".", ",").split(",");
-
-  // Unidade de venda derivada da embalagem
-  const saleUnit = deriveSaleUnit(product?.packaging, product?.unit).unit;
 
   // Cores institucionais
   const primaryColor = store?.primaryColor || DESIGN_TOKENS.colors.primary;
@@ -104,7 +100,7 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
                 transform: `scale(${totalScale})`,
                 transformOrigin: "center center",
               }}
-              className="max-h-full max-w-full object-contain transition-transform duration-200"
+              className="max-h-full max-w-full object-contain filter drop-shadow-md transition-transform duration-200"
             />
           ) : (
             <div className="flex flex-col h-full w-full items-center justify-center rounded-2xl bg-neutral-100 p-6 text-center text-neutral-400 border-2 border-dashed border-neutral-300">
@@ -150,7 +146,7 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
               ,{centavos || "00"}
             </span>
             <span className="text-base font-black text-white uppercase ml-1 tracking-wider">
-              {saleUnit}
+              {product.unit || "UND"}
             </span>
           </div>
         </div>
@@ -204,7 +200,7 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
                 transform: `scale(${totalScale})`,
                 transformOrigin: "center center",
               }}
-              className="max-h-full max-w-full object-contain transition-transform duration-200"
+              className="max-h-full max-w-full object-contain filter drop-shadow-2xs transition-transform duration-200"
             />
           ) : (
             <div className="flex flex-col h-full w-full items-center justify-center rounded-lg bg-neutral-100 p-1 text-center text-neutral-400 border border-dashed border-neutral-300">
@@ -269,7 +265,7 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
                 ,{centavos || "00"}
               </span>
               <span className="text-[7.5pt] font-black text-white uppercase ml-0.5">
-                {saleUnit}
+                {product.unit || "UND"}
               </span>
             </div>
           </div>
@@ -326,7 +322,7 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
               transform: `scale(${totalScale})`,
               transformOrigin: "center center",
             }}
-            className="max-h-full max-w-full object-contain transition-transform duration-200"
+            className="max-h-full max-w-full object-contain filter drop-shadow-xs transition-transform duration-200"
           />
         ) : (
           <div className="flex flex-col h-full w-full items-center justify-center rounded-xl bg-neutral-100 p-2 text-center text-neutral-400 border border-dashed border-neutral-300">
@@ -394,7 +390,7 @@ export const ProductCardA4: React.FC<ProductCardA4Props> = ({
               ,{centavos || "00"}
             </span>
             <span className="text-[9.5pt] font-black text-white uppercase ml-0.5 tracking-wider">
-              {saleUnit}
+              {product.unit || "UND"}
             </span>
           </div>
         </div>

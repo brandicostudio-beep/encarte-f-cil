@@ -1,7 +1,7 @@
 import React, { useRef } from "react";
 import type { EncarteProduct } from "@/types/encarte";
 import { isDateExpired } from "@/lib/encarte-helpers";
-import { formatPrice, deriveSaleUnit } from "@/lib/parse-product";
+import { formatPrice } from "@/lib/parse-product";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,7 +12,6 @@ import {
   Trash2,
   Package,
   Layers,
-  Tag,
 } from "lucide-react";
 
 interface ReviewTableProps {
@@ -116,7 +115,6 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
               const hasPrice = Boolean(p?.price && String(p.price).trim() !== "");
               const hasPhoto = Boolean(p?.image && String(p.image).trim() !== "");
               const hasPackaging = Boolean(p?.packaging && String(p.packaging).trim() !== "");
-              const unitCheck = deriveSaleUnit(p?.packaging, p?.unit);
 
               // Diagnóstico de pendências com cor E texto explícito (Acessibilidade)
               const issues: { type: string; label: string; className: string }[] = [];
@@ -139,13 +137,6 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                   type: "packaging",
                   label: "Sem embalagem",
                   className: "bg-orange-100 text-orange-900 border-orange-300",
-                });
-              }
-              if (!unitCheck.hasUnitWord) {
-                issues.push({
-                  type: "unit",
-                  label: "Sem unidade",
-                  className: "bg-blue-100 text-blue-900 border-blue-300 font-semibold",
                 });
               }
               if (isExpired) {
@@ -188,7 +179,7 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                   <td className="p-2 text-center align-middle">
                     <div className="flex flex-col items-center gap-1">
                       <div
-                        className="relative h-11 w-11 rounded-lg border bg-white flex items-center justify-center overflow-hidden group cursor-pointer hover:border-red-400"
+                        className="relative h-11 w-11 rounded-lg border bg-white flex items-center justify-center overflow-hidden shadow-2xs group cursor-pointer hover:border-red-400"
                         onClick={() => onEditProduct(p)}
                         title={
                           p.image
@@ -225,8 +216,6 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                               ? "bg-blue-50 text-blue-700 border-blue-200"
                               : p.photoSource === "zip"
                               ? "bg-purple-50 text-purple-700 border-purple-200"
-                              : p.photoSource === "folder"
-                              ? "bg-amber-50 text-amber-800 border-amber-200"
                               : p.photoSource === "upload"
                               ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                               : "bg-neutral-100 text-neutral-600 border-neutral-200"
@@ -236,8 +225,6 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                             ? "Drive"
                             : p.photoSource === "zip"
                             ? "ZIP"
-                            : p.photoSource === "folder"
-                            ? "Pasta"
                             : p.photoSource === "upload"
                             ? "Upload"
                             : p.photoSource}
@@ -287,9 +274,6 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                           )}
                           {iss.type === "packaging" && (
                             <Package className="h-3 w-3" />
-                          )}
-                          {iss.type === "unit" && (
-                            <Tag className="h-3 w-3" />
                           )}
                           {iss.type === "expired" && (
                             <CalendarX className="h-3 w-3" />
@@ -355,18 +339,12 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                         onChange={(e) => onPriceChange(p.id, e.target.value)}
                         onBlur={(e) => handlePriceBlur(p.id, e.target.value)}
                         onKeyDown={(e) => handlePriceKeyDown(e, idx)}
-                        className={`w-full min-h-[44px] pl-8 pr-12 text-xs font-mono font-bold rounded-lg border transition-colors focus:outline-hidden focus:ring-2 ${
+                        className={`w-full min-h-[44px] pl-8 pr-2 text-xs font-mono font-bold rounded-lg border transition-colors focus:outline-hidden focus:ring-2 ${
                           !hasPrice
                             ? "bg-amber-50/80 border-amber-400 text-amber-950 placeholder:text-amber-500 focus:ring-amber-500"
                             : "bg-white border-neutral-300 text-neutral-900 focus:ring-red-600 focus:border-red-600"
                         }`}
                       />
-                      <span
-                        className="absolute right-2 top-1/2 -translate-y-1/2 font-mono font-bold text-[10px] text-neutral-600 uppercase pointer-events-none bg-neutral-100 px-1.5 py-0.5 rounded border border-neutral-200"
-                        title={`Unidade de venda: ${unitCheck.unit}`}
-                      >
-                        {unitCheck.unit}
-                      </span>
                     </div>
                   </td>
 

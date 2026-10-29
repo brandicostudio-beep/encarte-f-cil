@@ -1,5 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { getClientSession, clearClientSession } from "@/lib/auth-constants";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { extractCategoryProducts } from "@/lib/product.functions";
@@ -22,7 +21,7 @@ import {
   isDateExpired,
   getSampleProducts,
 } from "@/lib/encarte-helpers";
-import { formatPrice, deriveSaleUnit } from "@/lib/parse-product";
+import { formatPrice } from "@/lib/parse-product";
 import { DESIGN_TOKENS } from "@/lib/design-tokens";
 import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
 
@@ -38,12 +37,9 @@ import { TemplateAreaAdjuster } from "@/components/encarte/TemplateAreaAdjuster"
 import { SpreadsheetModal } from "@/components/encarte/SpreadsheetModal";
 import { ProductEditModal } from "@/components/encarte/ProductEditModal";
 import { StoreSettingsModal } from "@/components/encarte/StoreSettingsModal";
-import { FinalEditor } from "@/components/encarte/FinalEditor";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -74,9 +70,6 @@ import {
   Archive,
   Upload,
   Scale,
-  Trash2,
-  AlertCircle,
-  LogOut,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -96,44 +89,7 @@ export const Route = createFileRoute("/")({
 type SortOption = "code-asc" | "code-desc" | "name-asc" | "name-desc";
 
 function EncarteApp() {
-  const navigate = useNavigate();
   const extractCategory = useServerFn(extractCategoryProducts);
-
-  // Verificação de Acesso Restrito Interno
-  const [isAuthVerified, setIsAuthVerified] = useState<boolean>(false);
-
-  useEffect(() => {
-    const session = getClientSession();
-    if (!session) {
-      setIsAuthVerified(false);
-      navigate({
-        to: "/acesso",
-        search: { redirect: window.location.pathname + window.location.search },
-      });
-      return;
-    }
-    setIsAuthVerified(true);
-
-    // Verificação periódica de expiração de sessão (ex: 12 horas)
-    const checkTimer = setInterval(() => {
-      const active = getClientSession();
-      if (!active) {
-        setIsAuthVerified(false);
-        navigate({
-          to: "/acesso",
-          search: { redirect: window.location.pathname + window.location.search },
-        });
-      }
-    }, 15 * 1000);
-
-    return () => clearInterval(checkTimer);
-  }, [navigate]);
-
-  const handleLogout = () => {
-    // Encerra a sessão sem apagar os produtos e configurações salvas do encarte
-    clearClientSession();
-    navigate({ to: "/acesso" });
-  };
 
   // FLUXO DE ETAPAS (Origem, Dados, Preços, Campanha, Exportar)
   const [currentStep, setCurrentStep] = useState<EditorStep>("origem");
@@ -165,20 +121,9 @@ function EncarteApp() {
   // Modais
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false);
   const [storeSettingsOpen, setStoreSettingsOpen] = useState(false);
-  const [resetModalOpen, setResetModalOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<EncarteProduct | null>(null);
   const [addManualOpen, setAddManualOpen] = useState(false);
   const [expiredWarningOpen, setExpiredWarningOpen] = useState(false);
-  const [unpricedModalOpen, setUnpricedModalOpen] = useState(false);
-  const [missingPhotoModalOpen, setMissingPhotoModalOpen] = useState(false);
-  const [preExportModalOpen, setPreExportModalOpen] = useState(false);
-  const [preExportIssues, setPreExportIssues] = useState<
-    {
-      type: "missing_photo" | "unpriced" | "font_too_small" | "text_overflow";
-      title: string;
-      description: string;
-    }[]
-  >([]);
   const [pendingExportAction, setPendingExportAction] = useState<
     (() => void) | null
   >(null);
@@ -209,23 +154,12 @@ function EncarteApp() {
             ...DEFAULT_STORE,
             ...prev,
             ...parsed,
-            name:
-              parsed.name === "SUPERMERCADO BOM PREÇO"
-                ? ""
-                : parsed.name || parsed.nome || "",
-            logo: parsed.logo || parsed.logotipo || "",
-            address:
-              parsed.address === "Av. Principal, 1200 - Centro"
-                ? ""
-                : parsed.address || parsed.endereco || "",
-            phone:
-              parsed.phone === "(11) 99999-8888"
-                ? ""
-                : parsed.phone || parsed.telefone || "",
+            name: parsed.name || parsed.nome || DEFAULT_STORE.name,
+            logo: parsed.logo || parsed.logotipo || DEFAULT_STORE.logo,
+            address: parsed.address || parsed.endereco || DEFAULT_STORE.address,
+            phone: parsed.phone || parsed.telefone || DEFAULT_STORE.phone,
             legalNotice:
-              parsed.legalNotice?.includes("Ofertas válidas enquanto durarem os estoques")
-                ? ""
-                : parsed.legalNotice || parsed.notaLegal || "",
+              parsed.legalNotice || parsed.notaLegal || DEFAULT_STORE.legalNotice,
             primaryColor:
               parsed.primaryColor || parsed.corPrimaria || DEFAULT_STORE.primaryColor,
             accentColor:
@@ -250,7 +184,7 @@ function EncarteApp() {
             observation:
               parsed.observation || parsed.observacao || DEFAULT_CAMPAIGN.observation,
             format: parsed.format === "a4" ? "a4" : "story_9_16",
-            productsPerPage: [6, 8, 9, 10, 12].includes(Number(parsed.productsPerPage))
+            productsPerPage: [6, 8, 9, 12].includes(Number(parsed.productsPerPage))
               ? (Number(parsed.productsPerPage) as ProductsPerPageOption)
               : DEFAULT_CAMPAIGN.productsPerPage,
             template916Image:
@@ -298,18 +232,7 @@ function EncarteApp() {
           }));
 
           setProducts(sanitized);
-
-          // Restaura a etapa apenas em caso de recarregamento (F5) na mesma aba via sessionStorage.
-          // Ao abrir o link em uma nova janela ou aba, inicia sempre na etapa "origem", sem forçar ida para preços.
-          let stepToSet: EditorStep = "origem";
-          try {
-            const sessionStep = sessionStorage.getItem("encarte-active-step") as EditorStep | null;
-            if (sessionStep && ["origem", "dados", "precos", "campanha", "edicao_final", "exportar"].includes(sessionStep)) {
-              stepToSet = sessionStep;
-            }
-          } catch {}
-
-          setCurrentStep(stepToSet);
+          setCurrentStep("precos");
           setCompletedSteps(new Set(["origem", "dados"]));
         }
       }
@@ -332,7 +255,7 @@ function EncarteApp() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [undoStack]);
 
-  // Atualizar estado com histórico de Desfazer e Auto-Save resiliente
+  // Atualizar estado com histórico de Desfazer e Auto-Save
   const updateProductsState = (
     updated: EncarteProduct[],
     saveToUndo: boolean = true
@@ -341,34 +264,7 @@ function EncarteApp() {
       setUndoStack((prev) => [...prev.slice(-10), products]);
     }
     setProducts(updated);
-
-    // Salvar no localStorage de forma resiliente contra QuotaExceededError
-    try {
-      localStorage.setItem("encarte-products-v2", JSON.stringify(updated));
-    } catch (quotaErr) {
-      console.warn(
-        "Aviso: Quota do localStorage excedida ao salvar fotos completas. Salvando versão compacta...",
-        quotaErr
-      );
-      try {
-        // Remove data URLs pesadas (>50KB) do localStorage de contingência para garantir que todos os dados,
-        // códigos, descrições, preços e configurações continuem salvos sem travar a interface.
-        const safeForStorage = updated.map((p) => {
-          const isHeavyDataUrl = p.image && p.image.startsWith("data:") && p.image.length > 50000;
-          return {
-            ...p,
-            image: isHeavyDataUrl ? "" : p.image,
-            alternativePhotos: (p.alternativePhotos || []).map((alt) => ({
-              ...alt,
-              dataUrl: "",
-            })),
-          };
-        });
-        localStorage.setItem("encarte-products-v2", JSON.stringify(safeForStorage));
-      } catch (innerErr) {
-        console.warn("Aviso: Falha ao gravar no localStorage:", innerErr);
-      }
-    }
+    localStorage.setItem("encarte-products-v2", JSON.stringify(updated));
 
     // Feedback discreto de salvamento
     const now = new Date();
@@ -436,36 +332,31 @@ function EncarteApp() {
     sourceType: "spreadsheet" | "link" | "sample",
     unmatched: string[]
   ) => {
-    // 1. Atualizar navegação e etapas concluídas imediatamente
+    updateProductsState(loaded);
     setUnmatchedPhotos(unmatched);
     setCompletedSteps((prev) => new Set([...prev, "origem", "dados"]));
-    navigateToStep("precos");
+    setCurrentStep("precos");
 
-    // 2. Persistir lista de produtos no estado de forma resiliente
-    try {
-      updateProductsState(loaded);
-    } catch (err) {
-      console.warn("Aviso ao atualizar produtos:", err);
-      setProducts(loaded);
+    // Auto-balanceia bordas brancas em segundo plano para novos produtos carregados
+    if (typeof window !== "undefined") {
+      setTimeout(async () => {
+        try {
+          const trimmed = await Promise.all(
+            loaded.map(async (prod) => {
+              if (!prod.image || prod.image.trim() === "") return prod;
+              try {
+                const res = await autoTrimImageWhitespace(prod.image);
+                if (res.wasTrimmed) {
+                  return { ...prod, image: res.trimmedSrc };
+                }
+              } catch {}
+              return prod;
+            })
+          );
+          updateProductsState(trimmed);
+        } catch {}
+      }, 100);
     }
-  };
-
-  // Atualizar fotos dos produtos da campanha via Pasta do Computador ou Banco de Fotos
-  const handleUpdateProductsPhotos = (
-    updated: EncarteProduct[],
-    unmatched: string[]
-  ) => {
-    setUnmatchedPhotos(unmatched);
-    updateProductsState(updated);
-    setSavedNotice("Fotos da pasta do computador atualizadas com sucesso!");
-  };
-
-  // Navegação segura entre etapas persistindo na sessão ativa
-  const navigateToStep = (step: EditorStep) => {
-    setCurrentStep(step);
-    try {
-      sessionStorage.setItem("encarte-active-step", step);
-    } catch {}
   };
 
   // Carregar dados de demonstração (16 produtos com codes, fotos e validade)
@@ -474,38 +365,16 @@ function EncarteApp() {
     updateProductsState(samples);
     setUnmatchedPhotos([]);
     setCompletedSteps((prev) => new Set([...prev, "origem", "dados"]));
-    navigateToStep("precos");
+    setCurrentStep("precos");
   };
 
-  // Abrir modal de confirmação para zerar dados e iniciar novo encarte
   const handleResetEncarte = () => {
-    setResetModalOpen(true);
-  };
-
-  // Executa o reset completo: limpa localStorage, estado da memória e sessão
-  const handleExecuteReset = () => {
-    try {
-      localStorage.removeItem("encarte-products-v2");
-      localStorage.removeItem("encarte-products");
-      localStorage.removeItem("encarte-campaign-v2");
-      localStorage.removeItem("encarte-campaign");
-      localStorage.removeItem("encarte-drive-cache");
-      sessionStorage.removeItem("encarte-active-step");
-    } catch (err) {
-      console.warn("Aviso ao limpar dados do localStorage:", err);
+    if (confirm("Deseja reiniciar o encarte para escolher uma nova origem?")) {
+      updateProductsState([]);
+      setUnmatchedPhotos([]);
+      setCurrentStep("origem");
+      setCompletedSteps(new Set());
     }
-
-    setProducts([]);
-    setUndoStack([]);
-    setUnmatchedPhotos([]);
-    setCurrentStep("origem");
-    setCompletedSteps(new Set());
-    setCampaign(DEFAULT_CAMPAIGN);
-    setCurrentPage(1);
-    setSearchQuery("");
-    setActiveIssueFilter("all");
-    setSavedNotice("Encarte zerado com sucesso. Pronto para iniciar.");
-    setResetModalOpen(false);
   };
 
   // Conexão com a Server Function de categoria
@@ -621,20 +490,8 @@ function EncarteApp() {
     [flyerProducts]
   );
 
-  // Produtos incluídos sem preço cadastrado (bloqueiam a exportação)
-  const unpricedIncluded = useMemo(
-    () => (products || []).filter((p) => p && p.included && (!p.price || String(p.price).trim() === "")),
-    [products]
-  );
-
-  // Produtos incluídos sem foto (bloqueiam a exportação se campaign.blockExportWithoutPhoto estiver ativo)
-  const missingPhotoIncluded = useMemo(
-    () => (products || []).filter((p) => p && p.included && (!p.image || String(p.image).trim() === "")),
-    [products]
-  );
-
-  // Paginação: produtos por página (padrão 10 para Story 9:16, ajustável para 6, 8, 10, 12)
-  const perPage = campaign?.productsPerPage || 10;
+  // Paginação: produtos por página (padrão 12, ajustável para 6, 8, 9, 12)
+  const perPage = campaign?.productsPerPage || 12;
   const totalPages = Math.max(1, Math.ceil((flyerProducts || []).length / perPage));
 
   const pageProducts = useMemo(() => {
@@ -663,8 +520,6 @@ function EncarteApp() {
       result = result.filter((p) => Boolean(p?.alternativePhotos && p.alternativePhotos.length > 0));
     } else if (activeIssueFilter === "missing_packaging") {
       result = result.filter((p) => !p?.packaging || String(p.packaging).trim() === "");
-    } else if (activeIssueFilter === "missing_unit") {
-      result = result.filter((p) => !deriveSaleUnit(p?.packaging, p?.unit).hasUnitWord);
     } else if (activeIssueFilter === "expired") {
       result = result.filter((p) => isDateExpired(p?.validity || ""));
     } else if (activeIssueFilter === "excluded") {
@@ -775,115 +630,18 @@ function EncarteApp() {
     }
   };
 
-  // Validação obrigatória: bloqueia exportação se houver produto sem preço marcado no encarte
-  const checkUnpricedBeforeExport = (): boolean => {
-    if (unpricedIncluded.length > 0) {
-      setUnpricedModalOpen(true);
-      return false;
-    }
-    return true;
-  };
-
-  // Validação opcional: bloqueia exportação se houver produto sem foto e a opção estiver ativada
-  const checkMissingPhotoBeforeExport = (): boolean => {
-    if (campaign?.blockExportWithoutPhoto && missingPhotoIncluded.length > 0) {
-      setMissingPhotoModalOpen(true);
-      return false;
-    }
-    return true;
-  };
-
-  // Checagem Preventiva de Qualidade antes de Exportar:
-  // Valida produtos sem foto, textos cortados, textos abaixo do tamanho mínimo e preços vazios.
-  const runPreExportDiagnostics = () => {
-    const issues: {
-      type: "missing_photo" | "unpriced" | "font_too_small" | "text_overflow";
-      title: string;
-      description: string;
-    }[] = [];
-
-    // 1. Preços vazios
-    flyerProducts.forEach((p) => {
-      if (!p.price || String(p.price).trim() === "") {
-        issues.push({
-          type: "unpriced",
-          title: "Preço não informado",
-          description: `Produto "${p.name || p.code}" está sem preço preenchido.`,
-        });
-      }
-    });
-
-    // 2. Produtos sem foto
-    flyerProducts.forEach((p) => {
-      if (!p.image || String(p.image).trim() === "") {
-        issues.push({
-          type: "missing_photo",
-          title: "Produto sem foto",
-          description: `Produto "${p.name || p.code}" está sem foto (será gerado com "SEM FOTO").`,
-        });
-      }
-    });
-
-    // 3. Textos abaixo do tamanho mínimo
-    flyerProducts.forEach((p) => {
-      const nameSize = p.customStyle?.nameFontSize;
-      if (typeof nameSize === "number" && nameSize < 24) {
-        issues.push({
-          type: "font_too_small",
-          title: "Fonte do nome muito pequena",
-          description: `Produto "${p.name}": tamanho ${nameSize}px abaixo do mínimo legível (24px).`,
-        });
-      }
-      const headerSize = p.customStyle?.headerFontSize;
-      if (typeof headerSize === "number" && headerSize < 20) {
-        issues.push({
-          type: "font_too_small",
-          title: "Fonte do código muito pequena",
-          description: `Produto "${p.name}": cabeçalho em ${headerSize}px abaixo do mínimo (20px).`,
-        });
-      }
-    });
-
-    // 4. Textos muito longos com risco de corte (overflow)
-    flyerProducts.forEach((p) => {
-      if (p.name && p.name.length > 55 && !p.customStyle?.nameFontSize) {
-        issues.push({
-          type: "text_overflow",
-          title: "Nome muito longo com risco de corte",
-          description: `Produto "${p.name}" tem ${p.name.length} caracteres.`,
-        });
-      }
-    });
-
-    return issues;
-  };
-
-  const confirmOrExecuteExport = (exportAction: () => void) => {
-    if (!checkUnpricedBeforeExport()) return;
-    if (!checkMissingPhotoBeforeExport()) return;
+  const handleExportPdf = () => {
     if (flyerProducts.length === 0) {
       alert("Nenhum produto com preço está marcado para entrar no encarte.");
       return;
     }
-
-    const issues = runPreExportDiagnostics();
-    if (issues.length > 0) {
-      setPreExportIssues(issues);
-      setPendingExportAction(() => exportAction);
-      setPreExportModalOpen(true);
-      return;
-    }
-
     if (expiredInFlyer.length > 0) {
-      setPendingExportAction(() => exportAction);
+      setPendingExportAction(() => executeExportPdf);
       setExpiredWarningOpen(true);
       return;
     }
-
-    exportAction();
+    executeExportPdf();
   };
-
-  const handleExportPdf = () => confirmOrExecuteExport(executeExportPdf);
 
   // Exportar PNG em Resolução 1080 × 1920 ou 2160 × 3840 (ou A4)
   const executeExportPngCurrentPage = async () => {
@@ -923,7 +681,18 @@ function EncarteApp() {
     }
   };
 
-  const handleExportPng = () => confirmOrExecuteExport(executeExportPngCurrentPage);
+  const handleExportPng = () => {
+    if (flyerProducts.length === 0) {
+      alert("Nenhum produto com preço está marcado para entrar no encarte.");
+      return;
+    }
+    if (expiredInFlyer.length > 0) {
+      setPendingExportAction(() => executeExportPngCurrentPage);
+      setExpiredWarningOpen(true);
+      return;
+    }
+    executeExportPngCurrentPage();
+  };
 
   // Exportar Todas as Páginas em Arquivo ZIP
   const executeExportZipAllPages = async () => {
@@ -975,24 +744,18 @@ function EncarteApp() {
     }
   };
 
-  const handleExportZip = () => confirmOrExecuteExport(executeExportZipAllPages);
-
-  // Proteção rígida: quem não entrar não vê nenhuma tela do sistema
-  if (!isAuthVerified) {
-    return (
-      <div
-        data-testid="auth-loading-screen"
-        className="min-h-screen bg-[#0D0D0D] flex items-center justify-center select-none"
-      >
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-3 border-[#FFD400] border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs text-neutral-400 font-semibold tracking-wide">
-            Verificando acesso restrito...
-          </span>
-        </div>
-      </div>
-    );
-  }
+  const handleExportZip = () => {
+    if (flyerProducts.length === 0) {
+      alert("Nenhum produto com preço está marcado para entrar no encarte.");
+      return;
+    }
+    if (expiredInFlyer.length > 0) {
+      setPendingExportAction(() => executeExportZipAllPages);
+      setExpiredWarningOpen(true);
+      return;
+    }
+    executeExportZipAllPages();
+  };
 
   return (
     <div className="min-h-screen bg-neutral-100/90 font-sans text-neutral-900 pb-20">
@@ -1017,34 +780,11 @@ function EncarteApp() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setResetModalOpen(true)}
-              className="min-h-[44px] bg-red-600 hover:bg-red-700 text-white border-red-500 text-xs font-bold shadow-xs transition-colors"
-              title="Zerar todos os dados e começar um novo encarte limpo"
-            >
-              <RotateCcw className="h-4 w-4 mr-1.5" />
-              Novo Encarte (Zerar Dados)
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
               onClick={() => setStoreSettingsOpen(true)}
               className="min-h-[44px] bg-neutral-900 text-white border-neutral-700 hover:bg-neutral-800 hover:text-[#FFD400] text-xs font-semibold"
             >
               <Store className="h-4 w-4 mr-1.5 text-[#FFD400]" />
               Configurar Loja & Cores
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLogout}
-              className="min-h-[44px] bg-neutral-900 text-neutral-300 border-neutral-700 hover:bg-neutral-800 hover:text-red-400 text-xs font-semibold"
-              title="Encerrar sessão de acesso"
-              data-testid="logout-button"
-            >
-              <LogOut className="h-4 w-4 mr-1.5 text-neutral-400" />
-              Sair
             </Button>
           </div>
         </div>
@@ -1054,21 +794,14 @@ function EncarteApp() {
       <EditorStepper
         currentStep={currentStep}
         completedSteps={completedSteps}
-        onStepClick={navigateToStep}
+        onStepClick={(s) => setCurrentStep(s)}
         savedNotice={savedNotice}
         hasUndo={undoStack.length > 0}
         onUndo={handleUndo}
-        onReset={() => setResetModalOpen(true)}
       />
 
       {/* 3. CONTEÚDO PRINCIPAL DO EDITOR */}
-      <div
-        className={
-          currentStep === "edicao_final"
-            ? "w-full max-w-[1920px] mx-auto px-2 sm:px-4 py-2"
-            : "mx-auto max-w-7xl px-4 py-6 space-y-6"
-        }
-      >
+      <div className="mx-auto max-w-7xl px-4 py-6 space-y-6">
         {/* ETAPA 1: ESCOLHA DA ORIGEM (Quando na etapa de origem ou sem produtos) */}
         {currentStep === "origem" && (
           <SourceSelector
@@ -1076,9 +809,7 @@ function EncarteApp() {
             onExtractCategoryUrl={handleExtractCategoryUrl}
             onLoadSample={handleLoadSample}
             hasExistingProducts={products.length > 0}
-            existingProducts={products}
             onReset={handleResetEncarte}
-            onUpdateExistingProductsPhotos={handleUpdateProductsPhotos}
           />
         )}
 
@@ -1088,7 +819,7 @@ function EncarteApp() {
             type="no_products"
             primaryAction={{
               label: "Escolher Origem dos Dados",
-              onClick: () => navigateToStep("origem"),
+              onClick: () => setCurrentStep("origem"),
               icon: <Sparkles className="h-4 w-4" />,
             }}
             secondaryAction={{
@@ -1098,28 +829,7 @@ function EncarteApp() {
           />
         )}
 
-        {/* ETAPA 4: EDIÇÃO FINAL (STUDIO WYSIWYG EM 3 COLUNAS) */}
-        {products.length > 0 && currentStep === "edicao_final" && (
-          <FinalEditor
-            products={products}
-            store={store}
-            campaign={campaign}
-            onUpdateProducts={(updated) => updateProductsState(updated)}
-            onUpdateCampaign={(updatedCamp) => saveCampaignConfig(updatedCamp)}
-            onProceedToExport={() => {
-              setCompletedSteps((prev) => new Set([...prev, "edicao_final"]));
-              navigateToStep("exportar");
-              if (campaign.format === "story_9_16") {
-                setPreviewZoom(0.38);
-              } else {
-                setPreviewZoom(0.68);
-              }
-            }}
-            onBackToCampaign={() => navigateToStep("campanha")}
-          />
-        )}
-
-        {products.length > 0 && currentStep !== "origem" && currentStep !== "edicao_final" && (
+        {products.length > 0 && currentStep !== "origem" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* PAINEL LATERAL DE PENDÊNCIAS (SEMPRE VISÍVEL NO DESKTOP, 3 COLUNAS) */}
             <div className="lg:col-span-3 space-y-4 lg:sticky lg:top-[128px]">
@@ -1136,7 +846,7 @@ function EncarteApp() {
                 <Button
                   onClick={() => {
                     setCompletedSteps((prev) => new Set([...prev, "precos"]));
-                    navigateToStep("campanha");
+                    setCurrentStep("campanha");
                   }}
                   className="w-full min-h-[44px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs"
                 >
@@ -1149,11 +859,11 @@ function EncarteApp() {
                 <Button
                   onClick={() => {
                     setCompletedSteps((prev) => new Set([...prev, "campanha"]));
-                    navigateToStep("edicao_final");
+                    setCurrentStep("exportar");
                   }}
                   className="w-full min-h-[44px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs"
                 >
-                  Avançar para Edição Final
+                  Conferir Pré-visualização A4
                   <ArrowRight className="h-4 w-4 ml-1.5" />
                 </Button>
               )}
@@ -1265,11 +975,17 @@ function EncarteApp() {
                     <Button
                       onClick={() => {
                         setCompletedSteps((prev) => new Set([...prev, "campanha"]));
-                        navigateToStep("edicao_final");
+                        setCurrentStep("exportar");
+                        // Ajustar zoom inicial para visualização confortável
+                        if (campaign.format === "story_9_16") {
+                          setPreviewZoom(0.38);
+                        } else {
+                          setPreviewZoom(0.68);
+                        }
                       }}
                       className="min-h-[44px] bg-red-600 hover:bg-red-700 text-white font-bold text-xs"
                     >
-                      Avançar para Edição Final
+                      Avançar para Pré-visualização
                       <ArrowRight className="h-4 w-4 ml-1.5" />
                     </Button>
                   </div>
@@ -1474,31 +1190,6 @@ function EncarteApp() {
                       )}
                     </div>
                   )}
-
-                  {/* Opção de Bloqueio de Exportação por Foto Pendente */}
-                  <div className="rounded-lg border p-4 bg-white shadow-2xs space-y-2">
-                    <div className="text-xs font-bold text-neutral-900">
-                      Regras de Exportação e Validação:
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="block-export-photo-toggle"
-                        checked={campaign.blockExportWithoutPhoto || false}
-                        onCheckedChange={(checked) =>
-                          saveCampaignConfig({
-                            ...campaign,
-                            blockExportWithoutPhoto: Boolean(checked),
-                          })
-                        }
-                      />
-                      <Label
-                        htmlFor="block-export-photo-toggle"
-                        className="text-xs cursor-pointer text-neutral-800 font-medium"
-                      >
-                        Bloquear exportação se houver produto sem foto (por padrão desmarcado: itens sem foto exibem o quadro "SEM FOTO")
-                      </Label>
-                    </div>
-                  </div>
                 </div>
               )}
 
@@ -2059,284 +1750,6 @@ function EncarteApp() {
               }}
             >
               Exportar Mesmo Assim
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 6. Bloqueio de Exportação por Preço Vazio */}
-      <Dialog open={unpricedModalOpen} onOpenChange={setUnpricedModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-red-700 font-bold flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
-              Exportação Bloqueada: Preços Pendentes
-            </DialogTitle>
-            <DialogDescription className="text-xs text-neutral-600 pt-1">
-              Existem <strong>{unpricedIncluded.length} produto(s)</strong> no encarte sem preço preenchido. Para garantir a qualidade das artes, todos os preços devem ser informados antes de exportar.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 rounded-lg border bg-neutral-50 text-xs">
-            {unpricedIncluded.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center justify-between p-1.5 bg-white rounded border border-neutral-200"
-              >
-                <div className="min-w-0 pr-2">
-                  <span className="font-mono font-bold text-red-700 bg-red-50 border border-red-200 px-1 rounded text-[11px] mr-1.5">
-                    {p.code}
-                  </span>
-                  <span className="font-bold text-neutral-900 uppercase truncate">
-                    {p.name}
-                  </span>
-                </div>
-                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded shrink-0">
-                  Sem preço
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <DialogFooter className="gap-2 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setUnpricedModalOpen(false)}
-            >
-              Fechar
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="bg-red-600 hover:bg-red-700 text-white font-bold"
-              onClick={() => {
-                setUnpricedModalOpen(false);
-                navigateToStep("precos");
-                setActiveIssueFilter("unpriced");
-              }}
-            >
-              Preencher Preços Agora
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 7. Bloqueio de Exportação por Foto Vazia (Opcional, ativo via checkbox) */}
-      <Dialog open={missingPhotoModalOpen} onOpenChange={setMissingPhotoModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-amber-700 font-bold flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-              Exportação Bloqueada: Fotos Pendentes
-            </DialogTitle>
-            <DialogDescription className="text-xs text-neutral-600 pt-1">
-              Existem <strong>{missingPhotoIncluded.length} produto(s)</strong> no encarte sem foto. Como a opção de bloquear exportação sem foto está ativada, adicione fotos aos produtos ou desmarque essa opção para exportar com o quadro padrão "SEM FOTO".
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 rounded-lg border bg-neutral-50 text-xs">
-            {missingPhotoIncluded.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center justify-between p-1.5 bg-white rounded border border-neutral-200"
-              >
-                <div className="min-w-0 pr-2">
-                  <span className="font-mono font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1 rounded text-[11px] mr-1.5">
-                    {p.code}
-                  </span>
-                  <span className="font-bold text-neutral-900 uppercase truncate">
-                    {p.name}
-                  </span>
-                </div>
-                <span className="text-[10px] font-bold text-neutral-600 bg-neutral-100 border border-neutral-300 px-1.5 py-0.5 rounded shrink-0">
-                  Sem foto
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <DialogFooter className="gap-2 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setMissingPhotoModalOpen(false);
-                navigateToStep("precos");
-                setActiveIssueFilter("missing_photo");
-              }}
-            >
-              Revisar Fotos
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
-              onClick={() => {
-                setMissingPhotoModalOpen(false);
-                saveCampaignConfig({ ...campaign, blockExportWithoutPhoto: false });
-                if (pendingExportAction) {
-                  pendingExportAction();
-                  setPendingExportAction(null);
-                }
-              }}
-            >
-              Desmarcar Bloqueio e Exportar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 8. Checagem Preventiva de Qualidade Antes da Exportação */}
-      <Dialog open={preExportModalOpen} onOpenChange={setPreExportModalOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-amber-800 font-bold flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-              Checagem Preventiva de Qualidade
-            </DialogTitle>
-            <DialogDescription className="text-xs text-neutral-600 pt-1">
-              Foram detectados pontos de atenção antes da exportação. Revise os itens abaixo:
-            </DialogDescription>
-          </DialogHeader>
-
-          <div
-            data-testid="pre-export-issues-list"
-            className="max-h-60 overflow-y-auto space-y-2 p-2.5 rounded-lg border bg-neutral-50 text-xs"
-          >
-            {preExportIssues.map((issue, idx) => (
-              <div
-                key={`issue-${idx}`}
-                className="p-2 bg-white rounded border border-neutral-200 flex items-start gap-2 shadow-2xs"
-              >
-                <AlertCircle
-                  className={`h-4 w-4 shrink-0 mt-0.5 ${
-                    issue.type === "unpriced" ? "text-red-600" : "text-amber-600"
-                  }`}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="font-bold text-neutral-900 flex items-center justify-between">
-                    <span>{issue.title}</span>
-                    <span
-                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                        issue.type === "unpriced"
-                          ? "bg-red-100 text-red-700"
-                          : "bg-amber-100 text-amber-800"
-                      }`}
-                    >
-                      {issue.type === "unpriced"
-                        ? "Bloqueante"
-                        : issue.type === "missing_photo"
-                        ? "Sem Foto"
-                        : "Ajuste Visual"}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-neutral-600 mt-0.5">
-                    {issue.description}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <DialogFooter className="gap-2 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setPreExportModalOpen(false);
-                setPendingExportAction(null);
-                navigateToStep("edicao_final");
-              }}
-            >
-              Revisar na Edição Final
-            </Button>
-            {preExportIssues.some((i) => i.type === "unpriced") ? (
-              <Button
-                type="button"
-                size="sm"
-                className="bg-red-600 hover:bg-red-700 text-white font-bold"
-                onClick={() => {
-                  setPreExportModalOpen(false);
-                  setPendingExportAction(null);
-                  navigateToStep("precos");
-                  setActiveIssueFilter("unpriced");
-                }}
-              >
-                Corrigir Preços Pendentes
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                size="sm"
-                data-testid="confirm-export-anyway-button"
-                className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
-                onClick={() => {
-                  setPreExportModalOpen(false);
-                  if (pendingExportAction) {
-                    const action = pendingExportAction;
-                    setPendingExportAction(null);
-                    action();
-                  }
-                }}
-              >
-                Confirmar e Exportar Mesmo Assim
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL DE CONFIRMAÇÃO: NOVO ENCARTE / ZERAR DADOS */}
-      <Dialog open={resetModalOpen} onOpenChange={setResetModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-red-700 font-bold flex items-center gap-2">
-              <RotateCcw className="h-5 w-5 text-red-600" />
-              Iniciar Novo Encarte e Zerar Dados?
-            </DialogTitle>
-            <DialogDescription className="text-xs text-neutral-600 pt-1 leading-relaxed">
-              Tem certeza que deseja começar um novo encarte? Esta ação irá{" "}
-              <strong>apagar todos os produtos, fotos e dados da campanha atual</strong> salvos no navegador, permitindo iniciar um encarte 100% limpo a partir de uma nova planilha ou origem.
-            </DialogDescription>
-          </DialogHeader>
-
-          {products.length > 0 && (
-            <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-900 space-y-1">
-              <div className="font-bold flex items-center gap-1.5">
-                <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
-                Dados atuais que serão removidos:
-              </div>
-              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-red-800 pl-1">
-                <li>{products.length} produtos carregados na lista</li>
-                <li>Fotos associadas do computador, Drive ou ZIP</li>
-                <li>Preços, estoques e validades editadas</li>
-              </ul>
-            </div>
-          )}
-
-          <DialogFooter className="gap-2 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setResetModalOpen(false)}
-              className="text-xs font-semibold min-h-[38px]"
-            >
-              Cancelar e Manter Dados
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={handleExecuteReset}
-              className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs min-h-[38px]"
-            >
-              <Trash2 className="h-4 w-4 mr-1.5" />
-              Sim, Zerar Dados e Começar Novo
             </Button>
           </DialogFooter>
         </DialogContent>

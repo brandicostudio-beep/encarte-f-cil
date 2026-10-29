@@ -1,6 +1,5 @@
 import type { EncarteProduct } from "@/types/encarte";
 import { parsePhotoCodeAndSuffix } from "./drive-api";
-import { fileToDataUrl } from "./local-folder-service";
 
 export interface LoadedPhoto {
   filename: string;
@@ -61,7 +60,17 @@ export function extractProductCodeFromFilename(
   return cleanBase;
 }
 
-
+/**
+ * Converte um File de imagem para Data URL.
+ */
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
 
 /**
  * Processa upload de imagens em lote (FileList / File[]) ou arquivo compactado (.zip).
