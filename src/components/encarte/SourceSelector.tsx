@@ -472,6 +472,7 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
           if (cols.packaging) colParts.push(`Embalagem: ${cols.packaging}`);
           if (cols.stock) colParts.push(`Estoque: ${cols.stock}`);
           if (cols.price) colParts.push(`Preço: ${cols.price}`);
+          if (cols.validity) colParts.push(`Validade: ${cols.validity}`);
           if (colParts.length > 0) {
             colInfo = ` (${colParts.join(" · ")})`;
           }
