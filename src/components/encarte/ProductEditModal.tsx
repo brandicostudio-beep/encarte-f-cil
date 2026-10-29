@@ -444,6 +444,37 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
                       <Scissors className="h-3.5 w-3.5 mr-1 text-indigo-600" />
                       {isTrimming ? "Recortando..." : "Recortar Bordas Brancas (Auto-Trim)"}
                     </Button>
+
+                    {/* Barra deslizante + campo numérico, sincronizados com os botões e a prévia */}
+                    <div className="flex items-center gap-2 w-full pt-1">
+                      <input
+                        type="range"
+                        min={50}
+                        max={200}
+                        step={1}
+                        value={Math.round((form.imageScale || 1.0) * 100)}
+                        onChange={(e) => handleScaleSlider(Number(e.target.value) / 100)}
+                        className="flex-1 h-2 accent-red-600 cursor-pointer"
+                        aria-label="Tamanho da foto (porcentagem)"
+                      />
+                      <Input
+                        type="number"
+                        min={50}
+                        max={200}
+                        step={1}
+                        value={Math.round((form.imageScale || 1.0) * 100)}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          if (!isNaN(v)) handleScaleSlider(v / 100);
+                        }}
+                        className="w-20 h-7 text-xs text-center"
+                        aria-label="Tamanho da foto em porcentagem"
+                      />
+                      <span className="text-xs font-bold text-neutral-600">%</span>
+                    </div>
+                    <p className="text-[10.5px] text-neutral-500 w-full">
+                      O box do card nunca muda de tamanho: só a foto é ampliada dentro dele, com recorte automático.
+                    </p>
                   </div>
                 )}
 
