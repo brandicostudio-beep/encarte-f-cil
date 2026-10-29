@@ -21,6 +21,30 @@ interface ProductEditModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (updated: EncarteProduct) => void;
+  /** Aplica ajustes de estilo (escala da foto, selo, unidade) em massa */
+  onApplyBulk?: (
+    scope: "page" | "all",
+    changes: { imageScale?: number; badge?: BadgeType; unit?: string }
+  ) => void;
+}
+
+interface StylePreset {
+  name: string;
+  imageScale: number;
+  badge: BadgeType;
+  unit: string;
+}
+
+const PRESETS_KEY = "encarte-style-presets";
+
+function loadPresets(): StylePreset[] {
+  try {
+    const raw = localStorage.getItem(PRESETS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 export const ProductEditModal: React.FC<ProductEditModalProps> = ({
@@ -28,6 +52,7 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
   open,
   onOpenChange,
   onSave,
+  onApplyBulk,
 }) => {
   const [form, setForm] = useState<EncarteProduct | null>(null);
 
@@ -40,6 +65,63 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
   if (!form) return null;
 
   const [isTrimming, setIsTrimming] = useState(false);
+  const [bulkScope, setBulkScope] = useState<"page" | "all">("all");
+  const [presets, setPresets] = useState<StylePreset[]>([]);
+  const [presetName, setPresetName] = useState("");
+
+  useEffect(() => {
+    if (open) setPresets(loadPresets());
+  }, [open]);
+
+  const handleScaleSlider = (value: number) => {
+    const next = Math.min(2.0, Math.max(0.5, Number(value.toFixed(2))));
+    setForm((prev) => (prev ? { ...prev, imageScale: next } : null));
+  };
+
+  const handleSavePreset = () => {
+    if (!form || !presetName.trim()) return;
+    const next: StylePreset = {
+      name: presetName.trim(),
+      imageScale: typeof form.imageScale === "number" ? form.imageScale : 1.0,
+      badge: form.badge,
+      unit: form.unit,
+    };
+    const updated = [...presets.filter((p) => p.name !== next.name), next];
+    setPresets(updated);
+    try {
+      localStorage.setItem(PRESETS_KEY, JSON.stringify(updated));
+    } catch {
+      /* armazenamento cheio: ignora */
+    }
+    setPresetName("");
+  };
+
+  const handleApplyPreset = (preset: StylePreset) => {
+    setForm((prev) =>
+      prev
+        ? { ...prev, imageScale: preset.imageScale, badge: preset.badge, unit: preset.unit }
+        : null
+    );
+  };
+
+  const handleDeletePreset = (name: string) => {
+    const updated = presets.filter((p) => p.name !== name);
+    setPresets(updated);
+    try {
+      localStorage.setItem(PRESETS_KEY, JSON.stringify(updated));
+    } catch {
+      /* ignora */
+    }
+  };
+
+  const handleBulkApply = () => {
+    if (!form || !onApplyBulk) return;
+    onApplyBulk(bulkScope, {
+      imageScale: typeof form.imageScale === "number" ? form.imageScale : 1.0,
+      badge: form.badge,
+      unit: form.unit,
+    });
+  };
 
   const handleFile = (file: File) => {
     const reader = new FileReader();
