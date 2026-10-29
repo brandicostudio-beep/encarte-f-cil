@@ -121,6 +121,9 @@ export const ProductEditModal: React.FC<ProductEditModalProps> = ({
     });
   };
 
+  // Hooks acima — o retorno antecipado precisa ficar depois de todos eles
+  if (!form) return null;
+
   const handleFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
