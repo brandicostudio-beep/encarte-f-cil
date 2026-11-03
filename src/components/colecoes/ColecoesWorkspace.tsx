@@ -36,7 +36,9 @@ import {
   Eye,
   Edit2,
   Copy,
+  FolderSync,
 } from "lucide-react";
+import { ColecoesSourceSelector } from "./ColecoesSourceSelector";
 
 const STORAGE_KEY_PRODUCTS = "encarte-colecoes-products-v1";
 const STORAGE_KEY_CONFIG = "encarte-colecoes-config-v1";
@@ -72,6 +74,7 @@ export const ColecoesWorkspace: React.FC = () => {
   const [variantsModalProduct, setVariantsModalProduct] = useState<ColecaoProduct | null>(null);
   const [variantsModalOpen, setVariantsModalOpen] = useState(false);
   const [importSpreadsheetOpen, setImportSpreadsheetOpen] = useState(false);
+  const [sourceSelectorModalOpen, setSourceSelectorModalOpen] = useState(false);
   const [newProductModalOpen, setNewProductModalOpen] = useState(false);
   const [newProd, setNewProd] = useState({ code: "", description: "", image: "", isPrincipal: false });
 
@@ -147,6 +150,20 @@ export const ColecoesWorkspace: React.FC = () => {
         return p;
       })
     );
+  };
+
+  // Carregamento e sincronização completa via ColecoesSourceSelector
+  const handleProductsLoaded = (
+    loadedProducts: ColecaoProduct[],
+    sourceType: "spreadsheet" | "link" | "sample"
+  ) => {
+    setProducts(loadedProducts);
+    setSourceSelectorModalOpen(false);
+    setActiveTab("tabela");
+  };
+
+  const handleUpdateExistingPhotos = (updatedProducts: ColecaoProduct[]) => {
+    setProducts(updatedProducts);
   };
 
   // Importar planilha Excel/CSV
@@ -397,33 +414,24 @@ export const ColecoesWorkspace: React.FC = () => {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setImportSpreadsheetOpen(true)}
+              onClick={() => setSourceSelectorModalOpen(true)}
               className="bg-neutral-900 border-neutral-700 text-neutral-200 hover:text-white text-xs h-9"
+              title="Importar produtos por Planilha (.xlsx/.csv) com drag & drop ou Link da Categoria"
             >
               <FileSpreadsheet className="h-4 w-4 mr-1.5 text-green-500" />
-              Importar Planilha
+              Importar Planilha / Link
             </Button>
 
             <Button
               size="sm"
               variant="outline"
-              onClick={() => photoFolderInputRef.current?.click()}
+              onClick={() => setSourceSelectorModalOpen(true)}
               className="bg-neutral-900 border-neutral-700 text-neutral-200 hover:text-white text-xs h-9"
-              title="Carrega fotos de pasta local vinculando automaticamente pelo código"
+              title="Sincronizar banco de fotos com pasta local/rede (ex: Fotos_Palm), ZIP ou Google Drive"
             >
-              <FolderOpen className="h-4 w-4 mr-1.5 text-blue-400" />
-              Vincular Fotos
+              <FolderSync className="h-4 w-4 mr-1.5 text-amber-400" />
+              Banco de Fotos (Rede / Drive)
             </Button>
-            <input
-              ref={photoFolderInputRef}
-              type="file"
-              // @ts-ignore
-              webkitdirectory=""
-              directory=""
-              multiple
-              className="hidden"
-              onChange={handlePhotoFolderUpload}
-            />
 
             <Button
               size="sm"
@@ -435,7 +443,22 @@ export const ColecoesWorkspace: React.FC = () => {
               Novo Produto
             </Button>
 
-            {products.length === 0 && (
+            {products.length > 0 ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (confirm("Deseja realmente limpar todos os produtos da coleção atual?")) {
+                    setProducts([]);
+                  }
+                }}
+                className="bg-neutral-900 border-red-900/60 text-red-400 hover:text-red-300 text-xs h-9"
+                title="Zerar produtos da coleção"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                Limpar
+              </Button>
+            ) : (
               <Button
                 size="sm"
                 variant="ghost"
@@ -506,36 +529,28 @@ export const ColecoesWorkspace: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. CONTEÚDO DA ABA: LISTA DE PRODUTOS */}
-      {activeTab === "tabela" && (
-        <div className="rounded-xl border border-neutral-200 bg-white shadow-xs overflow-hidden">
-          <div className="p-3 border-b bg-neutral-50 flex items-center justify-between text-xs">
-            <span className="font-bold text-neutral-800">
-              Produtos da Coleção ({products.length})
-            </span>
-            <span className="text-neutral-500 text-[11px]">
-              Clique no botão <strong>★ Principal</strong> para agrupar variações semelhantes (mesmo nome-base sem sabor/recheio).
-            </span>
-          </div>
-
-          {products.length === 0 ? (
-            <div className="py-16 text-center space-y-3">
-              <Layers className="h-10 w-10 mx-auto text-neutral-300" />
-              <p className="text-sm font-semibold text-neutral-700">Nenhum produto cadastrado na coleção.</p>
-              <div className="flex justify-center gap-2">
-                <Button size="sm" onClick={() => setImportSpreadsheetOpen(true)}>
-                  <FileSpreadsheet className="h-4 w-4 mr-1.5" />
-                  Importar Planilha
-                </Button>
-                <Button size="sm" variant="outline" onClick={handleLoadSample}>
-                  <Sparkles className="h-4 w-4 mr-1.5 text-purple-600" />
-                  Carregar Exemplo
-                </Button>
+      {/* 2. CONTEÚDO: SELETOR DE ORIGEM (QUANDO VAZIO) OU TABELA/PREVIEW (QUANDO HÁ PRODUTOS) */}
+      {products.length === 0 ? (
+        <ColecoesSourceSelector
+          onProductsLoaded={handleProductsLoaded}
+          existingProducts={products}
+          hasExistingProducts={false}
+        />
+      ) : (
+        <>
+          {activeTab === "tabela" && (
+            <div className="rounded-xl border border-neutral-200 bg-white shadow-xs overflow-hidden">
+              <div className="p-3 border-b bg-neutral-50 flex items-center justify-between text-xs">
+                <span className="font-bold text-neutral-800">
+                  Produtos da Coleção ({products.length})
+                </span>
+                <span className="text-neutral-500 text-[11px]">
+                  Clique no botão <strong>★ Principal</strong> para agrupar variações semelhantes (mesmo nome-base sem sabor/recheio).
+                </span>
               </div>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
                 <thead className="bg-neutral-100 text-neutral-700 font-bold border-b">
                   <tr>
                     <th className="py-2.5 px-3 w-16">Foto</th>
@@ -662,7 +677,6 @@ export const ColecoesWorkspace: React.FC = () => {
                 </tbody>
               </table>
             </div>
-          )}
         </div>
       )}
 
@@ -764,6 +778,21 @@ export const ColecoesWorkspace: React.FC = () => {
           </div>
         </div>
       )}
+        </>
+      )}
+
+      {/* MODAL: Origem e Banco de Fotos Completo de Coleções */}
+      <Dialog open={sourceSelectorModalOpen} onOpenChange={setSourceSelectorModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <ColecoesSourceSelector
+            onProductsLoaded={handleProductsLoaded}
+            onUpdateExistingPhotos={handleUpdateExistingPhotos}
+            existingProducts={products}
+            hasExistingProducts={products.length > 0}
+            onClose={() => setSourceSelectorModalOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* MODAL: Configurar Variações do Produto Principal */}
       <PrincipalVariantsModal
