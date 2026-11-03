@@ -14,6 +14,8 @@ import {
   formatColecaoPageFilename,
   sanitizeCollectionFileName,
 } from "./colecoes-export";
+import { parseColecaoSpreadsheet, parseBooleanFlag } from "./colecoes-parser";
+import * as XLSX from "xlsx";
 
 describe("Encarte de Coleções - Regras de Negócio e Testes Obrigatórios", () => {
   // Dados de teste reais
@@ -258,6 +260,64 @@ describe("Encarte de Coleções - Regras de Negócio e Testes Obrigatórios", ()
       expect(sanitizeCollectionFileName("Coleção de Verão @ 2026!!!")).toBe(
         "colecao-de-verao-2026"
       );
+    });
+  });
+
+  describe("5. Importação e Leitura de Planilha de Coleções (parseColecaoSpreadsheet)", () => {
+    it("Normaliza flags booleanas de Principal (SIM, S, 1, TRUE, etc.)", () => {
+      expect(parseBooleanFlag("SIM")).toBe(true);
+      expect(parseBooleanFlag("sim")).toBe(true);
+      expect(parseBooleanFlag("S")).toBe(true);
+      expect(parseBooleanFlag("true")).toBe(true);
+      expect(parseBooleanFlag(true)).toBe(true);
+      expect(parseBooleanFlag(1)).toBe(true);
+      expect(parseBooleanFlag("1")).toBe(true);
+      expect(parseBooleanFlag("PRINCIPAL")).toBe(true);
+      expect(parseBooleanFlag("NÃO")).toBe(false);
+      expect(parseBooleanFlag("nao")).toBe(false);
+      expect(parseBooleanFlag("")).toBe(false);
+      expect(parseBooleanFlag(null)).toBe(false);
+    });
+
+    it("Lê planilha .xlsx com produtos e flag Principal sem erro de 'set is not a function'", async () => {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet([
+        { CODPROD: "23396", DESCRICAO: "FRALDA PERSONAL MEGA", PRINCIPAL: "SIM" },
+        { CODPROD: "19559", DESCRICAO: "SEQUILHOS BOMBISCOITO", PRINCIPAL: "N" },
+        { CODPROD: "20609", DESCRICAO: "SALGADINHO YOKITOS", PRINCIPAL: "1" },
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws, "Produtos");
+      const buffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+      const file = new File([buffer], "colecao-teste.xlsx", {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const res = await parseColecaoSpreadsheet(file);
+      expect(res.success).toBe(true);
+      expect(res.products).toHaveLength(3);
+      expect(res.products[0].code).toBe("23396");
+      expect(res.products[0].description).toBe("FRALDA PERSONAL MEGA");
+      expect(res.products[0].isPrincipal).toBe(true);
+      expect(res.products[1].code).toBe("19559");
+      expect(res.products[1].isPrincipal).toBe(false);
+      expect(res.products[2].code).toBe("20609");
+      expect(res.products[2].isPrincipal).toBe(true);
+    });
+
+    it("Detecta código duplicado e reporta erro sem lançar exceção", async () => {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet([
+        { CODPROD: "1001", DESCRICAO: "PRODUTO A" },
+        { CODPROD: "1001", DESCRICAO: "PRODUTO A DUPLICADO" },
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+      const buffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+      const file = new File([buffer], "duplicados.xlsx");
+
+      const res = await parseColecaoSpreadsheet(file);
+      expect(res.success).toBe(false);
+      expect(res.errors.some((e) => e.includes("duplicado"))).toBe(true);
+      expect(res.products).toHaveLength(1);
     });
   });
 });

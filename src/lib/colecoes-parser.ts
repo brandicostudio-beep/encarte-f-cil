@@ -99,7 +99,7 @@ export async function parseColecaoSpreadsheet(file: File): Promise<ColecaoImport
 
   const products: ColecaoProduct[] = [];
   const errors: string[] = [];
-  const seenCodes = new Set<string>();
+  const seenCodes = new Map<string, number>();
 
   rows.forEach((row, idx) => {
     const lineNum = idx + 2;
@@ -111,11 +111,13 @@ export async function parseColecaoSpreadsheet(file: File): Promise<ColecaoImport
       return;
     }
 
-    if (seenCodes.has(code.toLowerCase())) {
-      errors.push(`Linha ${lineNum}: Código duplicado '${code}'.`);
+    const lowerCode = code.toLowerCase();
+    if (seenCodes.has(lowerCode)) {
+      const prevLine = seenCodes.get(lowerCode);
+      errors.push(`Linha ${lineNum}: Código duplicado '${code}' (já cadastrado na linha ${prevLine}).`);
       return;
     }
-    seenCodes.set(code.toLowerCase(), true);
+    seenCodes.set(lowerCode, lineNum);
 
     const rawDesc = descKey ? String(row[descKey] ?? "").trim() : "";
     const description = rawDesc || `PRODUTO ${code}`;
