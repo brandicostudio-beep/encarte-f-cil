@@ -1,9 +1,62 @@
 import type { ColecaoProduct } from "@/types/colecoes";
 
 /**
- * Lista abrangente de sabores, recheios e variações comuns no varejo alimentício e mercearia.
+ * Lista abrangente de sabores, recheios, fragrâncias e variações comuns no varejo alimentício e produtos de limpeza.
+ * Ordenada por tamanho decrescente para priorizar expressões compostas (ex: "agua de coco e alecrim verde" antes de "alecrim").
  */
-const FLAVORS_AND_VARIANTS = [
+const RAW_FLAVORS_AND_VARIANTS = [
+  // Fragrâncias Compostas e Limpeza
+  "agua de coco e alecrim verde",
+  "agua de coco e alecrim",
+  "agua de coco",
+  "alecrim verde",
+  "frescor das flores",
+  "azul intenso",
+  "capim limao",
+  "primavera sache",
+  "primavera refil",
+  "maciez sache",
+  "primavera",
+  "maciez",
+  "aconchego",
+  "delicado",
+  "frescor",
+  "carinho",
+  "ternura",
+  "flores e frutas",
+  "flores de lavanda",
+  "lavanda e camomila",
+  "oxigenio ativo",
+  "bicarbonato",
+  "alecrim",
+  "lavanda",
+  "floral",
+  "marine",
+  "eucalipto",
+  "camomila",
+  "aloe vera",
+  "citrus",
+  "talco",
+  "suave",
+  "intenso",
+  "clear",
+  "neutro",
+  "active",
+  "power",
+  "sache",
+  "refil",
+
+  // Cores / Variações de Fragrância e Sub-linhas Comuns
+  "flor de",
+  "flores de",
+  "rosa",
+  "verde",
+  "azul",
+  "branca",
+  "amarela",
+  "vermelha",
+  "dourada",
+
   // Doces e Frutas
   "chocolate ao leite",
   "chocolate branco",
@@ -19,19 +72,15 @@ const FLAVORS_AND_VARIANTS = [
   "caramelo",
   "coco",
   "limao",
-  "limão",
   "maracuja",
-  "maracujá",
   "abacaxi",
   "banana",
   "maca",
-  "maçã",
   "uva",
   "cereja",
   "framboesa",
   "amora",
   "avela",
-  "avelã",
   "nozes",
   "castanha",
   "nata",
@@ -40,25 +89,24 @@ const FLAVORS_AND_VARIANTS = [
   "menthol",
   "churros",
   "red velvet",
-  "cookies",
   "cookies & cream",
+  "cookies",
   "pacoca",
-  "paçoca",
   "amendoim",
 
   // Salgados e Temperos
   "presunto",
   "queijo nacho",
-  "queijo",
   "quatro queijos",
   "4 queijos",
+  "queijo",
   "cebola e salsa",
   "cebola",
   "salsa",
   "bacon",
   "calabresa",
-  "frango assado",
   "frango com catupiry",
+  "frango assado",
   "frango",
   "carne assada",
   "carne de sol",
@@ -67,14 +115,11 @@ const FLAVORS_AND_VARIANTS = [
   "churrasco",
   "picanha",
   "requeijao",
-  "requeijão",
   "cheddar",
   "parmesao",
-  "parmesão",
   "provolone",
   "ervas finas",
   "alho e oleo",
-  "alho e óleo",
   "alho",
   "azeitona preta",
   "azeitona",
@@ -88,31 +133,26 @@ const FLAVORS_AND_VARIANTS = [
   // Bebidas
   "cola",
   "guarana",
-  "guaraná",
   "laranja",
   "manga",
   "caju",
   "pessego",
-  "pêssego",
-
-  // Limpeza e Higiene
-  "lavanda",
-  "floral",
-  "marine",
-  "eucalipto",
-  "alecrim",
-  "camomila",
-  "aloe vera",
-  "citrus",
-  "talco",
-  "suave",
-  "intenso",
 ];
+
+// Ordenação decrescente por quantidade de caracteres para expressões compostas
+const FLAVORS_AND_VARIANTS = [...RAW_FLAVORS_AND_VARIANTS].sort(
+  (a, b) => b.length - a.length
+);
 
 /**
  * Palavras estruturais que podem ser removidas ao derivar o nome genérico base.
  */
 const DESCRIPTOR_TERMS = [
+  "fragrancia",
+  "fragrância",
+  "aroma",
+  "essencia",
+  "essência",
   "sabor",
   "sabores",
   "recheio",
@@ -141,18 +181,39 @@ export function normalizeText(text: string): string {
 }
 
 /**
- * Extrai o nome-base genérico de um produto removendo o sabor, recheio ou aroma.
+ * Cria padrão regex tolerante a acentuação e limites de palavras não-ASCII.
+ */
+function buildAccentInsensitiveRegex(phrase: string): RegExp {
+  const pattern = phrase
+    .split("")
+    .map((c) => {
+      if ("aáàãâ".includes(c)) return "[aáàãâ]";
+      if ("eéèê".includes(c)) return "[eéèê]";
+      if ("iíìî".includes(c)) return "[iíìî]";
+      if ("oóòõô".includes(c)) return "[oóòõô]";
+      if ("uúùû".includes(c)) return "[uúùû]";
+      if ("cç".includes(c)) return "[cç]";
+      return c;
+    })
+    .join("");
+
+  return new RegExp("(^|[\\s,.-]+)" + pattern + "(?=$|[\\s,.-]+)", "gi");
+}
+
+/**
+ * Extrai o nome-base genérico de um produto removendo a fragrância, sabor, recheio ou aroma.
  * Exemplo:
- * - "Biscoito Oreo 80g Chocolate" -> "Biscoito Oreo 80g"
- * - "Biscoito Oreo 80g Baunilha" -> "Biscoito Oreo 80g"
- * - "Gelatina Royal Uva 25g" -> "Gelatina Royal 25g"
- * - "Salgadinho Yokitos Conchinha Presunto 153g" -> "Salgadinho Yokitos Conchinha 153g"
+ * - "Sabonete Água de Coco e Alecrim Verde Ypê" -> "Sabonete Ypê"
+ * - "Detergente Capim Limão Ypê" -> "Detergente Ypê"
+ * - "Biscoito Recheado Oreo 80g Chocolate" -> "Biscoito Oreo 80g"
+ * - "Lava Roupas Pó Maciez Tixan" -> "Lava Roupas Pó Tixan"
+ * - "Amaciante Frescor das Flores Ypê" -> "Amaciante Ypê"
  */
 export function extractGenericBaseName(rawName: string): string {
   if (!rawName) return "";
   let working = rawName.trim();
 
-  // Preservar gramatura/tamanho se existir (ex: 80g, 153g, 1kg, 200ml, 1x24 unid)
+  // Preservar gramatura/tamanho se existir (ex: 80g, 153g, 1kg, 200ml, 1x24 unid, etc.)
   const sizeMatch =
     working.match(/\b(\d+X\d+\s*(?:GR|G|KG|ML|L|UNID|UN))\b/i) ||
     working.match(/\b(\d+[\d.,]*\s*(?:GR|G|KG|ML|L|UNID|UN))\b/i) ||
@@ -160,17 +221,22 @@ export function extractGenericBaseName(rawName: string): string {
 
   const sizeToken = sizeMatch ? sizeMatch[1].trim() : "";
 
-  // Procura e remove termos de sabor/recheio
+  // Procura e remove termos de sabor/fragrância/variação (expressões compostas primeiro)
   for (const flavor of FLAVORS_AND_VARIANTS) {
-    const re = new RegExp(`\\b${flavor}\\b`, "gi");
+    const re = buildAccentInsensitiveRegex(flavor);
     working = working.replace(re, " ");
   }
 
   // Remove termos descritores
   for (const desc of DESCRIPTOR_TERMS) {
-    const re = new RegExp(`\\b${desc}\\b`, "gi");
+    const re = buildAccentInsensitiveRegex(desc);
     working = working.replace(re, " ");
   }
+
+  // Limpeza de conectivos órfãos deixados após a remoção (de, do, da, com, em, e)
+  working = working.replace(/\s+(de|do|da|com|em|e)\s+([A-Z0-9À-ÿ]+)$/gi, " $2");
+  working = working.replace(/\s+(de|do|da|com|em|e)\s*$/gi, "");
+  working = working.replace(/^\s*(de|do|da|com|em|e)\s+/gi, "");
 
   // Limpeza de hífens soltos, barras e múltiplos espaços
   working = working

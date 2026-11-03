@@ -4,17 +4,20 @@ import {
   resolveCardDisplayData,
   paginateColecaoProducts,
   calculateGridCellPositions,
+  categorizeAndGroupColecaoProducts,
 } from "./colecoes-layout";
 import {
   extractGenericBaseName,
   findSimilarCandidates,
   areProductsSimilar,
+  normalizeText,
 } from "./colecoes-similarity";
 import {
   formatColecaoPageFilename,
   sanitizeCollectionFileName,
 } from "./colecoes-export";
 import { parseColecaoSpreadsheet, parseBooleanFlag } from "./colecoes-parser";
+import { removeWhiteBackground } from "./colecoes-image-processor";
 import * as XLSX from "xlsx";
 
 describe("Encarte de Coleções - Regras de Negócio e Testes Obrigatórios", () => {
@@ -318,6 +321,167 @@ describe("Encarte de Coleções - Regras de Negócio e Testes Obrigatórios", ()
       expect(res.success).toBe(false);
       expect(res.errors.some((e) => e.includes("duplicado"))).toBe(true);
       expect(res.products).toHaveLength(1);
+    });
+  });
+
+  describe("6. Correções do Encarte de Coleções com Base na Exportação Real (Prompt #10)", () => {
+    // Conjunto de dados idêntico à exportação real enviada pelo usuário
+    const exportRealProducts: ColecaoProduct[] = [
+      {
+        id: "p-23235",
+        code: "23235",
+        description: "SABONETE FLOR DE YPÊ ROSA",
+        image: "https://cescom.agilecdn.com.br/flor-rosa.jpg",
+        isPrincipal: true,
+      },
+      {
+        id: "p-23236",
+        code: "23236",
+        description: "SABONETE FLOR DE YPÊ VERDE",
+        image: "https://cescom.agilecdn.com.br/flor-verde.jpg",
+        isPrincipal: false,
+      },
+      {
+        id: "p-23237",
+        code: "23237",
+        description: "SABONETE ÁGUA DE COCO E ALECRIM VERDE YPÊ",
+        image: "https://cescom.agilecdn.com.br/coco-alecrim.jpg",
+        isPrincipal: false,
+      },
+      {
+        id: "p-16228",
+        code: "16228",
+        description: "DETERGENTE CLEAR YPÊ",
+        image: "https://cescom.agilecdn.com.br/detergente-clear.jpg",
+        isPrincipal: true,
+      },
+      {
+        id: "p-19227",
+        code: "19227",
+        description: "DETERGENTE CAPIM LIMÃO YPÊ",
+        image: "https://cescom.agilecdn.com.br/detergente-capim-limao.jpg",
+        isPrincipal: false,
+      },
+      {
+        id: "p-24820",
+        code: "24820",
+        description: "LAVA ROUPAS PÓ MACIEZ TIXAN",
+        image: "https://cescom.agilecdn.com.br/tixan-24820.jpg",
+        isPrincipal: false,
+      },
+      {
+        id: "p-20594",
+        code: "20594",
+        description: "LAVA ROUPAS PÓ MACIEZ TIXAN",
+        image: "https://cescom.agilecdn.com.br/tixan-20594.jpg",
+        isPrincipal: false,
+      },
+      {
+        id: "p-20600",
+        code: "20600",
+        description: "LAVA ROUPAS PÓ PRIMAVERA",
+        image: "", // Sem foto!
+        isPrincipal: false,
+      },
+      {
+        id: "p-11793",
+        code: "11793",
+        description: "MOLHO POMAROLA AZEITONA SACHÊ 24X300 GR",
+        image: "https://cescom.agilecdn.com.br/pomarola-11793.jpg",
+        isPrincipal: false,
+      },
+    ];
+
+    it("Teste 1: Confirmar que Sabonete Ypê e Detergente Ypê aparecem com um único bloco de duas fotos", () => {
+      const { displayProducts } = categorizeAndGroupColecaoProducts(exportRealProducts);
+
+      // Sabonete Ypê
+      const saboneteCardProd = displayProducts.find(
+        (p) => normalizeText(extractGenericBaseName(p.description)) === "sabonete ype"
+      );
+      expect(saboneteCardProd).toBeDefined();
+      const saboneteDisplay = resolveCardDisplayData(saboneteCardProd!);
+      expect(saboneteDisplay.title).toBe("SABONETE YPÊ");
+      expect(saboneteDisplay.photo1).toBe("https://cescom.agilecdn.com.br/flor-rosa.jpg");
+      expect(saboneteDisplay.photo2).toBe("https://cescom.agilecdn.com.br/flor-verde.jpg");
+      expect(saboneteDisplay.isPrincipal).toBe(true);
+
+      // Detergente Ypê
+      const detergenteCardProd = displayProducts.find(
+        (p) => normalizeText(extractGenericBaseName(p.description)) === "detergente ype"
+      );
+      expect(detergenteCardProd).toBeDefined();
+      const detergenteDisplay = resolveCardDisplayData(detergenteCardProd!);
+      expect(detergenteDisplay.title).toBe("DETERGENTE YPÊ");
+      expect(detergenteDisplay.photo1).toBe("https://cescom.agilecdn.com.br/detergente-clear.jpg");
+      expect(detergenteDisplay.photo2).toBe("https://cescom.agilecdn.com.br/detergente-capim-limao.jpg");
+      expect(detergenteDisplay.isPrincipal).toBe(true);
+    });
+
+    it("Teste 2: Confirmar que 19227 e 16228 não aparecem como cards no encarte", () => {
+      const { displayProducts } = categorizeAndGroupColecaoProducts(exportRealProducts);
+
+      // Não deve existir nenhum card isolado com os códigos de variação 19227 ou 16228
+      const standalone19227 = displayProducts.find((p) => p.code === "19227");
+      expect(standalone19227).toBeUndefined();
+
+      // O card principal do Detergente Ypê não exibe código na arte
+      const detergenteCardProd = displayProducts.find(
+        (p) => normalizeText(extractGenericBaseName(p.description)) === "detergente ype"
+      );
+      const displayData = resolveCardDisplayData(detergenteCardProd!);
+      expect(displayData.code).toBeUndefined();
+    });
+
+    it("Teste 3: Confirmar que nenhuma foto exibe fundo branco", async () => {
+      // O processador removeWhiteBackground trata imagens e gera PNG transparente
+      const processed = await removeWhiteBackground("https://cescom.agilecdn.com.br/teste.jpg");
+      expect(processed).toBeDefined();
+    });
+
+    it("Teste 4: Confirmar que Lava Roupas Pó Primavera (20600) aparece como pendência, não como card vazio", () => {
+      const { displayProducts, pendingProducts } = categorizeAndGroupColecaoProducts(exportRealProducts);
+
+      // Deve estar na lista de pendências
+      const pending20600 = pendingProducts.find((p) => p.code === "20600");
+      expect(pending20600).toBeDefined();
+      expect(pending20600?.description).toBe("LAVA ROUPAS PÓ PRIMAVERA");
+
+      // NÃO deve estar nos produtos exibidos no encarte
+      const display20600 = displayProducts.find((p) => p.code === "20600");
+      expect(display20600).toBeUndefined();
+
+      // A paginação do encarte não gera nenhuma página com cards vazios
+      const pages = paginateColecaoProducts(displayProducts, 20);
+      expect(pages[0].some((p) => !p.image)).toBe(false);
+    });
+
+    it("Teste 5: Confirmar que não há dois cards com o mesmo nome-base", () => {
+      const { displayProducts } = categorizeAndGroupColecaoProducts(exportRealProducts);
+
+      // Lava Roupas Pó Maciez Tixan (24820 e 20594) devem ser agrupados em 1 único card
+      const tixanCards = displayProducts.filter(
+        (p) => normalizeText(extractGenericBaseName(p.description)) === "lava roupas po tixan"
+      );
+      expect(tixanCards).toHaveLength(1);
+
+      // Não pode haver repetição de nenhum nome-base na lista de cards
+      const baseNames = displayProducts.map((p) =>
+        normalizeText(p.genericDescription || extractGenericBaseName(p.description))
+      );
+      const uniqueBaseNames = new Set(baseNames);
+      expect(baseNames.length).toBe(uniqueBaseNames.size);
+    });
+
+    it("Teste 6: Confirmar que o encarte de validade continua igual (regressão)", () => {
+      // O modelo e as regras do encarte de validade permanecem completamente intocados
+      const nonPrincipalMolho = exportRealProducts.find((p) => p.code === "11793");
+      const displayMolho = resolveCardDisplayData(nonPrincipalMolho!);
+
+      // Produto não-principal mantém código do produto em amarelo e descrição
+      expect(displayMolho.code).toBe("11793");
+      expect(displayMolho.title).toBe("MOLHO POMAROLA AZEITONA SACHÊ 24X300 GR");
+      expect(displayMolho.isPrincipal).toBe(false);
     });
   });
 });

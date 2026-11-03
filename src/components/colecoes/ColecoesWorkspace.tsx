@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import type { ColecaoProduct, ColecaoConfig } from "@/types/colecoes";
 import { DEFAULT_COLECAO_CONFIG } from "@/types/colecoes";
-import { paginateColecaoProducts } from "@/lib/colecoes-layout";
+import {
+  paginateColecaoProducts,
+  categorizeAndGroupColecaoProducts,
+} from "@/lib/colecoes-layout";
 import { parseColecaoSpreadsheet } from "@/lib/colecoes-parser";
 import { exportColecaoPageAsPng, exportColecaoAllPagesZip } from "@/lib/colecoes-export";
 import { ColecoesPage } from "./ColecoesPage";
@@ -37,6 +40,7 @@ import {
   Edit2,
   Copy,
   FolderSync,
+  AlertTriangle,
 } from "lucide-react";
 import { ColecoesSourceSelector } from "./ColecoesSourceSelector";
 
@@ -99,10 +103,15 @@ export const ColecoesWorkspace: React.FC = () => {
     }
   }, [config]);
 
-  // Paginação automática (20 produtos por página)
+  // Agrupamento por nome-base e separação de pendências sem foto
+  const { displayProducts, pendingProducts } = useMemo(() => {
+    return categorizeAndGroupColecaoProducts(products);
+  }, [products]);
+
+  // Paginação automática (20 produtos por página) dos produtos prontos com foto
   const pages = useMemo(() => {
-    return paginateColecaoProducts(products, config.itemsPerPage);
-  }, [products, config.itemsPerPage]);
+    return paginateColecaoProducts(displayProducts, config.itemsPerPage);
+  }, [displayProducts, config.itemsPerPage]);
 
   const totalPages = Math.max(1, pages.length);
 
@@ -316,9 +325,9 @@ export const ColecoesWorkspace: React.FC = () => {
     const samples: ColecaoProduct[] = [
       {
         id: "c-1",
-        code: "101",
-        description: "Biscoito Oreo 80g Chocolate",
-        genericDescription: "Biscoito Oreo 80g",
+        code: "23235",
+        description: "SABONETE FLOR DE YPÊ ROSA",
+        genericDescription: "SABONETE YPÊ",
         image: "https://cescom.agilecdn.com.br/banners/agrupar-1-1735835147.png",
         isPrincipal: true,
         variantIds: ["c-2", "c-3"],
@@ -326,39 +335,70 @@ export const ColecoesWorkspace: React.FC = () => {
         variants: [
           {
             id: "c-2",
-            code: "102",
-            description: "Biscoito Oreo 80g Baunilha",
+            code: "23236",
+            description: "SABONETE FLOR DE YPÊ VERDE",
             image: "https://cescom.agilecdn.com.br/banners/agrupar-1-1735835147.png",
             isPrincipal: false,
-            included: false, // Variação vinculada ao principal
+            included: false,
           },
         ],
       },
       {
-        id: "c-4",
-        code: "104",
-        description: "Salgadinho Yokitos Conchinha 153g",
-        genericDescription: "Salgadinho Yokitos 153g",
+        id: "c-3",
+        code: "23237",
+        description: "SABONETE ÁGUA DE COCO E ALECRIM VERDE YPÊ",
         image: "https://cescom.agilecdn.com.br/banners/agrupar-1-1735835147.png",
-        isPrincipal: true,
-        variantIds: [],
-        variants: [], // Principal sem variação
+        isPrincipal: false,
         included: true,
       },
       {
-        id: "c-5",
-        code: "21620",
-        description: "CHOCOLATE GRANULADO DORI SM 30X120 GR",
+        id: "c-4",
+        code: "16228",
+        description: "DETERGENTE CLEAR YPÊ",
         image: "https://cescom.agilecdn.com.br/banners/agrupar-1-1735835147.png",
-        isPrincipal: false, // Não principal
+        isPrincipal: true,
         included: true,
+        variants: [
+          {
+            id: "c-5",
+            code: "19227",
+            description: "DETERGENTE CAPIM LIMÃO YPÊ",
+            image: "https://cescom.agilecdn.com.br/banners/agrupar-1-1735835147.png",
+            isPrincipal: false,
+            included: false,
+          },
+        ],
       },
       {
         id: "c-6",
-        code: "11793",
-        description: "MOLHO POMAROLA AZEITONA SACHE 24X300 GR",
+        code: "24820",
+        description: "LAVA ROUPAS PÓ MACIEZ TIXAN",
         image: "https://cescom.agilecdn.com.br/banners/agrupar-1-1735835147.png",
-        isPrincipal: false, // Não principal
+        isPrincipal: false,
+        included: true,
+      },
+      {
+        id: "c-7",
+        code: "20594",
+        description: "LAVA ROUPAS PÓ MACIEZ TIXAN",
+        image: "https://cescom.agilecdn.com.br/banners/agrupar-1-1735835147.png",
+        isPrincipal: false,
+        included: true,
+      },
+      {
+        id: "c-8",
+        code: "20600",
+        description: "LAVA ROUPAS PÓ PRIMAVERA",
+        image: "", // Sem foto -> cai em pendências de segurança
+        isPrincipal: false,
+        included: true,
+      },
+      {
+        id: "c-9",
+        code: "11793",
+        description: "MOLHO POMAROLA AZEITONA SACHÊ 24X300 GR",
+        image: "https://cescom.agilecdn.com.br/banners/agrupar-1-1735835147.png",
+        isPrincipal: false,
         included: true,
       },
     ];
@@ -398,16 +438,18 @@ export const ColecoesWorkspace: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2">
             <div className="hidden sm:flex items-center gap-3 text-xs bg-black/40 border border-neutral-800 px-3 py-1.5 rounded-lg mr-2">
               <span className="text-neutral-400">
-                Produtos: <strong className="text-white">{products.length}</strong>
+                Cadastrados: <strong className="text-white">{products.length}</strong>
               </span>
               <span className="text-neutral-400">
-                Principais:{" "}
-                <strong className="text-amber-400">
-                  {products.filter((p) => p.isPrincipal).length}
-                </strong>
+                No Encarte: <strong className="text-emerald-400">{displayProducts.length}</strong>
               </span>
+              {pendingProducts.length > 0 && (
+                <span className="text-amber-400 font-bold bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/40">
+                  Pendências: {pendingProducts.length} sem foto
+                </span>
+              )}
               <span className="text-neutral-400">
-                Páginas: <strong className="text-emerald-400">{totalPages}</strong>
+                Páginas: <strong className="text-blue-400">{totalPages}</strong>
               </span>
             </div>
 
@@ -529,7 +571,43 @@ export const ColecoesWorkspace: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. CONTEÚDO: SELETOR DE ORIGEM (QUANDO VAZIO) OU TABELA/PREVIEW (QUANDO HÁ PRODUTOS) */}
+      {/* 2. ALERTA DE PENDÊNCIAS (PRODUTOS SEM FOTO FORA DO ENCARTE) */}
+      {pendingProducts.length > 0 && products.length > 0 && (
+        <div
+          className="rounded-xl border border-amber-600/50 bg-amber-950/20 p-3.5 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs"
+          data-testid="colecoes-pending-alert"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-amber-300">
+                Lista de Pendências ({pendingProducts.length} produto(s) sem foto fora do encarte):
+              </p>
+              <p className="text-[11px] text-amber-200/90 mt-0.5">
+                Regra de segurança ativa: produtos sem foto não geram card vazio. Vincule fotos para exibi-los no encarte:{" "}
+                <span className="font-mono text-amber-100 font-semibold">
+                  {pendingProducts
+                    .map((p) => `${p.description} (${p.code})`)
+                    .slice(0, 4)
+                    .join(", ")}
+                  {pendingProducts.length > 4 && ` e mais ${pendingProducts.length - 4}...`}
+                </span>
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setSourceSelectorModalOpen(true)}
+            className="bg-amber-950/60 border-amber-600 text-amber-200 hover:text-white text-xs h-8 shrink-0 self-start sm:self-auto"
+          >
+            <FolderSync className="h-3.5 w-3.5 mr-1 text-amber-400" />
+            Vincular Fotos
+          </Button>
+        </div>
+      )}
+
+      {/* 3. CONTEÚDO: SELETOR DE ORIGEM (QUANDO VAZIO) OU TABELA/PREVIEW (QUANDO HÁ PRODUTOS) */}
       {products.length === 0 ? (
         <ColecoesSourceSelector
           onProductsLoaded={handleProductsLoaded}
@@ -567,7 +645,11 @@ export const ColecoesWorkspace: React.FC = () => {
                       <tr
                         key={p.id}
                         className={`hover:bg-neutral-50 transition-colors ${
-                          p.isPrincipal ? "bg-amber-50/40" : ""
+                          !p.image
+                            ? "bg-amber-50/70"
+                            : p.isPrincipal
+                            ? "bg-amber-50/30"
+                            : ""
                         }`}
                       >
                         {/* Foto */}
@@ -580,7 +662,10 @@ export const ColecoesWorkspace: React.FC = () => {
                                 className="max-h-full max-w-full object-contain"
                               />
                             ) : (
-                              <ImageIcon className="h-5 w-5 text-neutral-300" />
+                              <div className="flex flex-col items-center justify-center text-amber-600">
+                                <AlertTriangle className="h-4 w-4" />
+                                <span className="text-[8px] font-bold mt-0.5">Sem foto</span>
+                              </div>
                             )}
                           </div>
                         </td>
@@ -598,6 +683,11 @@ export const ColecoesWorkspace: React.FC = () => {
                             onChange={(e) => handleUpdateDescription(p.id, e.target.value)}
                             className="w-full rounded border border-transparent hover:border-neutral-300 focus:border-neutral-500 bg-transparent px-2 py-1 font-semibold text-neutral-900 outline-hidden"
                           />
+                          {!p.image && (
+                            <span className="inline-block mt-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900 border border-amber-300">
+                              Pendência: Sem foto (não gerará card vazio no encarte)
+                            </span>
+                          )}
                           {p.isPrincipal && p.genericDescription && (
                             <p className="text-[10px] text-amber-700 px-2 font-medium">
                               Nome genérico no card: <strong>{p.genericDescription}</strong>
