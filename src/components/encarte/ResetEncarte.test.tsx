@@ -10,7 +10,7 @@ describe("Novo Encarte e Zerar Dados (ResetEncarte)", () => {
     const html = renderToString(
       React.createElement(EditorStepper, {
         currentStep: "precos",
-        completedSteps: new Set(["origem", "dados"]),
+        completedSteps: new Set(["origem", "dados"]) as any,
         onStepClick: () => {},
         onReset: () => {},
       })

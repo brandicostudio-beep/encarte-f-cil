@@ -108,13 +108,13 @@ export const ProductCard916: React.FC<ProductCard916Props> = ({
   const priceWeight = cs.priceFontWeight || ps.priceFontWeight || gs.priceFontWeight || "bold";
 
   // Mapeamento de pesos numéricos para garantir bold (700) e não black (900)
-  const getWeightNumber = (w: "normal" | "semibold" | "bold") => {
+  const getWeightNumber = (w: string) => {
     if (w === "normal") return 400;
     if (w === "semibold") return 600;
     return 700;
   };
 
-  const getAlignClass = (a: "left" | "center" | "right") => {
+  const getAlignClass = (a: string) => {
     if (a === "left") return "text-left justify-start";
     if (a === "right") return "text-right justify-end";
     return "text-center justify-center";

@@ -176,7 +176,15 @@ function formatSpreadsheetDate(raw: any, SSF?: any): string {
  */
 export async function parseSpreadsheetFile(file: File): Promise<SpreadsheetValidationResult> {
   const XLSX = await import("xlsx");
-  const buffer = await file.arrayBuffer();
+  const buffer =
+    typeof file.arrayBuffer === "function"
+      ? await file.arrayBuffer()
+      : await new Promise<ArrayBuffer>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as ArrayBuffer);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsArrayBuffer(file);
+        });
 
   // read com raw: true para evitar distorção de datas brasileiras dd/mm/aaaa para mm/dd/aaaa
   const workbook = XLSX.read(buffer, {
