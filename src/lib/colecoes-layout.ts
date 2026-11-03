@@ -36,11 +36,24 @@ export interface CategorizedColecaoProducts {
  */
 export function resolveCardDisplayData(product: ColecaoProduct): CardDisplayData {
   const photoPrincipal = product.image || "";
+  const customSecondary = (product.secondaryImage || "").trim();
 
   if (product.isPrincipal) {
     const title = (
       product.genericDescription || extractGenericBaseName(product.description)
     ).trim();
+
+    // Se o usuário personalizou explicitamente a foto secundária (slot 2)
+    if (customSecondary) {
+      return {
+        photo1: photoPrincipal,
+        photo2: customSecondary,
+        title,
+        code: undefined,
+        isPrincipal: true,
+        hasVariants: true,
+      };
+    }
 
     const variants = product.variants || [];
     // Prioriza variação com foto diferente da principal para renderizar as duas fotos lado a lado
@@ -78,11 +91,11 @@ export function resolveCardDisplayData(product: ColecaoProduct): CardDisplayData
   // Regra 3: Não principal
   return {
     photo1: photoPrincipal,
-    photo2: photoPrincipal, // Duas posições com a mesma foto
+    photo2: customSecondary || photoPrincipal, // Permite foto secundária customizada ou repete foto 1
     title: product.description.trim(), // Descrição original
     code: product.code, // Código do produto visível (CÓD: xxxxx)
     isPrincipal: false,
-    hasVariants: false,
+    hasVariants: Boolean(customSecondary && customSecondary !== photoPrincipal),
   };
 }
 

@@ -11,6 +11,7 @@ interface ColecoesPageProps {
   config?: ColecaoConfig;
   className?: string;
   style?: React.CSSProperties;
+  onEditProduct?: (product: ColecaoProduct) => void;
 }
 
 export const ColecoesPage: React.FC<ColecoesPageProps> = ({
@@ -20,6 +21,7 @@ export const ColecoesPage: React.FC<ColecoesPageProps> = ({
   config = DEFAULT_COLECAO_CONFIG,
   className = "",
   style = {},
+  onEditProduct,
 }) => {
   const gridCells = calculateGridCellPositions(config.gridArea);
 
@@ -77,6 +79,7 @@ export const ColecoesPage: React.FC<ColecoesPageProps> = ({
                 product={product}
                 width={cell.width}
                 height={cell.height}
+                onEdit={onEditProduct ? () => onEditProduct(product) : undefined}
               />
             </div>
           );

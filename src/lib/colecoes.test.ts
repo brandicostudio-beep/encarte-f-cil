@@ -484,4 +484,97 @@ describe("Encarte de Coleções - Regras de Negócio e Testes Obrigatórios", ()
       expect(displayMolho.isPrincipal).toBe(false);
     });
   });
+
+  describe("7. Personalização de Cada Bloco (Troca de Foto 1/Foto 2 e Descrição Editável)", () => {
+    it("Permite trocar ou adicionar a Foto 1 (principal) de qualquer bloco", () => {
+      const prod: ColecaoProduct = {
+        id: "p-custom-1",
+        code: "5001",
+        description: "CHOCOLATE NESTLE CLASSIC 80G",
+        image: "https://cescom.agilecdn.com.br/foto-antiga.jpg",
+        isPrincipal: false,
+      };
+
+      const before = resolveCardDisplayData(prod);
+      expect(before.photo1).toBe("https://cescom.agilecdn.com.br/foto-antiga.jpg");
+
+      // Troca da foto 1
+      const updated: ColecaoProduct = {
+        ...prod,
+        image: "https://cescom.agilecdn.com.br/foto-nova-personalizada.png",
+      };
+
+      const after = resolveCardDisplayData(updated);
+      expect(after.photo1).toBe("https://cescom.agilecdn.com.br/foto-nova-personalizada.png");
+    });
+
+    it("Permite personalizar e trocar a Foto 2 (secundária/slot 2) individualmente em qualquer bloco", () => {
+      const prod: ColecaoProduct = {
+        id: "p-custom-2",
+        code: "5002",
+        description: "SABONETE DOVE ORIGINAL 90G",
+        image: "https://cescom.agilecdn.com.br/dove-branca.jpg",
+        secondaryImage: "https://cescom.agilecdn.com.br/dove-esfoliante.jpg",
+        isPrincipal: false,
+      };
+
+      const display = resolveCardDisplayData(prod);
+      // Ambas as fotos personalizadas aparecem no bloco
+      expect(display.photo1).toBe("https://cescom.agilecdn.com.br/dove-branca.jpg");
+      expect(display.photo2).toBe("https://cescom.agilecdn.com.br/dove-esfoliante.jpg");
+      expect(display.photo1).not.toBe(display.photo2);
+    });
+
+    it("Permite alterar descrição e nome de exibição no card (igual ao encarte de validade)", () => {
+      const prod: ColecaoProduct = {
+        id: "p-custom-3",
+        code: "5003",
+        description: "BISCOITO RECHEADO PASSATEMPO CHOCOLATE 130G",
+        genericDescription: "PASSATEMPO CHOCOLATE",
+        image: "https://cescom.agilecdn.com.br/passatempo.jpg",
+        isPrincipal: true,
+      };
+
+      // Usuário altera a descrição completa e o título do card
+      const edited: ColecaoProduct = {
+        ...prod,
+        description: "BISCOITO PASSATEMPO CHOCOLATE 130G NESTLÉ",
+        genericDescription: "BISCOITO PASSATEMPO 130G",
+      };
+
+      const display = resolveCardDisplayData(edited);
+      expect(display.title).toBe("BISCOITO PASSATEMPO 130G");
+    });
+
+    it("Produtos com fotos trocadas passam na categorização e paginação do encarte", () => {
+      const customProducts: ColecaoProduct[] = [
+        {
+          id: "p-1",
+          code: "7001",
+          description: "PRODUTO PERSONALIZADO A",
+          image: "https://img.com/a1.png",
+          secondaryImage: "https://img.com/a2.png",
+          isPrincipal: true,
+        },
+        {
+          id: "p-2",
+          code: "7002",
+          description: "PRODUTO PERSONALIZADO B",
+          image: "https://img.com/b1.png",
+          isPrincipal: false,
+        },
+      ];
+
+      const { displayProducts, pendingProducts } = categorizeAndGroupColecaoProducts(customProducts);
+      expect(pendingProducts).toHaveLength(0);
+      expect(displayProducts).toHaveLength(2);
+
+      const pages = paginateColecaoProducts(displayProducts, 20);
+      expect(pages[0]).toHaveLength(2);
+
+      const cardA = resolveCardDisplayData(pages[0][0]);
+      expect(cardA.photo1).toBe("https://img.com/a1.png");
+      expect(cardA.photo2).toBe("https://img.com/a2.png");
+    });
+  });
 });

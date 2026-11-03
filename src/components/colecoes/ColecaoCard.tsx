@@ -2,18 +2,20 @@ import React, { useState, useEffect } from "react";
 import type { ColecaoProduct } from "@/types/colecoes";
 import { resolveCardDisplayData } from "@/lib/colecoes-layout";
 import { removeWhiteBackground } from "@/lib/colecoes-image-processor";
-import { ImageIcon } from "lucide-react";
+import { ImageIcon, Edit2 } from "lucide-react";
 
 interface ColecaoCardProps {
   product: ColecaoProduct;
   width?: number;
   height?: number;
+  onEdit?: () => void;
 }
 
 export const ColecaoCard: React.FC<ColecaoCardProps> = ({
   product,
   width = 255,
   height = 275,
+  onEdit,
 }) => {
   const display = resolveCardDisplayData(product);
 
@@ -53,15 +55,34 @@ export const ColecaoCard: React.FC<ColecaoCardProps> = ({
 
   return (
     <div
-      className="relative flex flex-col items-center justify-start overflow-hidden px-1.5 py-1 text-white select-none transition-all"
+      className={`relative flex flex-col items-center justify-start overflow-hidden px-1.5 py-1 text-white select-none transition-all ${
+        onEdit ? "cursor-pointer group hover:brightness-105" : ""
+      }`}
       style={{
         width: `${width}px`,
         height: `${height}px`,
         boxSizing: "border-box",
       }}
+      onClick={onEdit}
       data-testid={`colecao-card-${product.code}`}
       data-principal={display.isPrincipal ? "true" : "false"}
     >
+      {/* Botão flutuante de personalização no hover */}
+      {onEdit && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit();
+          }}
+          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/85 hover:bg-black text-[#FFD400] px-2 py-0.5 rounded-md border border-[#FFD400]/40 shadow-lg text-[10px] font-bold flex items-center gap-1 z-20 cursor-pointer"
+          title="Clique para personalizar fotos e descrição deste bloco"
+        >
+          <Edit2 className="h-3 w-3" />
+          <span>Editar</span>
+        </button>
+      )}
+
       {/* 1. BLOCO ÚNICO (UMA ÚNICA CAIXA COM AS FOTOS DENTRO - NUNCA UMA CAIXA SEPARADA POR FOTO) */}
       <div
         className="relative w-full h-[176px] rounded-xl bg-[#240407]/90 border border-[#521017]/80 flex items-center justify-around gap-2 px-2 py-1 shadow-[inset_0_1px_4px_rgba(0,0,0,0.6)]"

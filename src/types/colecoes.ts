@@ -9,6 +9,7 @@ export interface ColecaoProduct {
   description: string;           // Descrição original da planilha ou link
   genericDescription?: string;   // Descrição genérica para produtos principais (ex: "Biscoito Oreo 80g")
   image: string;                 // Foto principal (URL ou Data URL)
+  secondaryImage?: string;       // Foto secundária personalizada (slot 2)
   isPrincipal: boolean;          // Flag de produto principal
   variantGroupId?: string;       // Identificador do grupo de variações
   variantIds?: string[];         // IDs dos produtos que são variações deste principal

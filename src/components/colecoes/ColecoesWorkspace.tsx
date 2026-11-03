@@ -9,6 +9,8 @@ import { parseColecaoSpreadsheet } from "@/lib/colecoes-parser";
 import { exportColecaoPageAsPng, exportColecaoAllPagesZip } from "@/lib/colecoes-export";
 import { ColecoesPage } from "./ColecoesPage";
 import { PrincipalVariantsModal } from "./PrincipalVariantsModal";
+import { ColecaoProductEditModal } from "./ColecaoProductEditModal";
+import { extractGenericBaseName } from "@/lib/colecoes-similarity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -77,6 +79,7 @@ export const ColecoesWorkspace: React.FC = () => {
   // Modais
   const [variantsModalProduct, setVariantsModalProduct] = useState<ColecaoProduct | null>(null);
   const [variantsModalOpen, setVariantsModalOpen] = useState(false);
+  const [editProductModalItem, setEditProductModalItem] = useState<ColecaoProduct | null>(null);
   const [importSpreadsheetOpen, setImportSpreadsheetOpen] = useState(false);
   const [sourceSelectorModalOpen, setSourceSelectorModalOpen] = useState(false);
   const [newProductModalOpen, setNewProductModalOpen] = useState(false);
@@ -276,6 +279,21 @@ export const ColecoesWorkspace: React.FC = () => {
   const handleUpdateDescription = (id: string, newDesc: string) => {
     setProducts((prev) =>
       prev.map((p) => (p.id === id ? { ...p, description: newDesc } : p))
+    );
+  };
+
+  // Salvar edições completas do bloco (foto 1, foto 2, descrição e nome no card)
+  const handleSaveEditedProduct = (updated: ColecaoProduct) => {
+    setProducts((prev) =>
+      prev.map((p) => {
+        if (p.id === updated.id || p.code === updated.code) {
+          return {
+            ...p,
+            ...updated,
+          };
+        }
+        return p;
+      })
     );
   };
 
@@ -654,7 +672,11 @@ export const ColecoesWorkspace: React.FC = () => {
                       >
                         {/* Foto */}
                         <td className="py-2 px-3">
-                          <div className="h-11 w-11 rounded-md border bg-white p-0.5 flex items-center justify-center overflow-hidden">
+                          <div
+                            className="h-11 w-11 rounded-md border bg-white p-0.5 flex items-center justify-center overflow-hidden cursor-pointer hover:border-amber-500 hover:ring-2 hover:ring-amber-400/40 transition-all group relative"
+                            onClick={() => setEditProductModalItem(p)}
+                            title="Clique para personalizar ou trocar a foto do produto"
+                          >
                             {p.image ? (
                               <img
                                 src={p.image}
@@ -667,6 +689,9 @@ export const ColecoesWorkspace: React.FC = () => {
                                 <span className="text-[8px] font-bold mt-0.5">Sem foto</span>
                               </div>
                             )}
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                              <Edit2 className="h-3 w-3" />
+                            </div>
                           </div>
                         </td>
 
@@ -677,22 +702,40 @@ export const ColecoesWorkspace: React.FC = () => {
 
                         {/* Descrição */}
                         <td className="py-2 px-3">
-                          <input
-                            type="text"
-                            value={p.description}
-                            onChange={(e) => handleUpdateDescription(p.id, e.target.value)}
-                            className="w-full rounded border border-transparent hover:border-neutral-300 focus:border-neutral-500 bg-transparent px-2 py-1 font-semibold text-neutral-900 outline-hidden"
-                          />
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              value={p.description}
+                              onChange={(e) => handleUpdateDescription(p.id, e.target.value)}
+                              className="w-full rounded border border-transparent hover:border-neutral-300 focus:border-neutral-500 bg-transparent px-2 py-1 font-semibold text-neutral-900 outline-hidden"
+                              title="Clique para editar a descrição diretamente"
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditProductModalItem(p)}
+                              className="h-6 w-6 p-0 text-neutral-400 hover:text-amber-700 shrink-0"
+                              title="Editar detalhes completos do produto"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                           {!p.image && (
                             <span className="inline-block mt-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900 border border-amber-300">
                               Pendência: Sem foto (não gerará card vazio no encarte)
                             </span>
                           )}
-                          {p.isPrincipal && p.genericDescription && (
-                            <p className="text-[10px] text-amber-700 px-2 font-medium">
-                              Nome genérico no card: <strong>{p.genericDescription}</strong>
-                            </p>
-                          )}
+                          <div className="flex items-center gap-2 mt-0.5 px-2">
+                            <span className="text-[10px] text-neutral-500 font-medium">
+                              Card: <strong className="text-neutral-800">{p.genericDescription || extractGenericBaseName(p.description).toUpperCase()}</strong>
+                            </span>
+                            {p.secondaryImage && (
+                              <span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-1 rounded font-bold">
+                                Foto 2 personalizada
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Botão "Principal" */}
@@ -735,8 +778,8 @@ export const ColecoesWorkspace: React.FC = () => {
                                 size="sm"
                                 className="h-5 text-[10px] text-amber-700 p-0 font-bold"
                                 onClick={() => {
-                                  setVariantsModalProduct(p);
-                                  setVariantsModalOpen(true);
+                                   setVariantsModalProduct(p);
+                                   setVariantsModalOpen(true);
                                 }}
                               >
                                 Editar Variações
@@ -751,15 +794,28 @@ export const ColecoesWorkspace: React.FC = () => {
 
                         {/* Ações */}
                         <td className="py-2 px-3 text-center">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteProduct(p.id)}
-                            className="h-7 w-7 p-0 text-red-600 hover:bg-red-50 hover:text-red-700"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditProductModalItem(p)}
+                              className="h-7 w-7 p-0 text-neutral-600 hover:text-amber-700 hover:bg-amber-50"
+                              title="Personalizar bloco (fotos e descrição)"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteProduct(p.id)}
+                              className="h-7 w-7 p-0 text-red-600 hover:bg-red-50 hover:text-red-700"
+                              title="Excluir produto"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -849,6 +905,7 @@ export const ColecoesWorkspace: React.FC = () => {
                 pageIndex={currentPage - 1}
                 totalPages={totalPages}
                 config={config}
+                onEditProduct={(p) => setEditProductModalItem(p)}
               />
             </div>
           </div>
@@ -1020,6 +1077,14 @@ export const ColecoesWorkspace: React.FC = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL: Personalização de Foto e Descrição do Bloco (Igual ao Encarte de Validade) */}
+      <ColecaoProductEditModal
+        product={editProductModalItem}
+        open={Boolean(editProductModalItem)}
+        onOpenChange={(open) => !open && setEditProductModalItem(null)}
+        onSave={handleSaveEditedProduct}
+      />
     </div>
   );
 };
