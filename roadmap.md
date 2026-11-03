@@ -17,3 +17,7 @@
 - [x] Dados: autosave, persistência, migração sem perda, confirmar antes de descartar
 - [x] Testes obrigatórios do brief (localStorage vazio/antigo, 10/12/1/2 produtos, fotos variadas, nomes longos, exportação, mobile/desktop)
 - [x] Entrega: lista de bugs (causa+arquivo), recursos novos, checklist de regressão, o que não foi testado
+
+## Encarte de Coleções (separado do encarte de validade)
+- [x] Arte de fundo trocável (padrão: Esquenta Black Cescom 1080x1920) + grade configurável (topo/base, divisões de colunas, linhas)
+- [ ] Preencher produtos por link/planilha (foto, descrição, código) com regra de produto "principal" e variações
