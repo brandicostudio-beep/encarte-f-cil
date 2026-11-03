@@ -54,9 +54,9 @@ export function getServerAccessPassword(): string {
   try {
     if (!envPassword && typeof process !== "undefined" && process?.env) {
       envPassword =
-        process.env.APP_ACCESS_PASSWORD ||
-        process.env.ACCESS_PASSWORD ||
-        process.env.ENCARTE_ACCESS_PASSWORD;
+        process.env["APP_ACCESS_PASSWORD"] ||
+        process.env["ACCESS_PASSWORD"] ||
+        process.env["ENCARTE_ACCESS_PASSWORD"];
     }
   } catch {}
 

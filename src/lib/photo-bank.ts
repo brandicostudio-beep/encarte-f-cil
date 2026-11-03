@@ -9,7 +9,7 @@ export interface LoadedPhoto {
   fileId?: string;
   modifiedTime?: string;
   isPrimary?: boolean;
-  source?: "drive" | "zip" | "upload";
+  source?: "drive" | "zip" | "upload" | "folder";
 }
 
 export interface PhotoBankResult {
