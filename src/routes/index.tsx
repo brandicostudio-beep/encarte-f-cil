@@ -95,7 +95,9 @@ import {
   Loader2,
   Globe,
   Copy,
+  Layers,
 } from "lucide-react";
+import { ColecoesWorkspace } from "@/components/colecoes/ColecoesWorkspace";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -241,6 +243,25 @@ function EncarteApp() {
 
   const isDirtyRef = useRef(false);
   const lastAutoSaveRef = useRef<number>(Date.now());
+
+  // Modo de Encarte (Validade x Coleções)
+  const [appMode, setAppMode] = useState<"validade" | "colecoes">(() => {
+    try {
+      const saved = localStorage.getItem("encarte-active-mode");
+      if (saved === "colecoes" || saved === "validade") return saved;
+    } catch {
+      /* ignore */
+    }
+    return "validade";
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("encarte-active-mode", appMode);
+    } catch {
+      /* ignore */
+    }
+  }, [appMode]);
 
   // Formulário Manual de Produto
   const [newProd, setNewProd] = useState({
@@ -1404,6 +1425,33 @@ function EncarteApp() {
             </div>
           </div>
 
+          {/* Seletor de Tipo de Encarte: Validade x Coleções */}
+          <div className="hidden md:flex items-center gap-1 bg-black/70 border border-neutral-700/80 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setAppMode("validade")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                appMode === "validade"
+                  ? "bg-red-600 text-white shadow-xs"
+                  : "text-neutral-400 hover:text-white"
+              }`}
+            >
+              <span>Encarte de Validade</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAppMode("colecoes")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                appMode === "colecoes"
+                  ? "bg-red-600 text-white shadow-xs"
+                  : "text-neutral-400 hover:text-white"
+              }`}
+            >
+              <Layers className="h-3.5 w-3.5" />
+              <span>Coleções (Esquenta Black)</span>
+            </button>
+          </div>
+
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -1441,8 +1489,15 @@ function EncarteApp() {
         </div>
       </header>
 
-      {/* BARRA DE GERENCIAMENTO DE PROJETOS (Estilo Canva / Figma) */}
-      <ProjectTopBar
+      {/* SELETOR DE MODO: COLEÇÕES vs ENCARTE DE VALIDADE */}
+      {appMode === "colecoes" ? (
+        <div className="mx-auto max-w-7xl px-4 py-6">
+          <ColecoesWorkspace />
+        </div>
+      ) : (
+        <>
+          {/* BARRA DE GERENCIAMENTO DE PROJETOS (Estilo Canva / Figma) */}
+          <ProjectTopBar
         projectName={currentProject?.name || "Encarte Ofertas da Semana"}
         projectId={currentProject?.id}
         saveStatus={projectSaveStatus}
@@ -2315,6 +2370,8 @@ function EncarteApp() {
           </div>
         )}
       </div>
+        </>
+      )}
 
       {/* MODAIS DO SISTEMA */}
       {/* 1. Preenchimento em Massa por Planilha */}
