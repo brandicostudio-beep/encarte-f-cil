@@ -1429,6 +1429,14 @@ function EncarteApp() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => navigate({ to: "/colecoes" })}
+              className="min-h-[44px] bg-neutral-900 text-neutral-300 border-neutral-700 hover:bg-neutral-800 text-xs font-semibold"
+            >
+              Encarte de Coleções
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleLogout}
               className="min-h-[44px] bg-neutral-900 text-neutral-300 border-neutral-700 hover:bg-neutral-800 hover:text-red-400 text-xs font-semibold"
               title="Encerrar sessão de acesso"
