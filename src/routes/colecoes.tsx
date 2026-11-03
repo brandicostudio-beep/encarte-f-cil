@@ -15,7 +15,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Download, ImagePlus, RotateCcw, Grid3x3 } from "lucide-react";
+import { ArrowLeft, Download, ImagePlus, RotateCcw, Grid3x3, LayoutGrid, SlidersHorizontal } from "lucide-react";
+import { ColecoesWorkspace } from "@/components/colecoes/ColecoesWorkspace";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/colecoes")({
   head: () => ({
@@ -38,6 +40,7 @@ function ColecoesPage() {
   const [authed, setAuthed] = useState(false);
   const [config, setConfig] = useState<CollectionTemplateConfig>(DEFAULT_COLLECTION_TEMPLATE);
   const [loaded, setLoaded] = useState(false);
+  const [activeTab, setActiveTab] = useState<"workspace" | "template">("workspace");
   const [columnsText, setColumnsText] = useState(DEFAULT_COLLECTION_GRID.columnLines.join(", "));
   const [showGrid, setShowGrid] = useState(true);
   const [error, setError] = useState("");
@@ -145,10 +148,41 @@ function ColecoesPage() {
           </Button>
           <h1 className="truncate text-lg font-bold">Encarte de Coleções</h1>
         </div>
-        <Button size="sm" onClick={exportJpg}><Download className="mr-1 h-4 w-4" />Baixar JPG</Button>
+        {/* Alternador de visualização: Catálogo de Produtos x Ajuste de Fundo/Grade */}
+        <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg">
+          <Button
+            type="button"
+            size="sm"
+            variant={activeTab === "workspace" ? "default" : "ghost"}
+            onClick={() => setActiveTab("workspace")}
+            className="text-xs h-8"
+          >
+            <LayoutGrid className="mr-1.5 h-3.5 w-3.5" />
+            Catálogo & Páginas
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={activeTab === "template" ? "default" : "ghost"}
+            onClick={() => setActiveTab("template")}
+            className="text-xs h-8"
+          >
+            <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
+            Calibrar Grade
+          </Button>
+        </div>
+
+        {activeTab === "template" && (
+          <Button size="sm" onClick={exportJpg}><Download className="mr-1 h-4 w-4" />Baixar JPG</Button>
+        )}
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-6 p-4 md:grid-cols-[minmax(0,1fr)_auto]">
+      {activeTab === "workspace" ? (
+        <main className="mx-auto max-w-7xl p-4">
+          <ColecoesWorkspace />
+        </main>
+      ) : (
+        <main className="mx-auto grid max-w-6xl gap-6 p-4 md:grid-cols-[minmax(0,1fr)_auto]">
         <section className="space-y-5">
           <div className="space-y-2 rounded-lg border border-border p-4">
             <h2 className="font-semibold">Arte de fundo</h2>
@@ -211,6 +245,7 @@ function ColecoesPage() {
           ))}
         </div>
       </main>
+      )}
     </div>
   );
 }
