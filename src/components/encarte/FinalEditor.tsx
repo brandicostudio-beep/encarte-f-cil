@@ -1224,14 +1224,11 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
           {/* Rulers Overlay */}
           <CanvasRulers
             zoom={zoom}
-            panOffset={panOffset}
-            visible={showRulers}
+            panX={panOffset.x}
+            panY={panOffset.y}
+            showRulers={showRulers}
             guides={guides}
             onAddGuide={(g) => setGuides((prev) => [...prev, g])}
-            onUpdateGuide={(id, pos) =>
-              setGuides((prev) => prev.map((g) => (g.id === id ? { ...g, position: pos } : g)))
-            }
-            onRemoveGuide={(id) => setGuides((prev) => prev.filter((g) => g.id !== id))}
           />
 
           {/* Canvas Wrapper */}
@@ -1384,9 +1381,9 @@ export const FinalEditor: React.FC<FinalEditorProps> = ({
             onDeleteProduct={handleDeleteProduct}
             onCopyProduct={handleCopyProduct}
             onAlignElements={(type) => {
-              if (type === "left") updateCustomStyle({ nameTextAlign: "left" });
-              if (type === "center") updateCustomStyle({ nameTextAlign: "center" });
-              if (type === "right") updateCustomStyle({ nameTextAlign: "right" });
+              if (type === "left") updateCustomStyle({ nameAlign: "left" });
+              if (type === "center") updateCustomStyle({ nameAlign: "center" });
+              if (type === "right") updateCustomStyle({ nameAlign: "right" });
               if (type === "top") updateCustomStyle({ boxOffsetY: 0 });
               if (type === "middle") updateCustomStyle({ boxOffsetY: 0 });
               if (type === "bottom") updateCustomStyle({ boxOffsetY: 0 });
