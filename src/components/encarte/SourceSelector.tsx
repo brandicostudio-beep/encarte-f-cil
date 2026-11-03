@@ -588,18 +588,20 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
         });
 
         if (!indexRes.ok) {
-          if (indexRes.errorCode === "not_connected") {
+          const errCode = (indexRes as { errorCode?: string }).errorCode;
+          const errMsg = (indexRes as { errorMessage?: string }).errorMessage;
+          if (errCode === "not_connected") {
             setDriveConnectorStatus("not_connected");
             setDriveError(null);
             return;
           }
-          if (indexRes.errorCode === "token_expired") {
+          if (errCode === "token_expired") {
             setDriveConnectorStatus("token_expired");
             setDriveError(null);
             return;
           }
           setDriveError(
-            indexRes.errorMessage ||
+            errMsg ||
               "A pasta precisa estar compartilhada com a conta conectada e a conexão precisa de permissão de leitura do Drive."
           );
           return;
