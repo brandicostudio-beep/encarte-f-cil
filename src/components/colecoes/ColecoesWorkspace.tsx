@@ -10,7 +10,11 @@ import { exportColecaoPageAsPng, exportColecaoAllPagesZip } from "@/lib/colecoes
 import { ColecoesPage } from "./ColecoesPage";
 import { PrincipalVariantsModal } from "./PrincipalVariantsModal";
 import { ColecaoProductEditModal } from "./ColecaoProductEditModal";
-import { extractGenericBaseName } from "@/lib/colecoes-similarity";
+import {
+  extractGenericBaseName,
+  parseNormalizedWeight,
+  parsePackagingType,
+} from "@/lib/colecoes-similarity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -726,16 +730,43 @@ export const ColecoesWorkspace: React.FC = () => {
                               Pendência: Sem foto (não gerará card vazio no encarte)
                             </span>
                           )}
-                          <div className="flex items-center gap-2 mt-0.5 px-2">
-                            <span className="text-[10px] text-neutral-500 font-medium">
-                              Card: <strong className="text-neutral-800">{p.genericDescription || extractGenericBaseName(p.description).toUpperCase()}</strong>
-                            </span>
-                            {p.secondaryImage && (
-                              <span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-1 rounded font-bold">
-                                Foto 2 personalizada
-                              </span>
-                            )}
-                          </div>
+                          {(() => {
+                            const parsedWeight = parseNormalizedWeight(p.description);
+                            const parsedPkg = parsePackagingType(p.description);
+                            return (
+                              <div className="flex items-center gap-2 mt-0.5 px-2 flex-wrap">
+                                <span className="text-[10px] text-neutral-500 font-medium">
+                                  Card:{" "}
+                                  <strong className="text-neutral-800">
+                                    {p.genericDescription ||
+                                      extractGenericBaseName(p.description).toUpperCase()}
+                                  </strong>
+                                </span>
+                                {p.secondaryImage && (
+                                  <span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-1 rounded font-bold">
+                                    Foto 2 personalizada
+                                  </span>
+                                )}
+                                {parsedWeight ? (
+                                  <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1 rounded font-semibold">
+                                    {parsedWeight.display}
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="text-[9px] bg-amber-50 text-amber-800 border border-amber-200 px-1 rounded font-medium"
+                                    title="Gramatura não informada na descrição"
+                                  >
+                                    Gramatura pendente
+                                  </span>
+                                )}
+                                {parsedPkg !== "padrao" && (
+                                  <span className="text-[9px] bg-sky-50 text-sky-700 border border-sky-200 px-1 rounded font-semibold uppercase">
+                                    {parsedPkg}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Botão "Principal" */}

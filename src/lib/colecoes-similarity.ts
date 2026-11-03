@@ -56,6 +56,10 @@ const RAW_FLAVORS_AND_VARIANTS = [
   "amarela",
   "vermelha",
   "dourada",
+  "preta",
+  "preto",
+  "roxa",
+  "roxo",
 
   // Doces e Frutas
   "chocolate ao leite",
@@ -286,20 +290,324 @@ export function areProductsSimilar(nameA: string, nameB: string): boolean {
 }
 
 /**
+ * Estrutura de gramatura ou volume normalizados.
+ * Unidade base: 'g' para peso e 'ml' para volume.
+ */
+export interface NormalizedWeight {
+  value: number; // valor numérico normalizado em gramas (g) ou mililitros (ml)
+  unit: "g" | "ml";
+  display: string; // formato amigável para exibição (ex: "1,3 kg", "500 ml", "80 g")
+}
+
+/**
+ * Tipos de embalagem reconhecidos no varejo brasileiro.
+ */
+export type PackagingType =
+  | "sache"
+  | "caixa"
+  | "pacote"
+  | "refil"
+  | "garrafa"
+  | "pote"
+  | "lata"
+  | "padrao";
+
+/**
+ * Marcas frequentes no varejo nacional para indexação segura.
+ */
+const KNOWN_BRANDS = [
+  "YPE", "YPÊ", "TIXAN", "OREO", "POMAROLA", "PREDILECTA", "DORI", "NINHO", "NESTLE", "NESTLÉ",
+  "QUALY", "SADIA", "PERDIGAO", "PERDIGÃO", "SEARA", "PILAO", "PILÃO", "MELITTA", "MARATA", "MARATÁ",
+  "COCA-COLA", "PEPSI", "AMBEV", "HEINEKEN", "COLGATE", "SORRISO", "ORAL-B", "DOVE", "REXONA", "NIVEA",
+  "PANTENE", "SEDA", "PALMOLIVE", "LUX", "MINUANO", "BRILHANTE", "OMO", "ARIEL", "CONFORT", "COMFORT",
+  "DOWNY", "VANISH", "VEJA", "AJAX", "PINHO SOL", "YOKITOS", "PASSATEMPO", "TRAKINAS", "BAUDUCCO",
+  "DONA BENTA", "CAMIL", "TIO JOAO", "TIO JOÃO", "TODDY", "NESCAU", "SOYA", "LIZA", "VIGOR", "ITAMBE",
+  "ITAMBÉ", "PIRACANJUBA"
+];
+
+/**
+ * Normaliza gramatura ou volume para unidade padrão (g ou ml).
+ * Exemplos:
+ * - "1,3 kg" / "1.3kg" -> { value: 1300, unit: "g", display: "1,3 kg" }
+ * - "2,2 kg" -> { value: 2200, unit: "g", display: "2,2 kg" }
+ * - "1 l" / "2L" -> { value: 2000, unit: "ml", display: "2 L" }
+ * - "500 ml" -> { value: 500, unit: "ml", display: "500 ml" }
+ * - "80g" -> { value: 80, unit: "g", display: "80 g" }
+ * - "24X300 GR" -> { value: 300, unit: "g", display: "24X300 GR" }
+ * Retorna null se não houver gramatura/volume informado no texto.
+ */
+export function parseNormalizedWeight(text: string): NormalizedWeight | null {
+  if (!text) return null;
+
+  // 1. Formato multiplicador: ex "24X300 GR", "12 x 1L", "6X500ML"
+  const multMatch = text.match(
+    /\b(\d+)\s*[xX]\s*([\d.,]+)\s*(kg|kilo|quilo|quilos|g|gr|gramas|l|lt|litro|litros|ml)\b/i
+  );
+  if (multMatch) {
+    const val = parseFloat(multMatch[2].replace(",", "."));
+    const rawUnit = multMatch[3].toLowerCase();
+
+    if (rawUnit.startsWith("k")) {
+      return { value: Math.round(val * 1000), unit: "g", display: multMatch[0].trim() };
+    }
+    if (rawUnit.startsWith("g")) {
+      return { value: Math.round(val), unit: "g", display: multMatch[0].trim() };
+    }
+    if (rawUnit.startsWith("l")) {
+      return { value: Math.round(val * 1000), unit: "ml", display: multMatch[0].trim() };
+    }
+    if (rawUnit === "ml") {
+      return { value: Math.round(val), unit: "ml", display: multMatch[0].trim() };
+    }
+  }
+
+  // 2. Valores isolados no formato numérico + unidade
+  const singleMatch = text.match(
+    /\b([\d.,]+)\s*(kg|kilo|quilo|quilos|g|gr|gramas|l|lt|litro|litros|ml)\b/i
+  );
+  if (singleMatch) {
+    const val = parseFloat(singleMatch[1].replace(",", "."));
+    const rawUnit = singleMatch[2].toLowerCase();
+
+    if (rawUnit.startsWith("k")) {
+      return {
+        value: Math.round(val * 1000),
+        unit: "g",
+        display: `${singleMatch[1]} kg`.replace(".", ","),
+      };
+    }
+    if (rawUnit.startsWith("g")) {
+      return {
+        value: Math.round(val),
+        unit: "g",
+        display: `${singleMatch[1]} g`.replace(".", ","),
+      };
+    }
+    if (rawUnit.startsWith("l")) {
+      return {
+        value: Math.round(val * 1000),
+        unit: "ml",
+        display: `${singleMatch[1]} L`.replace(".", ","),
+      };
+    }
+    if (rawUnit === "ml") {
+      return {
+        value: Math.round(val),
+        unit: "ml",
+        display: `${singleMatch[1]} ml`.replace(".", ","),
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Identifica o tipo de embalagem a partir do texto do produto.
+ * Ex: sachê, caixa, pacote, refil, garrafa, pote, lata ou padrão.
+ */
+export function parsePackagingType(text: string): PackagingType {
+  if (!text) return "padrao";
+  const norm = normalizeText(text);
+
+  if (/\b(sache|saches)\b/.test(norm)) return "sache";
+  if (/\b(caixa|caixas|cx)\b/.test(norm)) return "caixa";
+  if (/\b(refil|refils|refis)\b/.test(norm)) return "refil";
+  if (/\b(pacote|pacotes|pct|pcte)\b/.test(norm)) return "pacote";
+  if (/\b(garrafa|garrafas|pet)\b/.test(norm)) return "garrafa";
+  if (/\b(pote|potes)\b/.test(norm)) return "pote";
+  if (/\b(lata|latas)\b/.test(norm)) return "lata";
+
+  return "padrao";
+}
+
+/**
+ * Extrai a marca do produto normalizada a partir da lista de marcas conhecidas
+ * ou da estrutura lexical da descrição.
+ */
+export function extractBrand(text: string): string {
+  if (!text) return "";
+  const norm = text.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  for (const b of KNOWN_BRANDS) {
+    const bNorm = b.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const re = new RegExp("(^|[\\s,.-]+)" + bNorm + "(?=$|[\\s,.-]+)", "i");
+    if (re.test(norm)) {
+      return bNorm;
+    }
+  }
+
+  // Fallback: última palavra maiúscula relevante
+  const words = norm.split(/\s+/).filter((w) => w.length >= 3 && !/^\d+$/.test(w));
+  if (words.length > 0) {
+    const lastWord = words[words.length - 1];
+    if (
+      !["SACHE", "CAIXA", "REFIL", "PACOTE", "POTE", "LATA", "PET", "GR", "KG", "ML", "UNID"].includes(
+        lastWord
+      )
+    ) {
+      return lastWord;
+    }
+  }
+
+  return "";
+}
+
+/**
+ * Deriva a descrição genérica do grupo recomendada para o card (sem fragrância, sem gramatura e sem código).
+ * Ex:
+ * - "AMACIANTE AZUL INTENSO YPÊ 2L" -> "AMACIANTE YPÊ"
+ * - "LAVA ROUPAS PÓ PRIMAVERA TIXAN 1,3 kg SACHÊ" -> "LAVA ROUPAS PÓ TIXAN"
+ * - "SABONETE FLOR DE YPÊ ROSA" -> "SABONETE YPÊ"
+ * - "DETERGENTE CAPIM LIMÃO YPÊ 500ML" -> "DETERGENTE YPÊ"
+ * - "BISCOITO RECHEADO OREO 80G CHOCOLATE" -> "BISCOITO OREO"
+ */
+export function extractGenericGroupTitle(text: string): string {
+  if (!text) return "";
+  let working = extractGenericBaseName(text);
+
+  // Remove termos de embalagem
+  const pkgWords = [
+    "sache", "saches", "sachê", "sachês", "caixa", "caixas", "cx",
+    "refil", "refils", "refis", "pacote", "pacotes", "pct", "pcte",
+    "garrafa", "garrafas", "pet", "pote", "potes", "lata", "latas",
+  ];
+  for (const pw of pkgWords) {
+    working = working.replace(buildAccentInsensitiveRegex(pw), " ");
+  }
+
+  // Remove gramaturas ou tamanhos remanescentes
+  working = working.replace(/\b(\d+X\d+\s*(?:GR|G|KG|ML|L|UNID|UN))\b/gi, " ");
+  working = working.replace(/\b(\d+[\d.,]*\s*(?:GR|G|KG|ML|L|UNID|UN))\b/gi, " ");
+  working = working.replace(/\b(\d+[\d.,]*\s*(?:G|KG|ML|L))\b/gi, " ");
+
+  // Limpeza de preposições ou conectivos soltos
+  working = working.replace(/\s+(de|do|da|com|em|e)\s+([A-Z0-9À-ÿ]+)$/gi, " $2");
+  working = working.replace(/\s+(de|do|da|com|em|e)\s*$/gi, "");
+  working = working.replace(/^\s*(de|do|da|com|em|e)\s+/gi, "");
+  working = working.replace(/\s+/g, " ").trim();
+
+  return working.toUpperCase();
+}
+
+/**
+ * Avalia se dois produtos são candidatos compatíveis segundo as 4 regras de negócio de variação:
+ * 1. Mesmo nome-base (categoria e linha) após remover sabor/fragrância/cor.
+ * 2. Mesma marca.
+ * 3. Mesma gramatura ou volume normalizados.
+ * 4. Mesmo tipo de embalagem (sachê não agrupa com caixa).
+ */
+export interface SimilarityEvaluation {
+  isRelated: boolean;
+  isCompatible: boolean;
+  reasons: string[];
+}
+
+export function evaluateSimilarity(
+  target: ColecaoProduct,
+  candidate: ColecaoProduct
+): SimilarityEvaluation {
+  const reasons: string[] = [];
+
+  const targetTitle = extractGenericGroupTitle(target.description);
+  const candTitle = extractGenericGroupTitle(candidate.description);
+
+  // 1. Relação de base/categoria
+  const isBaseRelated =
+    areProductsSimilar(targetTitle, candTitle) ||
+    areProductsSimilar(target.description, candidate.description);
+
+  if (!isBaseRelated) {
+    return {
+      isRelated: false,
+      isCompatible: false,
+      reasons: ["Produto de categoria ou linha diferente"],
+    };
+  }
+
+  // 2. Marca
+  const targetBrand = extractBrand(target.description);
+  const candBrand = extractBrand(candidate.description);
+  if (targetBrand && candBrand && targetBrand !== candBrand) {
+    reasons.push(`Marca diferente (${candBrand} vs ${targetBrand})`);
+  }
+
+  // 3. Gramatura ou Volume
+  const targetWeight = parseNormalizedWeight(target.description);
+  const candWeight = parseNormalizedWeight(candidate.description);
+
+  if (!targetWeight || !candWeight) {
+    reasons.push("Gramatura pendente (não informada no nome)");
+  } else if (
+    targetWeight.unit !== candWeight.unit ||
+    Math.abs(targetWeight.value - candWeight.value) > 0.01
+  ) {
+    reasons.push(`Gramatura diferente (${candWeight.display} vs ${targetWeight.display})`);
+  }
+
+  // 4. Tipo de Embalagem
+  const targetPkg = parsePackagingType(target.description);
+  const candPkg = parsePackagingType(candidate.description);
+  if (targetPkg !== "padrao" && candPkg !== "padrao" && targetPkg !== candPkg) {
+    reasons.push(`Embalagem diferente (${candPkg} vs ${targetPkg})`);
+  }
+
+  return {
+    isRelated: true,
+    isCompatible: reasons.length === 0,
+    reasons,
+  };
+}
+
+export interface IncompatibleVariant {
+  product: ColecaoProduct;
+  reasons: string[];
+}
+
+export interface CandidateGroupsResult {
+  compatible: ColecaoProduct[];
+  incompatible: IncompatibleVariant[];
+}
+
+/**
+ * Encontra variações candidatas dividindo em grupos:
+ * - compatible: passam em todos os critérios (marca, gramatura e embalagem iguais).
+ * - incompatible: da mesma linha/categoria, mas com restrições (ex: gramatura diferente, embalagem diferente).
+ */
+export function findSimilarCandidateGroups(
+  targetProduct: ColecaoProduct,
+  allProducts: ColecaoProduct[]
+): CandidateGroupsResult {
+  if (!targetProduct || !allProducts) {
+    return { compatible: [], incompatible: [] };
+  }
+
+  const compatible: ColecaoProduct[] = [];
+  const incompatible: IncompatibleVariant[] = [];
+
+  for (const p of allProducts) {
+    if (p.id === targetProduct.id || p.code === targetProduct.code) continue;
+
+    const evaluation = evaluateSimilarity(targetProduct, p);
+    if (!evaluation.isRelated) continue;
+
+    if (evaluation.isCompatible) {
+      compatible.push(p);
+    } else {
+      incompatible.push({ product: p, reasons: evaluation.reasons });
+    }
+  }
+
+  return { compatible, incompatible };
+}
+
+/**
  * Busca produtos similares em uma lista para um produto selecionado.
- * Retorna os candidatos a variação (excluindo o próprio produto principal).
+ * Retorna apenas candidatos 100% compatíveis por padrão.
  */
 export function findSimilarCandidates(
   targetProduct: ColecaoProduct,
   allProducts: ColecaoProduct[]
 ): ColecaoProduct[] {
-  if (!targetProduct || !allProducts) return [];
-
-  return allProducts.filter((p) => {
-    // Ignorar o próprio produto
-    if (p.id === targetProduct.id || p.code === targetProduct.code) return false;
-
-    // Verificar se possuem o mesmo nome-base (ignorando sabor/recheio)
-    return areProductsSimilar(targetProduct.description, p.description);
-  });
+  return findSimilarCandidateGroups(targetProduct, allProducts).compatible;
 }

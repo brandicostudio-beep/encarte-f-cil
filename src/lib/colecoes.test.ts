@@ -8,7 +8,13 @@ import {
 } from "./colecoes-layout";
 import {
   extractGenericBaseName,
+  extractGenericGroupTitle,
   findSimilarCandidates,
+  findSimilarCandidateGroups,
+  evaluateSimilarity,
+  parseNormalizedWeight,
+  parsePackagingType,
+  extractBrand,
   areProductsSimilar,
   normalizeText,
 } from "./colecoes-similarity";
@@ -575,6 +581,241 @@ describe("Encarte de Coleções - Regras de Negócio e Testes Obrigatórios", ()
       const cardA = resolveCardDisplayData(pages[0][0]);
       expect(cardA.photo1).toBe("https://img.com/a1.png");
       expect(cardA.photo2).toBe("https://img.com/a2.png");
+    });
+  });
+
+  describe("8. Correções de Variação Real: Marca, Gramatura, Embalagem e Erros do Modal (Prompt #10)", () => {
+    it("8.1 Normalização de Gramatura e Volume (g, kg, ml, l e multiplicadores)", () => {
+      // 1,3 kg = 1300 g
+      const w1 = parseNormalizedWeight("LAVA ROUPAS PÓ TIXAN 1,3 kg SACHÊ");
+      expect(w1).toEqual({ value: 1300, unit: "g", display: "1,3 kg" });
+
+      // 2,2 kg = 2200 g
+      const w2 = parseNormalizedWeight("LAVA ROUPAS PÓ TIXAN 2,2 kg CAIXA");
+      expect(w2).toEqual({ value: 2200, unit: "g", display: "2,2 kg" });
+
+      // 2L = 2000 ml
+      const w3 = parseNormalizedWeight("AMACIANTE AZUL INTENSO YPÊ 2L");
+      expect(w3).toEqual({ value: 2000, unit: "ml", display: "2 L" });
+
+      // 500 ml = 500 ml
+      const w4 = parseNormalizedWeight("DETERGENTE CLEAR YPÊ 500ML");
+      expect(w4).toEqual({ value: 500, unit: "ml", display: "500 ml" });
+
+      // 80g = 80 g
+      const w5 = parseNormalizedWeight("Biscoito Oreo 80g Chocolate");
+      expect(w5).toEqual({ value: 80, unit: "g", display: "80 g" });
+
+      // Multiplicador 24X300 GR = 300 g
+      const w6 = parseNormalizedWeight("MOLHO POMAROLA AZEITONA SACHÊ 24X300 GR");
+      expect(w6).toEqual({ value: 300, unit: "g", display: "24X300 GR" });
+
+      // Sem gramatura informada -> retorna null (para pendência)
+      const wNone = parseNormalizedWeight("LAVA ROUPAS PÓ PRIMAVERA");
+      expect(wNone).toBeNull();
+    });
+
+    it("8.2 Identificação de Tipos de Embalagem (sachê, caixa, pacote, etc.)", () => {
+      expect(parsePackagingType("LAVA ROUPAS PÓ TIXAN 1,3 kg SACHÊ")).toBe("sache");
+      expect(parsePackagingType("LAVA ROUPAS PÓ TIXAN 2,2 kg CAIXA")).toBe("caixa");
+      expect(parsePackagingType("SABONETE LIQUIDO REFIL DOVE")).toBe("refil");
+      expect(parsePackagingType("BISCOITO PACOTE 140G")).toBe("pacote");
+      expect(parsePackagingType("SABONETE FLOR DE YPÊ ROSA")).toBe("padrao");
+    });
+
+    it("8.3 Extração de Marca Reconhecida", () => {
+      expect(extractBrand("LAVA ROUPAS PÓ PRIMAVERA TIXAN 1,3 kg SACHÊ")).toBe("TIXAN");
+      expect(extractBrand("AMACIANTE AZUL INTENSO YPÊ 2L")).toBe("YPE");
+      expect(extractBrand("BISCOITO RECHEADO OREO 80G CHOCOLATE")).toBe("OREO");
+      expect(extractBrand("MOLHO POMAROLA AZEITONA SACHÊ 24X300 GR")).toBe("POMAROLA");
+    });
+
+    it("8.4 Sugestão Automática de Descrição Genérica do Grupo (sem fragrância, sem cor, sem gramatura e sem código)", () => {
+      // Amaciante Azul Intenso Ypê vira AMACIANTE YPÊ (removendo cor azul e fragrância intensa)
+      expect(extractGenericGroupTitle("AMACIANTE AZUL INTENSO YPÊ 2L")).toBe("AMACIANTE YPÊ");
+      // Lava Roupas Pó Primavera Tixan Sachê vira LAVA ROUPAS PÓ TIXAN
+      expect(extractGenericGroupTitle("LAVA ROUPAS PÓ PRIMAVERA TIXAN 1,3 kg SACHÊ")).toBe("LAVA ROUPAS PÓ TIXAN");
+      expect(extractGenericGroupTitle("LAVA ROUPAS PÓ MACIEZ TIXAN 2,2 kg CAIXA")).toBe("LAVA ROUPAS PÓ TIXAN");
+      // Sabonetes e Detergentes
+      expect(extractGenericGroupTitle("SABONETE FLOR DE YPÊ ROSA")).toBe("SABONETE YPÊ");
+      expect(extractGenericGroupTitle("DETERGENTE CAPIM LIMÃO YPÊ 500ML")).toBe("DETERGENTE YPÊ");
+    });
+
+    it("8.5 Regra de Variação: Tixan 1,3 kg Sachê NÃO agrupa com Tixan 2,2 kg Caixa", () => {
+      const prod13: ColecaoProduct = {
+        id: "p-tixan-13",
+        code: "23000",
+        description: "LAVA ROUPAS PÓ PRIMAVERA TIXAN 1,3 kg SACHÊ",
+        image: "https://cescom.agilecdn.com.br/tixan-13.jpg",
+        isPrincipal: true,
+      };
+
+      const prod22: ColecaoProduct = {
+        id: "p-tixan-22",
+        code: "23001",
+        description: "LAVA ROUPAS PÓ MACIEZ TIXAN 2,2 kg CAIXA",
+        image: "https://cescom.agilecdn.com.br/tixan-22.jpg",
+        isPrincipal: false,
+      };
+
+      // Avaliação de similaridade acusa incompatibilidade de gramatura e embalagem
+      const evalSim = evaluateSimilarity(prod13, prod22);
+      expect(evalSim.isCompatible).toBe(false);
+      expect(evalSim.reasons.some((r) => r.includes("Gramatura diferente"))).toBe(true);
+      expect(evalSim.reasons.some((r) => r.includes("Embalagem diferente"))).toBe(true);
+
+      // No agrupamento do encarte, devem gerar CARDS DISTINTOS (nunca juntos no mesmo card)
+      const { displayProducts } = categorizeAndGroupColecaoProducts([prod13, prod22]);
+      expect(displayProducts).toHaveLength(2);
+      expect(displayProducts.some((p) => p.code === "23000")).toBe(true);
+      expect(displayProducts.some((p) => p.code === "23001")).toBe(true);
+    });
+
+    it("8.6 Regra de Variação: Tixan Primavera 1,3 kg Sachê agrupa com Tixan Maciez 1,3 kg Sachê", () => {
+      const principal13: ColecaoProduct = {
+        id: "p-tixan-prim",
+        code: "23000",
+        description: "LAVA ROUPAS PÓ PRIMAVERA TIXAN 1,3 kg SACHÊ",
+        image: "https://cescom.agilecdn.com.br/prim-13.jpg",
+        isPrincipal: true,
+      };
+
+      const maciez13A: ColecaoProduct = {
+        id: "p-tixan-mac-1",
+        code: "24820",
+        description: "LAVA ROUPAS PÓ MACIEZ TIXAN 1,3 kg SACHÊ",
+        image: "https://cescom.agilecdn.com.br/mac-13a.jpg",
+        isPrincipal: false,
+      };
+
+      const maciez13B: ColecaoProduct = {
+        id: "p-tixan-mac-2",
+        code: "20594",
+        description: "LAVA ROUPAS PÓ MACIEZ TIXAN 1,3 kg SACHÊ",
+        image: "https://cescom.agilecdn.com.br/mac-13b.jpg",
+        isPrincipal: false,
+      };
+
+      const evalSimA = evaluateSimilarity(principal13, maciez13A);
+      expect(evalSimA.isCompatible).toBe(true);
+      expect(evalSimA.reasons).toHaveLength(0);
+
+      // Agrupamento gera exatamente 1 card com as variações unificadas
+      const { displayProducts } = categorizeAndGroupColecaoProducts([principal13, maciez13A, maciez13B]);
+      expect(displayProducts).toHaveLength(1);
+      const card = resolveCardDisplayData(displayProducts[0]);
+      expect(card.photo1).toBe("https://cescom.agilecdn.com.br/prim-13.jpg");
+      expect(card.photo2).toBe("https://cescom.agilecdn.com.br/mac-13a.jpg");
+      expect(card.code).toBeUndefined(); // Sem código no card principal
+    });
+
+    it("8.7 Erro do Amaciante Azul Intenso Ypê (8522): Encontra outros Amaciantes Ypê da mesma gramatura", () => {
+      const amacianteAzul: ColecaoProduct = {
+        id: "p-8522",
+        code: "8522",
+        description: "AMACIANTE AZUL INTENSO YPÊ 2L",
+        image: "https://cescom.agilecdn.com.br/azul-2l.jpg",
+        isPrincipal: true,
+      };
+
+      const amaciantesList: ColecaoProduct[] = [
+        amacianteAzul,
+        {
+          id: "p-aconchego",
+          code: "5280",
+          description: "AMACIANTE ACONCHEGO YPÊ 2L",
+          image: "https://cescom.agilecdn.com.br/aconchego-2l.jpg",
+          isPrincipal: false,
+        },
+        {
+          id: "p-delicado",
+          code: "9111",
+          description: "AMACIANTE DELICADO YPÊ 2L",
+          image: "https://cescom.agilecdn.com.br/delicado-2l.jpg",
+          isPrincipal: false,
+        },
+        {
+          id: "p-primavera",
+          code: "937",
+          description: "AMACIANTE PRIMAVERA YPÊ 2L",
+          image: "https://cescom.agilecdn.com.br/primavera-2l.jpg",
+          isPrincipal: false,
+        },
+        {
+          id: "p-frescor",
+          code: "24781",
+          description: "AMACIANTE FRESCOR DAS FLORES YPÊ 2L",
+          image: "https://cescom.agilecdn.com.br/frescor-2l.jpg",
+          isPrincipal: false,
+        },
+        {
+          id: "p-diferente",
+          code: "8523",
+          description: "AMACIANTE CONCENTRADO YPÊ 500ML",
+          image: "https://cescom.agilecdn.com.br/concentrado-500.jpg",
+          isPrincipal: false,
+        },
+      ];
+
+      const { compatible, incompatible } = findSimilarCandidateGroups(amacianteAzul, amaciantesList);
+
+      // Amaciante Azul encontra os 4 amaciantes de 2L como compatíveis
+      expect(compatible).toHaveLength(4);
+      expect(compatible.map((c) => c.code)).toEqual(
+        expect.arrayContaining(["5280", "9111", "937", "24781"])
+      );
+
+      // O de 500ml fica em "não agrupadas" por gramatura diferente
+      expect(incompatible.some((inc) => inc.product.code === "8523")).toBe(true);
+      const inc500 = incompatible.find((inc) => inc.product.code === "8523");
+      expect(inc500?.reasons.some((r) => r.includes("Gramatura diferente"))).toBe(true);
+    });
+
+    it("8.8 Amaciante sem similar mantém foto repetida nas duas posições (Regra 2)", () => {
+      const amacianteIsolado: ColecaoProduct = {
+        id: "p-iso-1",
+        code: "9999",
+        description: "AMACIANTE EXCLUSIVO YPÊ 2L",
+        image: "https://cescom.agilecdn.com.br/iso.jpg",
+        isPrincipal: true,
+        variants: [],
+      };
+
+      const card = resolveCardDisplayData(amacianteIsolado);
+      expect(card.photo1).toBe("https://cescom.agilecdn.com.br/iso.jpg");
+      expect(card.photo2).toBe("https://cescom.agilecdn.com.br/iso.jpg");
+      expect(card.code).toBeUndefined();
+      expect(card.hasVariants).toBe(false);
+    });
+
+    it("8.9 Produto com gramatura não identificada não entra automaticamente em nenhum grupo", () => {
+      const prodComPeso: ColecaoProduct = {
+        id: "p-com-peso",
+        code: "23000",
+        description: "LAVA ROUPAS PÓ PRIMAVERA TIXAN 1,3 kg",
+        image: "https://cescom.agilecdn.com.br/tixan.jpg",
+        isPrincipal: true,
+      };
+
+      const prodSemPeso: ColecaoProduct = {
+        id: "p-sem-peso",
+        code: "20600",
+        description: "LAVA ROUPAS PÓ PRIMAVERA",
+        image: "https://cescom.agilecdn.com.br/tixan.jpg",
+        isPrincipal: false,
+      };
+
+      const evalSim = evaluateSimilarity(prodComPeso, prodSemPeso);
+      expect(evalSim.isCompatible).toBe(false);
+      expect(evalSim.reasons.some((r) => r.includes("Gramatura pendente"))).toBe(true);
+
+      const { compatible, incompatible } = findSimilarCandidateGroups(prodComPeso, [
+        prodComPeso,
+        prodSemPeso,
+      ]);
+      expect(compatible).toHaveLength(0);
+      expect(incompatible).toHaveLength(1);
+      expect(incompatible[0].product.code).toBe("20600");
     });
   });
 });

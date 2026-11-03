@@ -12,8 +12,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { ColecaoProduct } from "@/types/colecoes";
-import { extractGenericBaseName, findSimilarCandidates } from "@/lib/colecoes-similarity";
-import { Star, Sparkles, Plus, Trash2, CheckCircle2, ImageIcon, Search } from "lucide-react";
+import {
+  extractGenericBaseName,
+  extractGenericGroupTitle,
+  findSimilarCandidateGroups,
+  parseNormalizedWeight,
+  parsePackagingType,
+  extractBrand,
+} from "@/lib/colecoes-similarity";
+import {
+  Star,
+  Sparkles,
+  Plus,
+  CheckCircle2,
+  ImageIcon,
+  Search,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 
 interface PrincipalVariantsModalProps {
   open: boolean;
@@ -38,32 +55,36 @@ export const PrincipalVariantsModal: React.FC<PrincipalVariantsModalProps> = ({
   const [selectedVariantIds, setSelectedVariantIds] = useState<Set<string>>(new Set());
   const [manualSearch, setManualSearch] = useState("");
   const [showManualPicker, setShowManualPicker] = useState(false);
+  const [showIncompatibleList, setShowIncompatibleList] = useState(true);
+
+  // Candidatos compatíveis e não agrupados (com motivos)
+  const { compatible: autoCandidates, incompatible: incompatibleCandidates } = useMemo(() => {
+    if (!product) return { compatible: [], incompatible: [] };
+    return findSimilarCandidateGroups(product, allProducts);
+  }, [product, allProducts]);
 
   // Inicializa quando abre o modal para um produto
   useEffect(() => {
     if (product && open) {
+      // Sugestão automática: nome-base limpo sem fragrância, sem gramatura e sem código
       const defaultGeneric =
-        product.genericDescription || extractGenericBaseName(product.description);
+        product.genericDescription && product.genericDescription !== product.description
+          ? product.genericDescription
+          : extractGenericGroupTitle(product.description) ||
+            extractGenericBaseName(product.description);
       setGenericDescription(defaultGeneric);
 
-      // Busca automáticas de similares
-      const candidates = findSimilarCandidates(product, allProducts);
-      // Se o produto já possuía variações previamente salvas, usa-as; caso contrário, seleciona todos os similares encontrados
-      const initialIds = product.variantIds && product.variantIds.length > 0
-        ? new Set(product.variantIds)
-        : new Set(candidates.map((c) => c.id));
+      // Se o produto já possuía variações salvas, usa-as; caso contrário, seleciona os compatíveis automáticos
+      const initialIds =
+        product.variantIds && product.variantIds.length > 0
+          ? new Set(product.variantIds)
+          : new Set(autoCandidates.map((c) => c.id));
 
       setSelectedVariantIds(initialIds);
       setShowManualPicker(false);
       setManualSearch("");
     }
-  }, [product, open, allProducts]);
-
-  // Candidatos sugeridos pelo motor de similaridade
-  const autoCandidates = useMemo(() => {
-    if (!product) return [];
-    return findSimilarCandidates(product, allProducts);
-  }, [product, allProducts]);
+  }, [product, open, allProducts, autoCandidates]);
 
   // Lista de produtos candidatos manuais (excluindo o principal)
   const manualCandidates = useMemo(() => {
@@ -93,10 +114,17 @@ export const PrincipalVariantsModal: React.FC<PrincipalVariantsModalProps> = ({
   };
 
   const handleSave = () => {
-    const finalGeneric = genericDescription.trim() || extractGenericBaseName(product.description);
+    const finalGeneric =
+      genericDescription.trim() ||
+      extractGenericGroupTitle(product.description) ||
+      extractGenericBaseName(product.description);
     onConfirm(product, finalGeneric, selectedVariants);
     onOpenChange(false);
   };
+
+  const targetWeight = parseNormalizedWeight(product.description);
+  const targetPkg = parsePackagingType(product.description);
+  const targetBrand = extractBrand(product.description);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -126,11 +154,26 @@ export const PrincipalVariantsModal: React.FC<PrincipalVariantsModalProps> = ({
               )}
             </div>
             <div className="flex-1 space-y-1">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="rounded bg-amber-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
                   PRINCIPAL
                 </span>
                 <span className="font-mono text-neutral-500">Cód: {product.code}</span>
+                {targetBrand && (
+                  <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-700">
+                    {targetBrand}
+                  </span>
+                )}
+                {targetWeight && (
+                  <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">
+                    {targetWeight.display}
+                  </span>
+                )}
+                {targetPkg !== "padrao" && (
+                  <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800 uppercase">
+                    {targetPkg}
+                  </span>
+                )}
               </div>
               <p className="font-semibold text-neutral-800 line-clamp-1">{product.description}</p>
             </div>
@@ -138,25 +181,30 @@ export const PrincipalVariantsModal: React.FC<PrincipalVariantsModalProps> = ({
 
           {/* Campo de Descrição Genérica */}
           <div className="space-y-1.5">
-            <Label htmlFor="genericDescInput" className="text-xs font-bold text-neutral-900 flex items-center gap-1.5">
+            <Label
+              htmlFor="genericDescInput"
+              className="text-xs font-bold text-neutral-900 flex items-center gap-1.5"
+            >
               <span>Descrição Genérica do Grupo (Exibida no Card)</span>
-              <span className="text-[10px] text-neutral-500 font-normal">(sem sabor ou recheio)</span>
+              <span className="text-[10px] text-neutral-500 font-normal">
+                (sem sabor, fragrância ou gramatura)
+              </span>
             </Label>
             <Input
               id="genericDescInput"
               value={genericDescription}
               onChange={(e) => setGenericDescription(e.target.value)}
-              placeholder="Ex: Biscoito Oreo 80g"
+              placeholder="Ex: LAVA ROUPAS PÓ TIXAN ou AMACIANTE YPÊ"
               className="text-xs font-semibold"
             />
           </div>
 
-          {/* Candidatos Similares Encontrados Automaticamente */}
+          {/* Candidatos Compatíveis Encontrados Automaticamente */}
           <div className="space-y-2 border-t pt-3">
             <div className="flex items-center justify-between">
               <span className="font-bold text-neutral-900 flex items-center gap-1.5">
                 <Sparkles className="h-4 w-4 text-purple-600" />
-                Variações Similares Detectadas ({autoCandidates.length})
+                Variações Compatíveis Detectadas ({autoCandidates.length})
               </span>
               <span className="text-[11px] text-neutral-500">
                 {selectedVariants.length} variação(ões) selecionada(s)
@@ -174,6 +222,9 @@ export const PrincipalVariantsModal: React.FC<PrincipalVariantsModalProps> = ({
               <div className="max-h-48 overflow-y-auto space-y-1.5 border rounded-md p-2 bg-neutral-50/50">
                 {autoCandidates.map((candidate) => {
                   const isChecked = selectedVariantIds.has(candidate.id);
+                  const candWeight = parseNormalizedWeight(candidate.description);
+                  const candPkg = parsePackagingType(candidate.description);
+
                   return (
                     <label
                       key={candidate.id}
@@ -203,9 +254,21 @@ export const PrincipalVariantsModal: React.FC<PrincipalVariantsModalProps> = ({
                           <p className="font-medium text-neutral-800 line-clamp-1">
                             {candidate.description}
                           </p>
-                          <span className="text-[10px] text-neutral-500 font-mono">
-                            Cód: {candidate.code}
-                          </span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px] text-neutral-500 font-mono">
+                              Cód: {candidate.code}
+                            </span>
+                            {candWeight && (
+                              <span className="rounded bg-emerald-50 px-1 py-0.2 text-[9px] font-semibold text-emerald-700 border border-emerald-200">
+                                {candWeight.display}
+                              </span>
+                            )}
+                            {candPkg !== "padrao" && (
+                              <span className="rounded bg-sky-50 px-1 py-0.2 text-[9px] font-semibold text-sky-700 border border-sky-200 uppercase">
+                                {candPkg}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </label>
@@ -214,6 +277,93 @@ export const PrincipalVariantsModal: React.FC<PrincipalVariantsModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* Seção "Não Agrupadas" (produtos com divergência de gramatura, embalagem ou marca) */}
+          {incompatibleCandidates.length > 0 && (
+            <div className="border-t pt-2 space-y-2">
+              <button
+                type="button"
+                onClick={() => setShowIncompatibleList((prev) => !prev)}
+                className="flex items-center justify-between w-full text-left font-bold text-neutral-700 hover:text-neutral-900"
+              >
+                <span className="flex items-center gap-1.5">
+                  <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+                  <span>Não Agrupadas ({incompatibleCandidates.length})</span>
+                  <span className="text-[10px] font-normal text-neutral-500">
+                    (gramatura, embalagem ou marca divergentes)
+                  </span>
+                </span>
+                {showIncompatibleList ? (
+                  <ChevronUp className="h-4 w-4 text-neutral-400" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-neutral-400" />
+                )}
+              </button>
+
+              {showIncompatibleList && (
+                <div className="max-h-40 overflow-y-auto space-y-1.5 border rounded-md p-2 bg-amber-50/30">
+                  {incompatibleCandidates.map(({ product: cand, reasons }) => {
+                    const isChecked = selectedVariantIds.has(cand.id);
+                    return (
+                      <div
+                        key={cand.id}
+                        className={`flex items-center justify-between rounded-md border p-2 transition-colors ${
+                          isChecked
+                            ? "border-amber-400 bg-amber-50"
+                            : "border-neutral-200 bg-white"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <div className="h-9 w-9 shrink-0 rounded bg-white border p-0.5 flex items-center justify-center">
+                            {cand.image ? (
+                              <img
+                                src={cand.image}
+                                alt={cand.description}
+                                className="max-h-full max-w-full object-contain"
+                              />
+                            ) : (
+                              <ImageIcon className="h-4 w-4 text-neutral-400" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-neutral-800 line-clamp-1">
+                              {cand.description}
+                            </p>
+                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                              <span className="text-[10px] text-neutral-500 font-mono">
+                                Cód: {cand.code}
+                              </span>
+                              {reasons.map((r, i) => (
+                                <span
+                                  key={i}
+                                  className="rounded bg-amber-100 px-1 py-0.2 text-[9px] font-semibold text-amber-800 border border-amber-200"
+                                >
+                                  {r}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={isChecked ? "default" : "outline"}
+                          className={`h-6 text-[10px] ml-2 shrink-0 ${
+                            isChecked
+                              ? "bg-amber-600 hover:bg-amber-700 text-white"
+                              : "border-amber-300 text-amber-800 hover:bg-amber-100"
+                          }`}
+                          onClick={() => toggleVariant(cand.id)}
+                        >
+                          {isChecked ? "Remover" : "+ Adicionar mesmo assim"}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Adicionar Variações Manualmente */}
           <div className="border-t pt-3 space-y-2">

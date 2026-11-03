@@ -1,6 +1,13 @@
 import type { ColecaoProduct, ColecaoGridArea } from "@/types/colecoes";
 import { DEFAULT_COLECAO_GRID_AREA } from "@/types/colecoes";
-import { extractGenericBaseName, normalizeText } from "./colecoes-similarity";
+import {
+  extractGenericBaseName,
+  extractGenericGroupTitle,
+  parseNormalizedWeight,
+  parsePackagingType,
+  extractBrand,
+  normalizeText,
+} from "./colecoes-similarity";
 
 export interface CardDisplayData {
   photo1: string;
@@ -128,8 +135,13 @@ export function categorizeAndGroupColecaoProducts(
     }
   }
 
-  // Agrupamento por nome-base genérico (ex: "Sabonete Ypê", "Detergente Ypê", "Lava Roupas Pó Tixan")
-  const groupsByBaseName = new Map<string, ColecaoProduct[]>();
+  // Agrupamento por critérios de variação real:
+  // 1. Mesmo nome-base (extractGenericGroupTitle)
+  // 2. Mesma marca (extractBrand)
+  // 3. Mesma gramatura ou volume normalizados (parseNormalizedWeight)
+  // 4. Mesmo tipo de embalagem (parsePackagingType)
+  // Produtos com gramaturas diferentes (ex.: 1,3 kg vs 2,2 kg) geram cards distintos.
+  const groupsByKey = new Map<string, ColecaoProduct[]>();
 
   for (const prod of validProducts) {
     // Se o produto já foi atribuído como variação interna de outro principal, não forma grupo standalone
@@ -137,33 +149,70 @@ export function categorizeAndGroupColecaoProducts(
       continue;
     }
 
-    const baseName = extractGenericBaseName(prod.description) || prod.description;
-    const baseKey = normalizeText(baseName);
+    const weight = parseNormalizedWeight(prod.description);
+    const pkg = parsePackagingType(prod.description);
+    const brand = extractBrand(prod.description);
+    const baseTitle =
+      extractGenericGroupTitle(prod.description) ||
+      extractGenericBaseName(prod.description) ||
+      prod.description;
+    const baseNorm = normalizeText(baseTitle);
 
-    const existing = groupsByBaseName.get(baseKey);
+    let groupKey: string;
+    if (weight) {
+      const weightKey = `${weight.value}${weight.unit}`;
+      const pkgKey = pkg !== "padrao" ? pkg : "";
+      groupKey = `${baseNorm}|${brand}|${weightKey}|${pkgKey}`;
+    } else if (prod.isPrincipal) {
+      // Principal explicitamente definido sem gramatura específica
+      groupKey = `${baseNorm}|${brand}|principal_${prod.id}`;
+    } else {
+      // Sem gramatura informada: agrupa se tiver a mesma base genérica ou descrição exata
+      const normDesc = normalizeText(prod.description);
+      groupKey = `${baseNorm}|${brand}|pendente|${normDesc}`;
+    }
+
+    // Se houver algum grupo já existente com o mesmo baseTitle e brand compatível
+    // e o produto atual for não-principal enquanto o grupo tiver um principal compatível sem choque de peso:
+    let matchedKey = groupKey;
+    if (!weight && !prod.isPrincipal) {
+      for (const [k, items] of groupsByKey.entries()) {
+        const hasPrincipal = items.some((it) => it.isPrincipal);
+        if (hasPrincipal && k.startsWith(`${baseNorm}|${brand}|`)) {
+          // Checar se não há choque explícito de gramatura
+          const itemWeight = parseNormalizedWeight(items[0].description);
+          if (!itemWeight) {
+            matchedKey = k;
+            break;
+          }
+        }
+      }
+    }
+
+    const existing = groupsByKey.get(matchedKey);
     if (existing) {
       existing.push(prod);
     } else {
-      groupsByBaseName.set(baseKey, [prod]);
+      groupsByKey.set(matchedKey, [prod]);
     }
   }
 
   const displayProducts: ColecaoProduct[] = [];
 
-  for (const [_baseKey, groupItems] of groupsByBaseName.entries()) {
+  for (const [_key, groupItems] of groupsByKey.entries()) {
     if (groupItems.length === 1) {
       // Produto único no grupo
       const item = groupItems[0];
       displayProducts.push(item);
     } else {
-      // Múltiplos produtos com o mesmo nome-base (ex.: várias fragrâncias ou códigos repetidos como 24820 e 20594)
-      // Agrupa em um único principal! Nunca exibe dois cards com o mesmo nome-base.
+      // Múltiplos produtos compatíveis agrupados em um único principal
       const explicitPrincipal = groupItems.find((p) => p.isPrincipal);
       const mainProd = explicitPrincipal || groupItems[0];
       const otherVariants = groupItems.filter((p) => p.id !== mainProd.id);
 
       const genericTitle =
         mainProd.genericDescription ||
+        extractGenericGroupTitle(mainProd.description) ||
         extractGenericBaseName(mainProd.description).trim().toUpperCase();
 
       const combinedVariants = [...(mainProd.variants || []), ...otherVariants];
