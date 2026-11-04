@@ -27,6 +27,7 @@ import {
 import { removeWhiteBackground } from "@/lib/colecoes-image-processor";
 import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
 import { extractGenericBaseName } from "@/lib/colecoes-similarity";
+import { ProductCell } from "./ProductCell";
 
 interface ColecaoProductEditModalProps {
   product: ColecaoProduct | null;
@@ -193,53 +194,19 @@ export const ColecaoProductEditModal: React.FC<ColecaoProductEditModalProps> = (
               Prévia do Bloco no Encarte
             </span>
 
-            {/* Container do Bloco Único */}
-            <div className="w-[245px] h-[165px] rounded-xl bg-[#240407]/90 border border-[#521017]/80 flex items-center justify-around gap-2 px-2 py-1 shadow-[inset_0_1px_4px_rgba(0,0,0,0.6)]">
-              {/* Foto 1 */}
-              <div className="relative flex-1 h-full flex items-center justify-center overflow-hidden">
-                {form.image ? (
-                  <img
-                    src={form.image}
-                    alt="Foto 1"
-                    className="max-h-full max-w-full object-contain filter drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]"
-                    style={{ mixBlendMode: "multiply" }}
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center text-red-300/40">
-                    <ImageIcon className="h-5 w-5" />
-                    <span className="text-[8px] mt-0.5">Sem foto 1</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Foto 2 */}
-              <div className="relative flex-1 h-full flex items-center justify-center overflow-hidden">
-                {currentPhoto2 ? (
-                  <img
-                    src={currentPhoto2}
-                    alt="Foto 2"
-                    className="max-h-full max-w-full object-contain filter drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]"
-                    style={{ mixBlendMode: "multiply" }}
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center text-red-300/40">
-                    <ImageIcon className="h-5 w-5" />
-                    <span className="text-[8px] mt-0.5">Sem foto 2</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Texto abaixo do bloco */}
-            <div className="w-[245px] flex flex-col items-center justify-center text-center mt-2 px-1">
-              {!form.isPrincipal && form.code && (
-                <div className="text-[11px] font-mono font-black text-[#FFE600] leading-none mb-1 uppercase">
-                  CÓD: {form.code}
-                </div>
-              )}
-              <div className="text-[11px] font-black uppercase text-white line-clamp-2 leading-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-                {currentDisplayTitle || "NOME DO PRODUTO"}
-              </div>
+            {/* Container do Bloco Único com ProductCell */}
+            <div className="relative w-[245px] h-[220px] rounded-xl bg-black/40 border border-neutral-800 overflow-visible p-1">
+              <ProductCell
+                photo={form.image}
+                photo2={currentPhoto2}
+                title={currentDisplayTitle || "NOME DO PRODUTO"}
+                code={!form.isPrincipal ? form.code : undefined}
+                cellW={237}
+                cellH={212}
+                productScale={1.3}
+                zIndex={1}
+                limit={form.limit}
+              />
             </div>
           </div>
 

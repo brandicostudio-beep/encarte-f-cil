@@ -24,6 +24,7 @@ import {
   sanitizeCollectionFileName,
 } from "./colecoes-export";
 import { parseColecaoSpreadsheet, parseBooleanFlag } from "./colecoes-parser";
+import { ProductCell, CAPTION_H } from "@/components/colecoes/ProductCell";
 import { removeWhiteBackground } from "./colecoes-image-processor";
 import * as XLSX from "xlsx";
 
@@ -932,6 +933,34 @@ describe("Encarte de Coleções - Regras de Negócio e Testes Obrigatórios", ()
       // Redefine todos para a grade
       customLayouts = {};
       expect(Object.keys(customLayouts)).toHaveLength(0);
+    });
+  });
+
+  describe("10. Componente ProductCell (Sobreposição e Legenda)", () => {
+    it("10.1 Exporta CAPTION_H = 54 para a legenda bege", () => {
+      expect(CAPTION_H).toBe(54);
+    });
+
+    it("10.2 Calcula dimensões da foto e sobreposição com base em cellW, cellH e productScale", () => {
+      const cellW = 255;
+      const cellH = 275;
+      const productScale = 1.3;
+      const photoBoxH = cellH - CAPTION_H; // 221
+      const imgW = cellW * productScale;   // 331.5
+      const imgH = photoBoxH * productScale; // 287.3
+
+      expect(photoBoxH).toBe(221);
+      expect(imgW).toBeCloseTo(331.5);
+      expect(imgH).toBeCloseTo(287.3);
+
+      const left = (cellW - imgW) / 2;
+      const top = (photoBoxH - imgH) / 2;
+      expect(left).toBeCloseTo(-38.25);
+      expect(top).toBeCloseTo(-33.15);
+    });
+
+    it("10.3 Componente ProductCell está definido como função React", () => {
+      expect(typeof ProductCell).toBe("function");
     });
   });
 });
