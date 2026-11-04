@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import type { ColecaoProduct, ColecaoConfig } from "@/types/colecoes";
 import { DEFAULT_COLECAO_CONFIG } from "@/types/colecoes";
 import {
   paginateColecaoProducts,
   categorizeAndGroupColecaoProducts,
+  calculateGridCellPositions,
 } from "@/lib/colecoes-layout";
 import { parseColecaoSpreadsheet } from "@/lib/colecoes-parser";
 import { exportColecaoPageAsPng, exportColecaoAllPagesZip } from "@/lib/colecoes-export";
-import { ColecoesPage } from "./ColecoesPage";
+import { ColecoesPage, type CustomItemLayout } from "./ColecoesPage";
 import { PrincipalVariantsModal } from "./PrincipalVariantsModal";
 import { ColecaoProductEditModal } from "./ColecaoProductEditModal";
 import {
@@ -39,19 +40,27 @@ import {
   ZoomIn,
   ZoomOut,
   Sparkles,
-  CheckCircle2,
-  FolderOpen,
-  ImageIcon,
-  Eye,
-  Edit2,
-  Copy,
   FolderSync,
   AlertTriangle,
+  Eye,
+  Edit2,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Lock,
+  Unlock,
+  EyeOff,
+  Undo2,
+  Redo2,
+  Settings,
+  Sliders,
+  RotateCcw,
 } from "lucide-react";
 import { ColecoesSourceSelector } from "./ColecoesSourceSelector";
 
 const STORAGE_KEY_PRODUCTS = "encarte-colecoes-products-v1";
 const STORAGE_KEY_CONFIG = "encarte-colecoes-config-v1";
+const STORAGE_KEY_LAYOUTS = "encarte-colecoes-layouts-v1";
 
 export const ColecoesWorkspace: React.FC = () => {
   // Estado isolado dos dados de Coleções
@@ -75,6 +84,24 @@ export const ColecoesWorkspace: React.FC = () => {
     return DEFAULT_COLECAO_CONFIG;
   });
 
+  // Layouts livres personalizados estilo Canva
+  const [customLayouts, setCustomLayouts] = useState<Record<string, CustomItemLayout>>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_LAYOUTS);
+      if (saved) return JSON.parse(saved);
+    } catch {
+      /* ignore */
+    }
+    return {};
+  });
+
+  // Histórico para Desfazer (Ctrl+Z) e Refazer (Ctrl+Y)
+  const [history, setHistory] = useState<Record<string, CustomItemLayout>[]>([customLayouts]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [gridSettingsOpen, setGridSettingsOpen] = useState(false);
+
   const [activeTab, setActiveTab] = useState<"tabela" | "preview">("tabela");
   const [currentPage, setCurrentPage] = useState(1);
   const [previewZoom, setPreviewZoom] = useState(0.38); // 38% para encaixar 1080x1920 confortavelmente na tela
@@ -89,9 +116,8 @@ export const ColecoesWorkspace: React.FC = () => {
   const [newProductModalOpen, setNewProductModalOpen] = useState(false);
   const [newProd, setNewProd] = useState({ code: "", description: "", image: "", isPrincipal: false });
 
-  const pageContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const photoFolderInputRef = useRef<HTMLInputElement>(null);
+  const bgFileInputRef = useRef<HTMLInputElement>(null);
 
   // Salvar no localStorage separadamente
   useEffect(() => {
@@ -110,15 +136,61 @@ export const ColecoesWorkspace: React.FC = () => {
     }
   }, [config]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_LAYOUTS, JSON.stringify(customLayouts));
+    } catch {
+      /* ignore */
+    }
+  }, [customLayouts]);
+
+  // Push para histórico
+  const pushHistory = useCallback(
+    (newLayouts?: Record<string, CustomItemLayout>) => {
+      const nextState = newLayouts || customLayouts;
+      setHistory((prev) => {
+        const trimmed = prev.slice(0, historyIndex + 1);
+        return [...trimmed, nextState];
+      });
+      setHistoryIndex((idx) => idx + 1);
+    },
+    [customLayouts, historyIndex]
+  );
+
+  const handleUndo = useCallback(() => {
+    if (historyIndex > 0) {
+      const targetIndex = historyIndex - 1;
+      setHistoryIndex(targetIndex);
+      setCustomLayouts(history[targetIndex]);
+    }
+  }, [historyIndex, history]);
+
+  const handleRedo = useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      const targetIndex = historyIndex + 1;
+      setHistoryIndex(targetIndex);
+      setCustomLayouts(history[targetIndex]);
+    }
+  }, [historyIndex, history]);
+
   // Agrupamento por nome-base e separação de pendências sem foto
   const { displayProducts, pendingProducts } = useMemo(() => {
     return categorizeAndGroupColecaoProducts(products);
   }, [products]);
 
-  // Paginação automática (20 produtos por página) dos produtos prontos com foto
+  // Paginação dinâmica respeitando itemsPerPage
+  const itemsPerPageEffective = useMemo(() => {
+    if (config.autoItemsPerPage !== false) {
+      const cols = config.columnsCount || 4;
+      const rows = config.rowsCount || 5;
+      return cols * rows;
+    }
+    return config.itemsPerPage || 20;
+  }, [config.autoItemsPerPage, config.columnsCount, config.rowsCount, config.itemsPerPage]);
+
   const pages = useMemo(() => {
-    return paginateColecaoProducts(displayProducts, config.itemsPerPage);
-  }, [displayProducts, config.itemsPerPage]);
+    return paginateColecaoProducts(displayProducts, itemsPerPageEffective);
+  }, [displayProducts, itemsPerPageEffective]);
 
   const totalPages = Math.max(1, pages.length);
 
@@ -129,14 +201,28 @@ export const ColecoesWorkspace: React.FC = () => {
     }
   }, [totalPages, currentPage]);
 
+  // Células da grade para a página atual
+  const cols = config.columnsCount || 4;
+  const rows = config.rowsCount || 5;
+  const cellSpacing = config.cellSpacing || 0;
+  const gridCells = useMemo(() => {
+    return calculateGridCellPositions(config.gridArea, cols, rows, cellSpacing);
+  }, [config.gridArea, cols, rows, cellSpacing]);
+
+  // Item selecionado atualmente
+  const selectedProductItem = useMemo(() => {
+    if (!selectedProductId) return null;
+    return products.find((p) => p.id === selectedProductId) || null;
+  }, [selectedProductId, products]);
+
+  const currentSelectedCustom = selectedProductId ? customLayouts[selectedProductId] : null;
+
   // Toggle do flag "Principal" com busca de similares
   const handleTogglePrincipal = (prod: ColecaoProduct) => {
     if (!prod.isPrincipal) {
-      // Ao ativar "Principal", abre o modal para confirmar ou selecionar similares
       setVariantsModalProduct(prod);
       setVariantsModalOpen(true);
     } else {
-      // Ao desativar, remove o flag de principal
       setProducts((prev) =>
         prev.map((p) =>
           p.id === prod.id
@@ -168,11 +254,22 @@ export const ColecoesWorkspace: React.FC = () => {
     );
   };
 
+  // Reordenação na tabela (▲ mover para cima / ▼ mover para baixo)
+  const handleMoveProduct = (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= products.length) return;
+
+    setProducts((prev) => {
+      const copy = [...prev];
+      const temp = copy[index];
+      copy[index] = copy[targetIndex];
+      copy[targetIndex] = temp;
+      return copy;
+    });
+  };
+
   // Carregamento e sincronização completa via ColecoesSourceSelector
-  const handleProductsLoaded = (
-    loadedProducts: ColecaoProduct[],
-    sourceType: "spreadsheet" | "link" | "sample"
-  ) => {
+  const handleProductsLoaded = (loadedProducts: ColecaoProduct[]) => {
     setProducts(loadedProducts);
     setSourceSelectorModalOpen(false);
     setActiveTab("tabela");
@@ -202,51 +299,29 @@ export const ColecoesWorkspace: React.FC = () => {
     }
   };
 
-  // Carregar fotos de pasta local (faz match por código do produto)
-  const handlePhotoFolderUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  // Upload de imagem de fundo personalizada
+  const handleBackgroundUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    const codeToDataUrl = new Map<string, string>();
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (!file.type.startsWith("image/") && !/\.(jpe?g|png|webp)$/i.test(file.name)) continue;
-
-      // Extrai código numérico do nome do arquivo (ex: "23396.jpg", "23396_1.png", "23396-1.jpg")
-      const match = file.name.match(/^(\d{3,8})/);
-      if (match) {
-        const code = match[1];
-        // Converte para dataUrl
-        const reader = new FileReader();
-        const dataUrl = await new Promise<string>((resolve) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        if (!codeToDataUrl.has(code)) {
-          codeToDataUrl.set(code, dataUrl);
-        }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result) {
+        setConfig((prev) => ({
+          ...prev,
+          templateImage: reader.result as string,
+        }));
       }
-    }
-
-    if (codeToDataUrl.size > 0) {
-      let matchedCount = 0;
-      setProducts((prev) =>
-        prev.map((p) => {
-          const photo = codeToDataUrl.get(p.code);
-          if (photo) {
-            matchedCount++;
-            return { ...p, image: photo };
-          }
-          return p;
-        })
-      );
-      alert(`${matchedCount} foto(s) vinculada(s) aos produtos pelo código!`);
-    } else {
-      alert("Nenhuma imagem com código numérico correspondente encontrada.");
-    }
-
+    };
+    reader.readAsDataURL(file);
     if (e.target) e.target.value = "";
+  };
+
+  const handleResetBackground = () => {
+    setConfig((prev) => ({
+      ...prev,
+      templateImage: DEFAULT_COLECAO_CONFIG.templateImage,
+    }));
   };
 
   // Adicionar produto manualmente
@@ -311,7 +386,7 @@ export const ColecoesWorkspace: React.FC = () => {
 
     setIsExporting(true);
     try {
-      await exportColecaoPageAsPng(pageEl, config.name, currentPage);
+      await exportColecaoPageAsPng(pageEl, config.name, currentPage, config.exportScale || 1);
     } catch (err: any) {
       alert("Erro ao exportar imagem: " + (err?.message || String(err)));
     } finally {
@@ -334,13 +409,315 @@ export const ColecoesWorkspace: React.FC = () => {
         return;
       }
 
-      await exportColecaoAllPagesZip(items, config.name);
+      await exportColecaoAllPagesZip(items, config.name, config.exportScale || 1);
     } catch (err: any) {
       alert("Erro ao gerar arquivo ZIP: " + (err?.message || String(err)));
     } finally {
       setIsExporting(false);
     }
   };
+
+  // Arrastar para mover elemento (Canva-style drag)
+  const handleStartDrag = (
+    productId: string,
+    e: React.PointerEvent,
+    initialBox: { x: number; y: number; width: number; height: number; rotation?: number }
+  ) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startClientX = e.clientX;
+    const startClientY = e.clientY;
+    let hasMoved = false;
+
+    const handlePointerMove = (moveEvt: PointerEvent) => {
+      const deltaX = (moveEvt.clientX - startClientX) / previewZoom;
+      const deltaY = (moveEvt.clientY - startClientY) / previewZoom;
+
+      if (!hasMoved && (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2)) {
+        hasMoved = true;
+      }
+
+      if (hasMoved) {
+        setCustomLayouts((prev) => {
+          const prevCustom = prev[productId] || {};
+          return {
+            ...prev,
+            [productId]: {
+              ...prevCustom,
+              x: Math.round(initialBox.x + deltaX),
+              y: Math.round(initialBox.y + deltaY),
+              width: initialBox.width,
+              height: initialBox.height,
+              rotation: initialBox.rotation || 0,
+              manuallyMoved: true,
+            },
+          };
+        });
+      }
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      if (hasMoved) {
+        pushHistory();
+      }
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
+
+  // Transform Bounding Box resize & rotate
+  const handleTransformBox = (
+    productId: string,
+    newBox: { x: number; y: number; width: number; height: number; rotation?: number }
+  ) => {
+    setCustomLayouts((prev) => {
+      const prevCustom = prev[productId] || {};
+      return {
+        ...prev,
+        [productId]: {
+          ...prevCustom,
+          x: newBox.x,
+          y: newBox.y,
+          width: newBox.width,
+          height: newBox.height,
+          rotation: newBox.rotation ?? prevCustom.rotation ?? 0,
+          manuallyMoved: true,
+        },
+      };
+    });
+  };
+
+  const handleTransformEnd = () => {
+    pushHistory();
+  };
+
+  // Alinhamento do elemento selecionado na área da grade
+  const handleAlignSelected = (alignment: "left" | "center" | "right" | "top" | "middle" | "bottom") => {
+    if (!selectedProductId) return;
+
+    const gridWidth = config.gridArea.xEnd - config.gridArea.xStart;
+    const gridHeight = config.gridArea.yEnd - config.gridArea.yStart;
+
+    setCustomLayouts((prev) => {
+      const current = prev[selectedProductId];
+      const curW = current?.width || 255;
+      const curH = current?.height || 275;
+
+      let nextX = current?.x ?? 0;
+      let nextY = current?.y ?? 0;
+
+      if (alignment === "left") nextX = 0;
+      if (alignment === "center") nextX = Math.round((gridWidth - curW) / 2);
+      if (alignment === "right") nextX = gridWidth - curW;
+      if (alignment === "top") nextY = 0;
+      if (alignment === "middle") nextY = Math.round((gridHeight - curH) / 2);
+      if (alignment === "bottom") nextY = gridHeight - curH;
+
+      const nextLayouts = {
+        ...prev,
+        [selectedProductId]: {
+          ...current,
+          x: nextX,
+          y: nextY,
+          width: curW,
+          height: curH,
+          manuallyMoved: true,
+        },
+      };
+      pushHistory(nextLayouts);
+      return nextLayouts;
+    });
+  };
+
+  // Ajuste de camada Z-Index
+  const handleZIndexSelected = (direction: "up" | "down") => {
+    if (!selectedProductId) return;
+    setCustomLayouts((prev) => {
+      const current = prev[selectedProductId];
+      const currentZ = current?.zIndex ?? 5;
+      const nextZ = direction === "up" ? currentZ + 1 : Math.max(1, currentZ - 1);
+
+      const nextLayouts = {
+        ...prev,
+        [selectedProductId]: {
+          ...current,
+          x: current?.x ?? 0,
+          y: current?.y ?? 0,
+          width: current?.width ?? 255,
+          height: current?.height ?? 275,
+          zIndex: nextZ,
+          manuallyMoved: true,
+        },
+      };
+      pushHistory(nextLayouts);
+      return nextLayouts;
+    });
+  };
+
+  // Alternar Bloqueio
+  const handleToggleLock = (productId: string) => {
+    setCustomLayouts((prev) => {
+      const current = prev[productId];
+      const nextLocked = !current?.isLocked;
+      const nextLayouts = {
+        ...prev,
+        [productId]: {
+          ...current,
+          x: current?.x ?? 0,
+          y: current?.y ?? 0,
+          width: current?.width ?? 255,
+          height: current?.height ?? 275,
+          isLocked: nextLocked,
+        },
+      };
+      pushHistory(nextLayouts);
+      return nextLayouts;
+    });
+  };
+
+  // Ocultar / Mostrar
+  const handleToggleHide = (productId: string) => {
+    setCustomLayouts((prev) => {
+      const current = prev[productId];
+      const nextHidden = !current?.isHidden;
+      const nextLayouts = {
+        ...prev,
+        [productId]: {
+          ...current,
+          x: current?.x ?? 0,
+          y: current?.y ?? 0,
+          width: current?.width ?? 255,
+          height: current?.height ?? 275,
+          isHidden: nextHidden,
+        },
+      };
+      pushHistory(nextLayouts);
+      return nextLayouts;
+    });
+    if (selectedProductId === productId) {
+      setSelectedProductId(null);
+    }
+  };
+
+  // Redefinir elemento selecionado para a grade
+  const handleResetSelectedToGrid = (productId: string) => {
+    setCustomLayouts((prev) => {
+      const next = { ...prev };
+      delete next[productId];
+      pushHistory(next);
+      return next;
+    });
+  };
+
+  // Redefinir todos os itens da página atual para a grade
+  const handleResetPageToGrid = () => {
+    const currentPageProducts = pages[currentPage - 1] || [];
+    setCustomLayouts((prev) => {
+      const next = { ...prev };
+      for (const prod of currentPageProducts) {
+        delete next[prod.id];
+      }
+      pushHistory(next);
+      return next;
+    });
+  };
+
+  // Teclado: Setas (1px ou Shift 10px), Delete, Esc, Ctrl+Z, Ctrl+Y
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+
+      // Desfazer: Ctrl+Z / Cmd+Z
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      // Refazer: Ctrl+Y ou Ctrl+Shift+Z
+      if (
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "z")
+      ) {
+        e.preventDefault();
+        handleRedo();
+        return;
+      }
+
+      // Ajuste fino com setas do teclado
+      if (selectedProductId) {
+        const step = e.shiftKey ? 10 : 1;
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+          e.preventDefault();
+          setCustomLayouts((prev) => {
+            const current = prev[selectedProductId];
+            if (current?.isLocked) return prev;
+
+            let curX = current?.x;
+            let curY = current?.y;
+            let curW = current?.width;
+            let curH = current?.height;
+
+            if (!current?.manuallyMoved) {
+              const currentProdIdx =
+                pages[currentPage - 1]?.findIndex((p) => p.id === selectedProductId) ?? -1;
+              const cell = currentProdIdx >= 0 ? gridCells[currentProdIdx] : null;
+              if (cell) {
+                curX = cell.x - config.gridArea.xStart;
+                curY = cell.y - config.gridArea.yStart;
+                curW = cell.width;
+                curH = cell.height;
+              }
+            }
+
+            if (curX === undefined || curY === undefined) return prev;
+
+            let nextX = curX;
+            let nextY = curY;
+            if (e.key === "ArrowLeft") nextX -= step;
+            if (e.key === "ArrowRight") nextX += step;
+            if (e.key === "ArrowUp") nextY -= step;
+            if (e.key === "ArrowDown") nextY += step;
+
+            const updated: Record<string, CustomItemLayout> = {
+              ...prev,
+              [selectedProductId]: {
+                ...current,
+                x: nextX,
+                y: nextY,
+                width: curW || 255,
+                height: curH || 275,
+                manuallyMoved: true,
+              },
+            };
+            return updated;
+          });
+          return;
+        }
+
+        if (e.key === "Delete" || e.key === "Backspace") {
+          e.preventDefault();
+          handleToggleHide(selectedProductId);
+          return;
+        }
+
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setSelectedProductId(null);
+          return;
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedProductId, handleUndo, handleRedo, pages, currentPage, gridCells, config.gridArea]);
 
   // Carregar produtos de exemplo para testar
   const handleLoadSample = () => {
@@ -394,7 +771,7 @@ export const ColecoesWorkspace: React.FC = () => {
       {
         id: "c-6",
         code: "24820",
-        description: "LAVA ROUPAS PÓ MACIEZ TIXAN",
+        description: "LAVA ROUPAS PÓ MACIEZ TIXAN 1,3KG",
         image: "https://cescom.agilecdn.com.br/banners/agrupar-1-1735835147.png",
         isPrincipal: false,
         included: true,
@@ -402,7 +779,7 @@ export const ColecoesWorkspace: React.FC = () => {
       {
         id: "c-7",
         code: "20594",
-        description: "LAVA ROUPAS PÓ MACIEZ TIXAN",
+        description: "LAVA ROUPAS PÓ MACIEZ TIXAN 1,3KG",
         image: "https://cescom.agilecdn.com.br/banners/agrupar-1-1735835147.png",
         isPrincipal: false,
         included: true,
@@ -451,7 +828,7 @@ export const ColecoesWorkspace: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-neutral-400 mt-0.5">
-                20 produtos por página (4 colunas × 5 linhas) · Sem preço/validade/estoque
+                {itemsPerPageEffective} produtos por página ({cols} colunas × {rows} linhas) · Sem preço/validade/estoque
               </p>
             </div>
           </div>
@@ -480,7 +857,7 @@ export const ColecoesWorkspace: React.FC = () => {
               variant="outline"
               onClick={() => setSourceSelectorModalOpen(true)}
               className="bg-neutral-900 border-neutral-700 text-neutral-200 hover:text-white text-xs h-9"
-              title="Importar produtos por Planilha (.xlsx/.csv) com drag & drop ou Link da Categoria"
+              title="Importar produtos por Planilha (.xlsx/.csv) ou Link da Categoria"
             >
               <FileSpreadsheet className="h-4 w-4 mr-1.5 text-green-500" />
               Importar Planilha / Link
@@ -494,7 +871,7 @@ export const ColecoesWorkspace: React.FC = () => {
               title="Sincronizar banco de fotos com pasta local/rede (ex: Fotos_Palm), ZIP ou Google Drive"
             >
               <FolderSync className="h-4 w-4 mr-1.5 text-amber-400" />
-              Banco de Fotos (Rede / Drive)
+              Banco de Fotos
             </Button>
 
             <Button
@@ -514,6 +891,7 @@ export const ColecoesWorkspace: React.FC = () => {
                 onClick={() => {
                   if (confirm("Deseja realmente limpar todos os produtos da coleção atual?")) {
                     setProducts([]);
+                    setCustomLayouts({});
                   }
                 }}
                 className="bg-neutral-900 border-red-900/60 text-red-400 hover:text-red-300 text-xs h-9"
@@ -565,8 +943,20 @@ export const ColecoesWorkspace: React.FC = () => {
             </button>
           </div>
 
-          {/* Botões de Exportação */}
+          {/* Botões de Configuração da Grade e Exportação */}
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setGridSettingsOpen(!gridSettingsOpen)}
+              className={`text-xs h-9 border-neutral-700 ${
+                gridSettingsOpen ? "bg-[#FFD400] text-black font-bold" : "bg-neutral-900 text-neutral-200 hover:text-white"
+              }`}
+            >
+              <Sliders className="h-3.5 w-3.5 mr-1.5" />
+              Grade & Layout
+            </Button>
+
             <Button
               size="sm"
               onClick={handleExportCurrentPage}
@@ -591,6 +981,245 @@ export const ColecoesWorkspace: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* 1.1 PAINEL DE GRADE CONFIGURÁVEL & ELEMENTOS LIVRES */}
+        {gridSettingsOpen && (
+          <div className="mt-3 pt-3 border-t border-neutral-800 bg-neutral-950/80 p-4 rounded-xl text-xs space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Coluna 1: Dimensões da Grade */}
+              <div className="space-y-2">
+                <p className="font-bold text-white flex items-center gap-1.5 text-xs text-[#FFD400]">
+                  <Settings className="h-3.5 w-3.5" />
+                  Grade & Telas
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-[10px] text-neutral-400">Colunas (1-6)</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={6}
+                      value={config.columnsCount || 4}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          columnsCount: Math.min(6, Math.max(1, parseInt(e.target.value) || 1)),
+                        })
+                      }
+                      className="h-8 bg-neutral-900 border-neutral-700 text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-neutral-400">Linhas (1-10)</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={config.rowsCount || 5}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          rowsCount: Math.min(10, Math.max(1, parseInt(e.target.value) || 1)),
+                        })
+                      }
+                      className="h-8 bg-neutral-900 border-neutral-700 text-xs font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[10px] text-neutral-400">Produtos por tela</Label>
+                    <label className="flex items-center gap-1.5 text-[10px] text-neutral-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={config.autoItemsPerPage !== false}
+                        onChange={(e) =>
+                          setConfig({
+                            ...config,
+                            autoItemsPerPage: e.target.checked,
+                          })
+                        }
+                        className="rounded"
+                      />
+                      Auto ({cols * rows})
+                    </label>
+                  </div>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={60}
+                    disabled={config.autoItemsPerPage !== false}
+                    value={itemsPerPageEffective}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        itemsPerPage: Math.max(1, parseInt(e.target.value) || 20),
+                        autoItemsPerPage: false,
+                      })
+                    }
+                    className="h-8 bg-neutral-900 border-neutral-700 text-xs font-mono disabled:opacity-50 mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-[10px] text-neutral-400">Espaçamento entre células (px)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={40}
+                    value={config.cellSpacing || 0}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        cellSpacing: Math.max(0, parseInt(e.target.value) || 0),
+                      })
+                    }
+                    className="h-8 bg-neutral-900 border-neutral-700 text-xs font-mono mt-1"
+                  />
+                </div>
+              </div>
+
+              {/* Coluna 2: Estilo dos Produtos */}
+              <div className="space-y-2">
+                <p className="font-bold text-white text-xs text-[#FFD400]">Visual dos Produtos</p>
+                <div>
+                  <div className="flex justify-between text-[10px] text-neutral-400">
+                    <span>Tamanho do Produto</span>
+                    <span className="font-mono text-white">{config.productScale || 130}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={80}
+                    max={180}
+                    value={config.productScale || 130}
+                    onChange={(e) => setConfig({ ...config, productScale: parseInt(e.target.value) })}
+                    className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer mt-1"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[10px] text-neutral-400">
+                    <span>Sobreposição de Fotos</span>
+                    <span className="font-mono text-white">{config.overlapAmount || 15}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={50}
+                    value={config.overlapAmount || 15}
+                    onChange={(e) => setConfig({ ...config, overlapAmount: parseInt(e.target.value) })}
+                    className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-[10px] text-neutral-400">Ordem de Empilhamento</Label>
+                  <select
+                    value={config.stackOrder || "right-in-front"}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        stackOrder: e.target.value as "right-in-front" | "left-in-front",
+                      })
+                    }
+                    className="w-full h-8 bg-neutral-900 border border-neutral-700 rounded-md px-2 text-xs text-white mt-1"
+                  >
+                    <option value="right-in-front">Direita na frente (Padrão KV)</option>
+                    <option value="left-in-front">Esquerda na frente</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="chkShowDottedLines"
+                    checked={config.showDottedLines !== false}
+                    onChange={(e) => setConfig({ ...config, showDottedLines: e.target.checked })}
+                    className="rounded"
+                  />
+                  <Label htmlFor="chkShowDottedLines" className="text-xs text-neutral-300 cursor-pointer">
+                    Linhas pontilhadas na grade
+                  </Label>
+                </div>
+              </div>
+
+              {/* Coluna 3: Template de Fundo */}
+              <div className="space-y-2">
+                <p className="font-bold text-white text-xs text-[#FFD400]">Arte de Fundo (1080×1920)</p>
+                <div className="flex items-center gap-2">
+                  <div className="h-14 w-9 border border-neutral-700 rounded overflow-hidden bg-black shrink-0 relative">
+                    <img
+                      src={config.templateImage || "/templates/template-esquenta-black-cescom.png"}
+                      alt="Fundo"
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <div className="space-y-1 flex-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => bgFileInputRef.current?.click()}
+                      className="w-full h-7 text-[11px] bg-neutral-900 border-neutral-700 text-neutral-200 hover:text-white"
+                    >
+                      <Upload className="h-3 w-3 mr-1" />
+                      Trocar Arte
+                    </Button>
+                    <input
+                      ref={bgFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleBackgroundUpload}
+                    />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleResetBackground}
+                      className="w-full h-7 text-[10px] text-neutral-400 hover:text-white"
+                    >
+                      <RotateCcw className="h-2.5 w-2.5 mr-1" />
+                      Redefinir Padrão
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <Label className="text-[10px] text-neutral-400">Resolução de Exportação PNG</Label>
+                  <select
+                    value={config.exportScale || 1}
+                    onChange={(e) => setConfig({ ...config, exportScale: parseInt(e.target.value) || 1 })}
+                    className="w-full h-8 bg-neutral-900 border border-neutral-700 rounded-md px-2 text-xs text-white mt-1"
+                  >
+                    <option value={1}>1x - 1080 × 1920 px (Full HD)</option>
+                    <option value={2}>2x - 2160 × 3840 px (Ultra HD 4K)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Coluna 4: Rodapé de Oferta & Ações */}
+              <div className="space-y-2">
+                <p className="font-bold text-white text-xs text-[#FFD400]">Rodapé de Oferta (Todas as Páginas)</p>
+                <textarea
+                  value={config.footerText || ""}
+                  onChange={(e) => setConfig({ ...config, footerText: e.target.value })}
+                  placeholder="Texto do rodapé de validade da oferta..."
+                  rows={3}
+                  className="w-full bg-neutral-900 border border-neutral-700 rounded-md p-2 text-[11px] text-neutral-200 focus:border-[#FFD400] outline-hidden resize-none font-sans"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleResetPageToGrid}
+                  className="w-full h-8 text-[11px] bg-neutral-900 border-amber-600/50 text-amber-300 hover:bg-neutral-800"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1 text-amber-400" />
+                  Redefinir Pág {currentPage} para a Grade
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 2. ALERTA DE PENDÊNCIAS (PRODUTOS SEM FOTO FORA DO ENCARTE) */}
@@ -645,317 +1274,513 @@ export const ColecoesWorkspace: React.FC = () => {
                   Produtos da Coleção ({products.length})
                 </span>
                 <span className="text-neutral-500 text-[11px]">
-                  Clique no botão <strong>★ Principal</strong> para agrupar variações semelhantes (mesmo nome-base sem sabor/recheio).
+                  Use as setas <strong>▲ / ▼</strong> para reordenar a posição do produto no encarte.
                 </span>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                <thead className="bg-neutral-100 text-neutral-700 font-bold border-b">
-                  <tr>
-                    <th className="py-2.5 px-3 w-16">Foto</th>
-                    <th className="py-2.5 px-3 w-28">Código</th>
-                    <th className="py-2.5 px-3">Descrição do Produto (Revisável)</th>
-                    <th className="py-2.5 px-3 w-40 text-center">Tipo / Principal</th>
-                    <th className="py-2.5 px-3 w-48">Variações Vinculadas</th>
-                    <th className="py-2.5 px-3 w-16 text-center">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-200">
-                  {products.map((p) => {
-                    return (
-                      <tr
-                        key={p.id}
-                        className={`hover:bg-neutral-50 transition-colors ${
-                          !p.image
-                            ? "bg-amber-50/70"
-                            : p.isPrincipal
-                            ? "bg-amber-50/30"
-                            : ""
-                        }`}
-                      >
-                        {/* Foto */}
-                        <td className="py-2 px-3">
-                          <div
-                            className="h-11 w-11 rounded-md border bg-white p-0.5 flex items-center justify-center overflow-hidden cursor-pointer hover:border-amber-500 hover:ring-2 hover:ring-amber-400/40 transition-all group relative"
-                            onClick={() => setEditProductModalItem(p)}
-                            title="Clique para personalizar ou trocar a foto do produto"
-                          >
-                            {p.image ? (
-                              <img
-                                src={p.image}
-                                alt={p.description}
-                                className="max-h-full max-w-full object-contain"
-                              />
-                            ) : (
-                              <div className="flex flex-col items-center justify-center text-amber-600">
-                                <AlertTriangle className="h-4 w-4" />
-                                <span className="text-[8px] font-bold mt-0.5">Sem foto</span>
-                              </div>
-                            )}
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
-                              <Edit2 className="h-3 w-3" />
+                  <thead className="bg-neutral-100 text-neutral-700 font-bold border-b">
+                    <tr>
+                      <th className="py-2.5 px-2 w-10 text-center">Ordem</th>
+                      <th className="py-2.5 px-3 w-16">Foto</th>
+                      <th className="py-2.5 px-3 w-28">Código</th>
+                      <th className="py-2.5 px-3">Descrição do Produto (Revisável)</th>
+                      <th className="py-2.5 px-3 w-40 text-center">Tipo / Principal</th>
+                      <th className="py-2.5 px-3 w-48">Variações Vinculadas</th>
+                      <th className="py-2.5 px-3 w-16 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-200">
+                    {products.map((p, index) => {
+                      return (
+                        <tr
+                          key={p.id}
+                          className={`hover:bg-neutral-50 transition-colors ${
+                            !p.image
+                              ? "bg-amber-50/70"
+                              : p.isPrincipal
+                              ? "bg-amber-50/30"
+                              : ""
+                          }`}
+                        >
+                          {/* Botões de Mover Ordem (▲ / ▼) */}
+                          <td className="py-2 px-2 text-center">
+                            <div className="flex flex-col items-center justify-center gap-0.5">
+                              <button
+                                type="button"
+                                disabled={index === 0}
+                                onClick={() => handleMoveProduct(index, "up")}
+                                className="h-4 w-5 flex items-center justify-center rounded text-neutral-500 hover:text-black hover:bg-neutral-200 disabled:opacity-20 disabled:cursor-not-allowed text-[10px] font-bold"
+                                title="Mover para cima"
+                              >
+                                ▲
+                              </button>
+                              <button
+                                type="button"
+                                disabled={index === products.length - 1}
+                                onClick={() => handleMoveProduct(index, "down")}
+                                className="h-4 w-5 flex items-center justify-center rounded text-neutral-500 hover:text-black hover:bg-neutral-200 disabled:opacity-20 disabled:cursor-not-allowed text-[10px] font-bold"
+                                title="Mover para baixo"
+                              >
+                                ▼
+                              </button>
                             </div>
-                          </div>
-                        </td>
+                          </td>
 
-                        {/* Código */}
-                        <td className="py-2 px-3 font-mono font-bold text-neutral-800">
-                          {p.code}
-                        </td>
+                          {/* Foto */}
+                          <td className="py-2 px-3">
+                            <div
+                              className="h-11 w-11 rounded-md border bg-white p-0.5 flex items-center justify-center overflow-hidden cursor-pointer hover:border-amber-500 hover:ring-2 hover:ring-amber-400/40 transition-all group relative"
+                              onClick={() => setEditProductModalItem(p)}
+                              title="Clique para personalizar ou trocar a foto do produto"
+                            >
+                              {p.image ? (
+                                <img
+                                  src={p.image}
+                                  alt={p.description}
+                                  className="max-h-full max-w-full object-contain"
+                                />
+                              ) : (
+                                <div className="flex flex-col items-center justify-center text-amber-600">
+                                  <AlertTriangle className="h-4 w-4" />
+                                  <span className="text-[8px] font-bold mt-0.5">Sem foto</span>
+                                </div>
+                              )}
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                                <Edit2 className="h-3 w-3" />
+                              </div>
+                            </div>
+                          </td>
 
-                        {/* Descrição */}
-                        <td className="py-2 px-3">
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="text"
-                              value={p.description}
-                              onChange={(e) => handleUpdateDescription(p.id, e.target.value)}
-                              className="w-full rounded border border-transparent hover:border-neutral-300 focus:border-neutral-500 bg-transparent px-2 py-1 font-semibold text-neutral-900 outline-hidden"
-                              title="Clique para editar a descrição diretamente"
-                            />
+                          {/* Código */}
+                          <td className="py-2 px-3 font-mono font-bold text-neutral-800">
+                            {p.code}
+                          </td>
+
+                          {/* Descrição */}
+                          <td className="py-2 px-3">
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                value={p.description}
+                                onChange={(e) => handleUpdateDescription(p.id, e.target.value)}
+                                className="w-full rounded border border-transparent hover:border-neutral-300 focus:border-neutral-500 bg-transparent px-2 py-1 font-semibold text-neutral-900 outline-hidden"
+                                title="Clique para editar a descrição diretamente"
+                              />
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setEditProductModalItem(p)}
+                                className="h-6 w-6 p-0 text-neutral-400 hover:text-amber-700 shrink-0"
+                                title="Editar detalhes completos do produto"
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            {!p.image && (
+                              <span className="inline-block mt-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900 border border-amber-300">
+                                Pendência: Sem foto (não gerará card vazio no encarte)
+                              </span>
+                            )}
+                            {(() => {
+                              const parsedWeight = parseNormalizedWeight(p.description);
+                              const parsedPkg = parsePackagingType(p.description);
+                              return (
+                                <div className="flex items-center gap-2 mt-0.5 px-2 flex-wrap">
+                                  <span className="text-[10px] text-neutral-500 font-medium">
+                                    Card:{" "}
+                                    <strong className="text-neutral-800">
+                                      {p.genericDescription ||
+                                        extractGenericBaseName(p.description).toUpperCase()}
+                                    </strong>
+                                  </span>
+                                  {p.secondaryImage && (
+                                    <span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-1 rounded font-bold">
+                                      Foto 2 personalizada
+                                    </span>
+                                  )}
+                                  {p.limit && (
+                                    <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 px-1 rounded font-bold">
+                                      Limite: {p.limit}
+                                    </span>
+                                  )}
+                                  {parsedWeight ? (
+                                    <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1 rounded font-semibold">
+                                      {parsedWeight.display}
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className="text-[9px] bg-amber-50 text-amber-800 border border-amber-200 px-1 rounded font-medium"
+                                      title="Gramatura não informada na descrição"
+                                    >
+                                      Gramatura pendente
+                                    </span>
+                                  )}
+                                  {parsedPkg !== "padrao" && (
+                                    <span className="text-[9px] bg-sky-50 text-sky-700 border border-sky-200 px-1 rounded font-semibold uppercase">
+                                      {parsedPkg}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </td>
+
+                          {/* Botão "Principal" */}
+                          <td className="py-2 px-3 text-center">
                             <Button
                               type="button"
                               size="sm"
-                              variant="ghost"
-                              onClick={() => setEditProductModalItem(p)}
-                              className="h-6 w-6 p-0 text-neutral-400 hover:text-amber-700 shrink-0"
-                              title="Editar detalhes completos do produto"
-                            >
-                              <Edit2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          {!p.image && (
-                            <span className="inline-block mt-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900 border border-amber-300">
-                              Pendência: Sem foto (não gerará card vazio no encarte)
-                            </span>
-                          )}
-                          {(() => {
-                            const parsedWeight = parseNormalizedWeight(p.description);
-                            const parsedPkg = parsePackagingType(p.description);
-                            return (
-                              <div className="flex items-center gap-2 mt-0.5 px-2 flex-wrap">
-                                <span className="text-[10px] text-neutral-500 font-medium">
-                                  Card:{" "}
-                                  <strong className="text-neutral-800">
-                                    {p.genericDescription ||
-                                      extractGenericBaseName(p.description).toUpperCase()}
-                                  </strong>
-                                </span>
-                                {p.secondaryImage && (
-                                  <span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-1 rounded font-bold">
-                                    Foto 2 personalizada
-                                  </span>
-                                )}
-                                {parsedWeight ? (
-                                  <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1 rounded font-semibold">
-                                    {parsedWeight.display}
-                                  </span>
-                                ) : (
-                                  <span
-                                    className="text-[9px] bg-amber-50 text-amber-800 border border-amber-200 px-1 rounded font-medium"
-                                    title="Gramatura não informada na descrição"
-                                  >
-                                    Gramatura pendente
-                                  </span>
-                                )}
-                                {parsedPkg !== "padrao" && (
-                                  <span className="text-[9px] bg-sky-50 text-sky-700 border border-sky-200 px-1 rounded font-semibold uppercase">
-                                    {parsedPkg}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </td>
-
-                        {/* Botão "Principal" */}
-                        <td className="py-2 px-3 text-center">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={p.isPrincipal ? "default" : "outline"}
-                            onClick={() => handleTogglePrincipal(p)}
-                            className={`h-7 text-xs font-bold ${
-                              p.isPrincipal
-                                ? "bg-amber-500 hover:bg-amber-600 text-neutral-950 border-amber-600"
-                                : "text-neutral-600 hover:text-amber-700 hover:border-amber-400"
-                            }`}
-                          >
-                            <Star
-                              className={`h-3.5 w-3.5 mr-1 ${
-                                p.isPrincipal ? "fill-neutral-950" : ""
+                              variant={p.isPrincipal ? "default" : "outline"}
+                              onClick={() => handleTogglePrincipal(p)}
+                              className={`h-7 text-xs font-bold ${
+                                p.isPrincipal
+                                  ? "bg-amber-500 hover:bg-amber-600 text-neutral-950 border-amber-600"
+                                  : "text-neutral-600 hover:text-amber-700 hover:border-amber-400"
                               }`}
-                            />
-                            {p.isPrincipal ? "Principal" : "Tornar Principal"}
-                          </Button>
-                        </td>
+                            >
+                              <Star
+                                className={`h-3.5 w-3.5 mr-1 ${
+                                  p.isPrincipal ? "fill-neutral-950" : ""
+                                }`}
+                              />
+                              {p.isPrincipal ? "Principal" : "Tornar Principal"}
+                            </Button>
+                          </td>
 
-                        {/* Variações */}
-                        <td className="py-2 px-3">
-                          {p.isPrincipal ? (
-                            <div className="space-y-1">
-                              <span className="text-[11px] font-semibold text-neutral-700">
-                                {(p.variants || []).length} variação(ões)
+                          {/* Variações */}
+                          <td className="py-2 px-3">
+                            {p.isPrincipal ? (
+                              <div className="space-y-1">
+                                <span className="text-[11px] font-semibold text-neutral-700">
+                                  {(p.variants || []).length} variação(ões)
+                                </span>
+                                {(p.variants || []).length > 0 && (
+                                  <p className="text-[10px] text-neutral-500 line-clamp-1">
+                                    {p.variants?.map((v) => v.description).join(", ")}
+                                  </p>
+                                )}
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 text-[10px] text-amber-700 p-0 font-bold"
+                                  onClick={() => {
+                                    setVariantsModalProduct(p);
+                                    setVariantsModalOpen(true);
+                                  }}
+                                >
+                                  Editar Variações
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-neutral-400 italic">
+                                Produto individual (com código)
                               </span>
-                              {(p.variants || []).length > 0 && (
-                                <p className="text-[10px] text-neutral-500 line-clamp-1">
-                                  {p.variants?.map((v) => v.description).join(", ")}
-                                </p>
-                              )}
+                            )}
+                          </td>
+
+                          {/* Ações */}
+                          <td className="py-2 px-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className="h-5 text-[10px] text-amber-700 p-0 font-bold"
-                                onClick={() => {
-                                   setVariantsModalProduct(p);
-                                   setVariantsModalOpen(true);
-                                }}
+                                onClick={() => setEditProductModalItem(p)}
+                                className="h-7 w-7 p-0 text-neutral-600 hover:text-amber-700 hover:bg-amber-50"
+                                title="Personalizar bloco (fotos e descrição)"
                               >
-                                Editar Variações
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteProduct(p.id)}
+                                className="h-7 w-7 p-0 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                title="Excluir produto"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </div>
-                          ) : (
-                            <span className="text-[11px] text-neutral-400 italic">
-                              Produto individual (com código)
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Ações */}
-                        <td className="py-2 px-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setEditProductModalItem(p)}
-                              className="h-7 w-7 p-0 text-neutral-600 hover:text-amber-700 hover:bg-amber-50"
-                              title="Personalizar bloco (fotos e descrição)"
-                            >
-                              <Edit2 className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteProduct(p.id)}
-                              className="h-7 w-7 p-0 text-red-600 hover:bg-red-50 hover:text-red-700"
-                              title="Excluir produto"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-        </div>
-      )}
-
-      {/* 3. CONTEÚDO DA ABA: VISUALIZAR ENCARTE 1080x1920 */}
-      {activeTab === "preview" && (
-        <div className="rounded-xl border border-neutral-800 bg-[#1A1A1A] p-4 text-white space-y-4 shadow-md">
-          {/* Barra de Controles de Visualização */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-neutral-900 border border-neutral-800 p-2.5 rounded-lg text-xs">
-            {/* Navegação entre páginas */}
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="h-8 bg-neutral-800 border-neutral-700 text-white"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="font-bold text-white px-2">
-                Página {currentPage} de {totalPages}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                className="h-8 bg-neutral-800 border-neutral-700 text-white"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Controles de Zoom */}
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setPreviewZoom((z) => Math.max(0.2, z - 0.05))}
-                className="h-8 text-neutral-300 hover:text-white"
-                title="Reduzir zoom"
-              >
-                <ZoomOut className="h-4 w-4" />
-              </Button>
-              <span className="font-mono text-neutral-400 w-12 text-center">
-                {Math.round(previewZoom * 100)}%
-              </span>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setPreviewZoom((z) => Math.min(1.0, z + 0.05))}
-                className="h-8 text-neutral-300 hover:text-white"
-                title="Aumentar zoom"
-              >
-                <ZoomIn className="h-4 w-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setPreviewZoom(0.38)}
-                className="h-8 bg-neutral-800 border-neutral-700 text-xs text-neutral-300 hover:text-white"
-              >
-                Ajustar à Tela
-              </Button>
-            </div>
-          </div>
-
-          {/* Área Central de Renderização da Página Atual */}
-          <div className="flex justify-center overflow-auto p-4 bg-neutral-950/60 rounded-xl border border-neutral-800 min-h-[600px]">
-            <div
-              style={{
-                transform: `scale(${previewZoom})`,
-                transformOrigin: "top center",
-                marginBottom: `${1920 * (previewZoom - 1)}px`,
-              }}
-              className="shadow-2xl rounded-lg overflow-hidden border border-neutral-800"
-            >
-              <ColecoesPage
-                products={pages[currentPage - 1] || []}
-                pageIndex={currentPage - 1}
-                totalPages={totalPages}
-                config={config}
-                onEditProduct={(p) => setEditProductModalItem(p)}
-              />
-            </div>
-          </div>
-
-          {/* Elementos ocultos para captura em alta resolução 1:1 de todas as páginas */}
-          <div className="fixed -left-[9999px] top-0 pointer-events-none opacity-0">
-            {pages.map((pgProducts, idx) => (
-              <div key={idx} id={`colecao-page-render-${idx}`}>
-                <ColecoesPage
-                  products={pgProducts}
-                  pageIndex={idx}
-                  totalPages={totalPages}
-                  config={config}
-                />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            </div>
+          )}
+
+          {/* 3. CONTEÚDO DA ABA: VISUALIZAR ENCARTE 1080x1920 COM EDITOR CANVA */}
+          {activeTab === "preview" && (
+            <div className="rounded-xl border border-neutral-800 bg-[#1A1A1A] p-4 text-white space-y-3 shadow-md">
+              {/* Barra de Controles de Visualização */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-neutral-900 border border-neutral-800 p-2.5 rounded-lg text-xs">
+                {/* Navegação entre páginas */}
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={currentPage <= 1}
+                    onClick={() => {
+                      setCurrentPage((p) => Math.max(1, p - 1));
+                      setSelectedProductId(null);
+                    }}
+                    className="h-8 bg-neutral-800 border-neutral-700 text-white"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="font-bold text-white px-2">
+                    Página {currentPage} de {totalPages}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => {
+                      setCurrentPage((p) => Math.min(totalPages, p + 1));
+                      setSelectedProductId(null);
+                    }}
+                    className="h-8 bg-neutral-800 border-neutral-700 text-white"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Desfazer / Refazer no cabeçalho */}
+                <div className="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-neutral-800">
+                  <button
+                    type="button"
+                    disabled={historyIndex <= 0}
+                    onClick={handleUndo}
+                    className="p-1.5 rounded hover:bg-neutral-800 text-neutral-300 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed"
+                    title="Desfazer (Ctrl+Z)"
+                  >
+                    <Undo2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={historyIndex >= history.length - 1}
+                    onClick={handleRedo}
+                    className="p-1.5 rounded hover:bg-neutral-800 text-neutral-300 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed"
+                    title="Refazer (Ctrl+Y)"
+                  >
+                    <Redo2 className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {/* Controles de Zoom */}
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setPreviewZoom((z) => Math.max(0.2, z - 0.05))}
+                    className="h-8 text-neutral-300 hover:text-white"
+                    title="Reduzir zoom"
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+                  <span className="font-mono text-neutral-400 w-12 text-center">
+                    {Math.round(previewZoom * 100)}%
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setPreviewZoom((z) => Math.min(1.0, z + 0.05))}
+                    className="h-8 text-neutral-300 hover:text-white"
+                    title="Aumentar zoom"
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setPreviewZoom(0.38)}
+                    className="h-8 bg-neutral-800 border-neutral-700 text-xs text-neutral-300 hover:text-white"
+                  >
+                    Ajustar à Tela
+                  </Button>
+                </div>
+              </div>
+
+              {/* BARRA DE FERRAMENTAS FLUTUANTE DO ELEMENTO SELECIONADO (ESTILO CANVA) */}
+              {selectedProductId && selectedProductItem && (
+                <div className="flex flex-wrap items-center justify-between gap-2 bg-neutral-900 border border-[#FFD400]/40 p-2.5 px-3 rounded-xl shadow-2xl text-xs animate-in fade-in duration-150">
+                  <div className="flex items-center gap-2">
+                    <span className="bg-[#F6E0A6] text-[#7A0D12] font-mono font-black px-1.5 py-0.5 rounded text-[10px]">
+                      {selectedProductItem.code || "ITEM"}
+                    </span>
+                    <span className="font-bold text-white max-w-[200px] truncate text-[11px]">
+                      {selectedProductItem.genericDescription || selectedProductItem.description}
+                    </span>
+                  </div>
+
+                  {/* Alinhamento */}
+                  <div className="flex items-center gap-1 bg-black/60 p-1 rounded-lg border border-neutral-800">
+                    <button
+                      type="button"
+                      onClick={() => handleAlignSelected("left")}
+                      className="p-1 rounded hover:bg-neutral-800 text-neutral-300 hover:text-white"
+                      title="Alinhar à Esquerda"
+                    >
+                      <AlignLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAlignSelected("center")}
+                      className="p-1 rounded hover:bg-neutral-800 text-neutral-300 hover:text-white"
+                      title="Centralizar Horizontalmente"
+                    >
+                      <AlignCenter className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAlignSelected("right")}
+                      className="p-1 rounded hover:bg-neutral-800 text-neutral-300 hover:text-white"
+                      title="Alinhar à Direita"
+                    >
+                      <AlignRight className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="w-[1px] h-3 bg-neutral-700 mx-0.5" />
+                    <button
+                      type="button"
+                      onClick={() => handleAlignSelected("top")}
+                      className="px-1.5 py-0.5 rounded hover:bg-neutral-800 text-neutral-300 hover:text-white text-[10px] font-bold"
+                      title="Alinhar ao Topo"
+                    >
+                      Topo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAlignSelected("middle")}
+                      className="px-1.5 py-0.5 rounded hover:bg-neutral-800 text-neutral-300 hover:text-white text-[10px] font-bold"
+                      title="Centralizar Verticalmente"
+                    >
+                      Meio
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAlignSelected("bottom")}
+                      className="px-1.5 py-0.5 rounded hover:bg-neutral-800 text-neutral-300 hover:text-white text-[10px] font-bold"
+                      title="Alinhar à Base"
+                    >
+                      Base
+                    </button>
+                  </div>
+
+                  {/* Camada / Z-Index */}
+                  <div className="flex items-center gap-1 bg-black/60 p-1 rounded-lg border border-neutral-800">
+                    <button
+                      type="button"
+                      onClick={() => handleZIndexSelected("up")}
+                      className="px-1.5 py-0.5 rounded hover:bg-neutral-800 text-neutral-300 hover:text-white text-[10px] font-bold"
+                      title="Trazer para Frente"
+                    >
+                      + Camada
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleZIndexSelected("down")}
+                      className="px-1.5 py-0.5 rounded hover:bg-neutral-800 text-neutral-300 hover:text-white text-[10px] font-bold"
+                      title="Enviar para Trás"
+                    >
+                      - Camada
+                    </button>
+                  </div>
+
+                  {/* Bloqueio, Ocultar e Redefinir */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleLock(selectedProductId)}
+                      className={`p-1.5 rounded-lg border text-xs font-bold flex items-center gap-1 ${
+                        currentSelectedCustom?.isLocked
+                          ? "bg-amber-500/20 text-amber-400 border-amber-500/50"
+                          : "bg-black/60 text-neutral-300 border-neutral-800 hover:text-white"
+                      }`}
+                      title={currentSelectedCustom?.isLocked ? "Desbloquear Elemento" : "Bloquear Elemento"}
+                    >
+                      {currentSelectedCustom?.isLocked ? (
+                        <Lock className="h-3.5 w-3.5" />
+                      ) : (
+                        <Unlock className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleHide(selectedProductId)}
+                      className="p-1.5 rounded-lg bg-black/60 text-neutral-300 border border-neutral-800 hover:text-red-400 text-xs font-bold"
+                      title="Ocultar do Encarte"
+                    >
+                      <EyeOff className="h-3.5 w-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleResetSelectedToGrid(selectedProductId)}
+                      className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white text-[11px] font-bold border border-neutral-700"
+                      title="Redefinir para o alinhamento padrão da grade"
+                    >
+                      Redefinir para a Grade
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Área Central de Renderização da Página Atual */}
+              <div
+                className="flex justify-center overflow-auto p-4 bg-neutral-950/60 rounded-xl border border-neutral-800 min-h-[600px]"
+                onClick={() => setSelectedProductId(null)}
+              >
+                <div
+                  style={{
+                    transform: `scale(${previewZoom})`,
+                    transformOrigin: "top center",
+                    marginBottom: `${1920 * (previewZoom - 1)}px`,
+                  }}
+                  className="shadow-2xl rounded-lg overflow-hidden border border-neutral-800"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ColecoesPage
+                    products={pages[currentPage - 1] || []}
+                    pageIndex={currentPage - 1}
+                    totalPages={totalPages}
+                    config={config}
+                    customLayouts={customLayouts}
+                    selectedProductId={selectedProductId}
+                    onSelectProduct={(id) => setSelectedProductId(id)}
+                    interactive={true}
+                    previewZoom={previewZoom}
+                    onTransformBox={handleTransformBox}
+                    onTransformEnd={handleTransformEnd}
+                    onStartDrag={handleStartDrag}
+                    onEditProduct={(p) => setEditProductModalItem(p)}
+                  />
+                </div>
+              </div>
+
+              {/* Elementos ocultos para captura em alta resolução 1:1 de todas as páginas */}
+              <div className="fixed -left-[9999px] top-0 pointer-events-none opacity-0">
+                {pages.map((pgProducts, idx) => (
+                  <div key={idx} id={`colecao-page-render-${idx}`}>
+                    <ColecoesPage
+                      products={pgProducts}
+                      pageIndex={idx}
+                      totalPages={totalPages}
+                      config={config}
+                      customLayouts={customLayouts}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
 

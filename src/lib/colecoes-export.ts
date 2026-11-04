@@ -1,8 +1,9 @@
 /**
- * Exportação em PNG e ZIP do Encarte de Coleções (1080x1920 px)
+ * Exportação em PNG e ZIP do Encarte de Coleções (1080x1920 px ou 2160x3840 px)
  * Regras:
- * - Exporte PNG por página, 1080x1920.
- * - Nomeie os arquivos com o nome da coleção e o número da página.
+ * - Exporte PNG por página, 1080x1920 (ou 2x 2160x3840).
+ * - Nomeie os arquivos como <colecao>-pagina-<n>.png.
+ * - Suporte a download de todas as páginas em ZIP.
  */
 
 export function sanitizeCollectionFileName(name: string): string {
@@ -22,19 +23,20 @@ export function formatColecaoPageFilename(collectionName: string, pageNumber: nu
 }
 
 /**
- * Exporta uma página individual para download em PNG (1080x1920)
+ * Exporta uma página individual para download em PNG (1080x1920 ou 2x)
  */
 export async function exportColecaoPageAsPng(
   pageElement: HTMLElement,
   collectionName: string,
-  pageNumber: number
+  pageNumber: number,
+  scale = 1
 ): Promise<string> {
   const { toPng } = await import("html-to-image");
 
   const dataUrl = await toPng(pageElement, {
     width: 1080,
     height: 1920,
-    pixelRatio: 1, // 1:1 exato com as dimensões 1080x1920
+    pixelRatio: scale || 1,
     cacheBust: true,
     style: {
       transform: "none",
@@ -59,7 +61,8 @@ export async function exportColecaoPageAsPng(
  */
 export async function exportColecaoAllPagesZip(
   pageElements: { element: HTMLElement; pageNumber: number }[],
-  collectionName: string
+  collectionName: string,
+  scale = 1
 ): Promise<void> {
   const [{ default: JSZip }, { toPng }] = await Promise.all([
     import("jszip"),
@@ -73,7 +76,7 @@ export async function exportColecaoAllPagesZip(
     const dataUrl = await toPng(item.element, {
       width: 1080,
       height: 1920,
-      pixelRatio: 1,
+      pixelRatio: scale || 1,
       cacheBust: true,
       style: { transform: "none" },
     });

@@ -28,14 +28,12 @@ import {
   RotateCcw,
   CheckCircle2,
 } from "lucide-react";
-import { z } from "zod";
 
-const searchSchema = z.object({
-  redirect: z.string().optional(),
-});
 
 export const Route = createFileRoute("/acesso")({
-  validateSearch: (search) => searchSchema.parse(search),
+  validateSearch: (search: Record<string, unknown>) => ({
+    redirect: typeof search?.redirect === "string" ? search.redirect : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Acesso Restrito - Gerador de Encartes" },

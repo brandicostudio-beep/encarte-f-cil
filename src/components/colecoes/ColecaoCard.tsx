@@ -8,6 +8,13 @@ interface ColecaoCardProps {
   product: ColecaoProduct;
   width?: number;
   height?: number;
+  productScale?: number;       // % ex.: 130
+  overlapAmount?: number;      // % ex.: 15
+  stackOrder?: "left-in-front" | "right-in-front";
+  showDottedLines?: boolean;
+  isLastCol?: boolean;
+  isLastRow?: boolean;
+  zIndex?: number;
   onEdit?: () => void;
 }
 
@@ -15,6 +22,13 @@ export const ColecaoCard: React.FC<ColecaoCardProps> = ({
   product,
   width = 255,
   height = 275,
+  productScale = 130,
+  overlapAmount = 15,
+  stackOrder = "right-in-front",
+  showDottedLines = true,
+  isLastCol = false,
+  isLastRow = false,
+  zIndex = 1,
   onEdit,
 }) => {
   const display = resolveCardDisplayData(product);
@@ -22,7 +36,7 @@ export const ColecaoCard: React.FC<ColecaoCardProps> = ({
   const [processedPhoto1, setProcessedPhoto1] = useState<string>(display.photo1);
   const [processedPhoto2, setProcessedPhoto2] = useState<string>(display.photo2);
 
-  // Recorta fundo branco/cinza em tempo real gerando PNG transparente
+  // Recorta fundo branco/cinza e aplica auto-trim em tempo real gerando PNG transparente
   useEffect(() => {
     let isCurrent = true;
     if (display.photo1) {
@@ -35,7 +49,6 @@ export const ColecaoCard: React.FC<ColecaoCardProps> = ({
 
     if (display.photo2) {
       if (display.photo2 === display.photo1) {
-        // Mesma foto, reusa
         removeWhiteBackground(display.photo1).then((url) => {
           if (isCurrent && url) setProcessedPhoto2(url);
         });
@@ -53,20 +66,35 @@ export const ColecaoCard: React.FC<ColecaoCardProps> = ({
     };
   }, [display.photo1, display.photo2]);
 
+  const scale = (productScale || 130) / 100;
+  const hasTwoDifferentPhotos =
+    Boolean(processedPhoto1 && processedPhoto2 && processedPhoto1 !== processedPhoto2);
+
+  const isLeftInFront = stackOrder === "left-in-front";
+
   return (
     <div
-      className={`relative flex flex-col items-center justify-start overflow-hidden px-1.5 py-1 text-white select-none transition-all ${
+      className={`relative flex flex-col items-center justify-between overflow-visible text-white select-none transition-all ${
         onEdit ? "cursor-pointer group hover:brightness-105" : ""
       }`}
       style={{
         width: `${width}px`,
         height: `${height}px`,
         boxSizing: "border-box",
+        zIndex,
       }}
       onClick={onEdit}
       data-testid={`colecao-card-${product.code}`}
       data-principal={display.isPrincipal ? "true" : "false"}
     >
+      {/* Linhas pontilhadas vermelhas entre células (conforme referência) */}
+      {showDottedLines && !isLastCol && (
+        <div className="absolute right-0 top-0 bottom-0 border-r border-dashed border-red-500/40 pointer-events-none z-0" />
+      )}
+      {showDottedLines && !isLastRow && (
+        <div className="absolute left-0 right-0 bottom-0 border-b border-dashed border-red-500/40 pointer-events-none z-0" />
+      )}
+
       {/* Botão flutuante de personalização no hover */}
       {onEdit && (
         <button
@@ -75,7 +103,7 @@ export const ColecaoCard: React.FC<ColecaoCardProps> = ({
             e.stopPropagation();
             onEdit();
           }}
-          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/85 hover:bg-black text-[#FFD400] px-2 py-0.5 rounded-md border border-[#FFD400]/40 shadow-lg text-[10px] font-bold flex items-center gap-1 z-20 cursor-pointer"
+          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/85 hover:bg-black text-[#FFD400] px-2 py-0.5 rounded-md border border-[#FFD400]/40 shadow-lg text-[10px] font-bold flex items-center gap-1 z-30 cursor-pointer"
           title="Clique para personalizar fotos e descrição deste bloco"
         >
           <Edit2 className="h-3 w-3" />
@@ -83,67 +111,123 @@ export const ColecaoCard: React.FC<ColecaoCardProps> = ({
         </button>
       )}
 
-      {/* 1. BLOCO ÚNICO (UMA ÚNICA CAIXA COM AS FOTOS DENTRO - NUNCA UMA CAIXA SEPARADA POR FOTO) */}
+      {/* 1. ÁREA DOS PRODUTOS COM 100% DE OPACIDADE E SOBREPOSIÇÃO (SEM VÉU, SEM MIX-BLEND ESCURO) */}
       <div
-        className="relative w-full h-[176px] rounded-xl bg-[#240407]/90 border border-[#521017]/80 flex items-center justify-around gap-2 px-2 py-1 shadow-[inset_0_1px_4px_rgba(0,0,0,0.6)]"
+        className="relative w-full flex-1 flex items-center justify-center overflow-visible pt-1 pb-1"
         data-testid="colecao-single-block"
       >
-        {/* Posição 1 (Esquerda) */}
-        <div className="relative flex-1 h-full flex items-center justify-center overflow-hidden">
-          {processedPhoto1 ? (
+        {hasTwoDifferentPhotos ? (
+          // Duas fotos sobrepostas no centro (estilo referência KV Esquenta Black)
+          <div
+            className="relative w-full h-full flex items-center justify-center overflow-visible"
+            style={{ transform: `scale(${scale})` }}
+          >
+            {/* Foto 1 (Esquerda) */}
+            <div
+              className="absolute flex items-center justify-center overflow-visible"
+              style={{
+                left: `${Math.max(0, 8 - overlapAmount / 4)}%`,
+                width: "58%",
+                height: "94%",
+                zIndex: isLeftInFront ? 2 : 1,
+              }}
+            >
+              <img
+                src={processedPhoto1}
+                alt={display.title}
+                className="max-h-full max-w-full object-contain filter drop-shadow-[0_8px_16px_rgba(0,0,0,0.65)] pointer-events-none"
+                style={{ opacity: 1 }}
+                loading="lazy"
+              />
+            </div>
+
+            {/* Foto 2 (Direita) */}
+            <div
+              className="absolute flex items-center justify-center overflow-visible"
+              style={{
+                right: `${Math.max(0, 8 - overlapAmount / 4)}%`,
+                width: "58%",
+                height: "94%",
+                zIndex: isLeftInFront ? 1 : 2,
+              }}
+            >
+              <img
+                src={processedPhoto2}
+                alt={display.title}
+                className="max-h-full max-w-full object-contain filter drop-shadow-[0_10px_20px_rgba(0,0,0,0.75)] pointer-events-none"
+                style={{ opacity: 1 }}
+                loading="lazy"
+              />
+            </div>
+          </div>
+        ) : processedPhoto1 ? (
+          // Foto única solta no centro (sem caixas separadas)
+          <div
+            className="relative w-full h-full flex items-center justify-center overflow-visible"
+            style={{ transform: `scale(${scale})` }}
+          >
             <img
               src={processedPhoto1}
               alt={display.title}
-              className="max-h-full max-w-full object-contain filter drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]"
-              style={{ mixBlendMode: "multiply" }}
+              className="max-h-full max-w-full object-contain filter drop-shadow-[0_8px_16px_rgba(0,0,0,0.65)] pointer-events-none"
+              style={{ opacity: 1 }}
               loading="lazy"
             />
-          ) : (
-            <div className="flex flex-col items-center justify-center text-red-300/40">
-              <ImageIcon className="h-6 w-6 stroke-[1.5]" />
-              <span className="text-[9px] mt-0.5 font-bold">Sem foto</span>
-            </div>
-          )}
-        </div>
-
-        {/* Posição 2 (Direita) */}
-        <div className="relative flex-1 h-full flex items-center justify-center overflow-hidden">
-          {processedPhoto2 ? (
-            <img
-              src={processedPhoto2}
-              alt={display.title}
-              className="max-h-full max-w-full object-contain filter drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]"
-              style={{ mixBlendMode: "multiply" }}
-              loading="lazy"
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center text-red-300/40">
-              <ImageIcon className="h-6 w-6 stroke-[1.5]" />
-              <span className="text-[9px] mt-0.5 font-bold">Sem foto</span>
-            </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center text-red-300/40">
+            <ImageIcon className="h-7 w-7 stroke-[1.5]" />
+            <span className="text-[9px] mt-0.5 font-bold">Sem foto</span>
+          </div>
+        )}
       </div>
 
-      {/* 2. ABAIXO DO BLOCO: CÓDIGO EM AMARELO E NOME EM BRANCO EM CAIXA ALTA */}
-      <div className="w-full flex flex-col items-center justify-center text-center mt-2 px-1">
-        {/* Código do produto em amarelo (CÓD: xxxxx) */}
-        {display.code && (
+      {/* 2. LEGENDA: CAIXA BEGE ARREDONDADA (#F6E0A6), TEXTO VERMELHO-ESCURO (#7A0D12) EM NEGRITO E CAIXA ALTA */}
+      <div className="w-full px-1.5 pb-1 flex flex-col items-center justify-end z-20">
+        {/* Faixa Laranja opcional "LIMITE" */}
+        {product.limit && (
           <div
-            className="text-[12px] font-mono font-black tracking-wider text-[#FFE600] leading-none mb-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] uppercase"
-            data-testid="colecao-card-code"
+            className="bg-[#E65100] text-white font-black text-[9px] px-2 py-0.5 rounded-t-sm uppercase tracking-wider text-center shadow-xs leading-none mb-[-1px] z-10"
+            data-testid="colecao-card-limit"
           >
-            CÓD: {display.code}
+            LIMITE: {product.limit}
           </div>
         )}
 
-        {/* Nome do Produto em branco, em caixa alta */}
+        {/* Caixa Bege com mesma altura fixa (38px) alinhada na base de todas as células */}
         <div
-          className="line-clamp-2 text-[12px] font-black uppercase leading-tight tracking-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] max-w-full text-center"
-          title={display.title}
-          data-testid="colecao-card-title"
+          className={`w-full bg-[#F6E0A6] border border-[#E5CE92] shadow-[0_2px_4px_rgba(0,0,0,0.35)] flex items-stretch h-[38px] max-h-[38px] overflow-hidden ${
+            product.limit ? "rounded-b-md rounded-t-xs" : "rounded-md"
+          }`}
         >
-          {display.title}
+          {display.code ? (
+            <>
+              {/* Código à esquerda */}
+              <div
+                className="font-mono font-black text-[#7A0D12] text-[11px] px-1.5 flex items-center justify-center border-r border-[#7A0D12]/30 shrink-0 leading-tight select-text"
+                data-testid="colecao-card-code"
+              >
+                {display.code}
+              </div>
+              {/* Nome do produto (máximo 2 linhas) */}
+              <div
+                className="flex-1 font-black text-[#7A0D12] text-[9.5px] leading-[1.12] px-1.5 flex items-center justify-center text-center uppercase line-clamp-2 select-text"
+                data-testid="colecao-card-title"
+                title={display.title}
+              >
+                {display.title}
+              </div>
+            </>
+          ) : (
+            // Nome centralizado quando não houver código
+            <div
+              className="w-full font-black text-[#7A0D12] text-[10.5px] leading-[1.15] px-2 flex items-center justify-center text-center uppercase line-clamp-2 select-text"
+              data-testid="colecao-card-title"
+              title={display.title}
+            >
+              {display.title}
+            </div>
+          )}
         </div>
       </div>
     </div>

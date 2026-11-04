@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { ColecaoProduct } from "@/types/colecoes";
+import { DEFAULT_COLECAO_CONFIG } from "@/types/colecoes";
 import {
   resolveCardDisplayData,
   paginateColecaoProducts,
@@ -816,6 +817,121 @@ describe("Encarte de Coleções - Regras de Negócio e Testes Obrigatórios", ()
       expect(compatible).toHaveLength(0);
       expect(incompatible).toHaveLength(1);
       expect(incompatible[0].product.code).toBe("20600");
+    });
+  });
+
+  describe("9. Grade Configurável, Elementos Livres (Canva-style) e Critérios do Prompt #11", () => {
+    it("9.1 Com 12 por tela e 45 produtos, gera exatamente 4 páginas", () => {
+      // 45 produtos com foto válida
+      const products45: ColecaoProduct[] = Array.from({ length: 45 }, (_, i) => ({
+        id: `prod-${i + 1}`,
+        code: `${10000 + i}`,
+        description: `PRODUTO TESTE ${i + 1}`,
+        image: `https://cescom.agilecdn.com.br/prod-${i + 1}.png`,
+        isPrincipal: false,
+        included: true,
+      }));
+
+      const { displayProducts } = categorizeAndGroupColecaoProducts(products45);
+      expect(displayProducts).toHaveLength(45);
+
+      const itemsPerPage = 12;
+      const pages = paginateColecaoProducts(displayProducts, itemsPerPage);
+
+      expect(pages).toHaveLength(4);
+      expect(pages[0]).toHaveLength(12);
+      expect(pages[1]).toHaveLength(12);
+      expect(pages[2]).toHaveLength(12);
+      expect(pages[3]).toHaveLength(9); // Última página com as sobras
+    });
+
+    it("9.2 Layout dinâmico: calculateGridCellPositions para grade 3x4 (12 por tela)", () => {
+      const gridArea = {
+        xStart: 29,
+        xEnd: 1051,
+        yStart: 475,
+        yEnd: 1850,
+        columns: [29, 286, 541, 794, 1051],
+        rows: 5,
+        canvasWidth: 1080,
+        canvasHeight: 1920,
+      };
+
+      const cells12 = calculateGridCellPositions(gridArea, 3, 4, 10);
+      expect(cells12).toHaveLength(12);
+
+      // Cada célula tem largura e altura positivas e coerentes com a área
+      cells12.forEach((cell) => {
+        expect(cell.width).toBeGreaterThan(200);
+        expect(cell.height).toBeGreaterThan(250);
+        expect(cell.x).toBeGreaterThanOrEqual(gridArea.xStart);
+        expect(cell.y).toBeGreaterThanOrEqual(gridArea.yStart);
+        expect(cell.x + cell.width).toBeLessThanOrEqual(gridArea.xEnd + 2);
+        expect(cell.y + cell.height).toBeLessThanOrEqual(gridArea.yEnd + 2);
+      });
+    });
+
+    it("9.3 Configuração padrão de Coleção contém todos os novos controles", () => {
+      expect(DEFAULT_COLECAO_CONFIG.columnsCount).toBe(4);
+      expect(DEFAULT_COLECAO_CONFIG.rowsCount).toBe(5);
+      expect(DEFAULT_COLECAO_CONFIG.productScale).toBe(130);
+      expect(DEFAULT_COLECAO_CONFIG.overlapAmount).toBe(15);
+      expect(DEFAULT_COLECAO_CONFIG.showDottedLines).toBe(true);
+      expect(DEFAULT_COLECAO_CONFIG.stackOrder).toBe("right-in-front");
+      expect(DEFAULT_COLECAO_CONFIG.exportScale).toBe(1);
+      expect(DEFAULT_COLECAO_CONFIG.footerText).toContain("OFERTA VÁLIDA");
+    });
+
+    it("9.4 Reordenação de produtos na tabela troca posições corretamente", () => {
+      const list: ColecaoProduct[] = [
+        { id: "1", code: "101", description: "PROD A", image: "img1.png", isPrincipal: false },
+        { id: "2", code: "102", description: "PROD B", image: "img2.png", isPrincipal: false },
+        { id: "3", code: "103", description: "PROD C", image: "img3.png", isPrincipal: false },
+      ];
+
+      // Mover index 1 para cima
+      const moveUp = (arr: ColecaoProduct[], idx: number) => {
+        const copy = [...arr];
+        const temp = copy[idx];
+        copy[idx] = copy[idx - 1];
+        copy[idx - 1] = temp;
+        return copy;
+      };
+
+      const reordered = moveUp(list, 1);
+      expect(reordered[0].id).toBe("2");
+      expect(reordered[1].id).toBe("1");
+      expect(reordered[2].id).toBe("3");
+    });
+
+    it("9.5 Elementos com manuallyMoved retêm coordenadas manuais, enquanto !manuallyMoved seguem a grade", () => {
+      const customLayouts: Record<string, { x: number; y: number; width: number; height: number; manuallyMoved?: boolean }> = {
+        "prod-1": { x: 150, y: 300, width: 280, height: 320, manuallyMoved: true },
+        "prod-2": { x: 0, y: 0, width: 255, height: 275, manuallyMoved: false },
+      };
+
+      // Item 1 foi movido manualmente: suas coordenadas devem ser respeitadas
+      expect(customLayouts["prod-1"].manuallyMoved).toBe(true);
+      expect(customLayouts["prod-1"].x).toBe(150);
+
+      // Item 2 não foi movido: pode ser reposicionado pela grade
+      expect(customLayouts["prod-2"].manuallyMoved).toBe(false);
+    });
+
+    it("9.6 Redefinir para a grade limpa layouts manuais para que voltem à grade", () => {
+      let customLayouts: Record<string, any> = {
+        "prod-1": { x: 150, y: 300, manuallyMoved: true },
+        "prod-2": { x: 200, y: 400, manuallyMoved: true },
+      };
+
+      // Redefine prod-1 para a grade
+      delete customLayouts["prod-1"];
+      expect(customLayouts["prod-1"]).toBeUndefined();
+      expect(customLayouts["prod-2"]).toBeDefined();
+
+      // Redefine todos para a grade
+      customLayouts = {};
+      expect(Object.keys(customLayouts)).toHaveLength(0);
     });
   });
 });

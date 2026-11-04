@@ -34,7 +34,17 @@ export function parseBooleanFlag(val: any): boolean {
  */
 export async function parseColecaoSpreadsheet(file: File): Promise<ColecaoImportResult> {
   const XLSX = await import("xlsx");
-  const buffer = await file.arrayBuffer();
+  let buffer: ArrayBuffer;
+  if (typeof (file as any)?.arrayBuffer === "function") {
+    buffer = await file.arrayBuffer();
+  } else {
+    buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  }
 
   const workbook = XLSX.read(buffer, {
     type: "array",

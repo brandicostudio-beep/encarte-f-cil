@@ -236,29 +236,64 @@ export function categorizeAndGroupColecaoProducts(
 }
 
 /**
- * Calcula as coordenadas exatas da grade de 4 colunas x 5 linhas dentro da área vermelha.
+ * Calcula as coordenadas exatas da grade configurável (colunas x linhas) dentro da área vermelha.
+ * Suporta colunas customizadas (1 a 6), linhas customizadas (1 a 10) e espaçamento entre células.
+ * Mantém compatibilidade exata com o padrão histórico de 4 colunas x 5 linhas em [29, 286, 541, 794, 1051].
  */
 export function calculateGridCellPositions(
-  gridArea: ColecaoGridArea = DEFAULT_COLECAO_GRID_AREA
+  gridArea: ColecaoGridArea = DEFAULT_COLECAO_GRID_AREA,
+  customCols?: number,
+  customRows?: number,
+  cellSpacing = 0
 ): GridCellPosition[] {
   const cells: GridCellPosition[] = [];
-  const { columns, yStart, yEnd, rows } = gridArea;
-  const numCols = columns.length - 1; // 4 colunas
-  const rowHeight = (yEnd - yStart) / rows; // 1375 / 5 = 275px
+  const { xStart, xEnd, yStart, yEnd } = gridArea;
 
-  for (let r = 0; r < rows; r++) {
-    const y = yStart + r * rowHeight;
+  const numCols =
+    customCols && customCols >= 1
+      ? customCols
+      : gridArea.columns
+      ? gridArea.columns.length - 1
+      : 4;
+  const numRows =
+    customRows && customRows >= 1 ? customRows : gridArea.rows || 5;
+
+  const totalWidth = xEnd - xStart;
+  const totalHeight = yEnd - yStart;
+
+  // Se numCols for igual ao número padrão de colunas (4) e sem espaçamento, usa as colunas exatas históricas
+  const useExactDefaultCols =
+    numCols === 4 &&
+    cellSpacing === 0 &&
+    gridArea.columns &&
+    gridArea.columns.length === 5;
+
+  const rowHeight = totalHeight / numRows;
+
+  for (let r = 0; r < numRows; r++) {
+    const y = yStart + r * rowHeight + (cellSpacing > 0 ? cellSpacing / 2 : 0);
+    const h = rowHeight - (cellSpacing > 0 ? cellSpacing : 0);
+
     for (let c = 0; c < numCols; c++) {
-      const x = columns[c];
-      const nextX = columns[c + 1];
-      const width = nextX - x;
+      let x: number;
+      let w: number;
+
+      if (useExactDefaultCols) {
+        x = gridArea.columns[c];
+        w = gridArea.columns[c + 1] - x;
+      } else {
+        const colWidth = totalWidth / numCols;
+        x = xStart + c * colWidth + (cellSpacing > 0 ? cellSpacing / 2 : 0);
+        w = colWidth - (cellSpacing > 0 ? cellSpacing : 0);
+      }
+
       cells.push({
         colIndex: c,
         rowIndex: r,
         x,
         y,
-        width,
-        height: rowHeight,
+        width: w,
+        height: h,
       });
     }
   }

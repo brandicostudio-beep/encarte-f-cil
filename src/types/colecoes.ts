@@ -15,6 +15,7 @@ export interface ColecaoProduct {
   variantIds?: string[];         // IDs dos produtos que são variações deste principal
   variants?: ColecaoProduct[];   // Objetos de variações vinculados
   included?: boolean;            // Se o produto está ativo no encarte
+  limit?: string;                // Faixa laranja opcional de limite (ex.: "1500CX", "10 UN")
 }
 
 export interface ColecaoGridArea {
@@ -43,7 +44,17 @@ export interface ColecaoConfig {
   name: string;                  // Nome da coleção (ex: "Esquenta Black Cescom")
   templateImage: string;         // Imagem de fundo 1080x1920
   gridArea: ColecaoGridArea;
-  itemsPerPage: number;          // Padrão: 20 (4 colunas x 5 linhas)
+  itemsPerPage: number;          // Padrão: 20 (4 colunas x 5 linhas ou customizado)
+  columnsCount?: number;         // Colunas (1 a 6, padrão: 4)
+  rowsCount?: number;            // Linhas (1 a 10, padrão: 5)
+  autoItemsPerPage?: boolean;    // Se true, itemsPerPage = columnsCount * rowsCount
+  productScale?: number;         // Escala do produto em % (80 a 160, padrão: 130)
+  overlapAmount?: number;        // Sobreposição entre fotos em % (0 a 40, padrão: 15)
+  stackOrder?: "left-in-front" | "right-in-front"; // Ordem de empilhamento z-index
+  showDottedLines?: boolean;     // Linhas pontilhadas vermelhas entre células (padrão: true)
+  cellSpacing?: number;          // Espaçamento entre células em px (0 a 20, padrão: 0)
+  footerText?: string;           // Texto do rodapé de oferta
+  exportScale?: number;          // 1 (1080x1920) ou 2 (2160x3840)
 }
 
 export const DEFAULT_COLECAO_CONFIG: ColecaoConfig = {
@@ -51,4 +62,14 @@ export const DEFAULT_COLECAO_CONFIG: ColecaoConfig = {
   templateImage: "/templates/template-esquenta-black-cescom.png",
   gridArea: DEFAULT_COLECAO_GRID_AREA,
   itemsPerPage: 20,
+  columnsCount: 4,
+  rowsCount: 5,
+  autoItemsPerPage: true,
+  productScale: 130,
+  overlapAmount: 15,
+  stackOrder: "right-in-front",
+  showDottedLines: true,
+  cellSpacing: 0,
+  footerText: "OFERTA VÁLIDA DO DIA 02/11 AO DIA 07/11\nOU ENQUANTO DURAREM OS ESTOQUES PROMOCIONAIS.",
+  exportScale: 1,
 };

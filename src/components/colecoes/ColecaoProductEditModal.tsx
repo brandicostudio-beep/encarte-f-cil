@@ -300,6 +300,23 @@ export const ColecaoProductEditModal: React.FC<ColecaoProductEditModalProps> = (
               </p>
             </div>
 
+            {/* Faixa Opcional de Limite de Compra */}
+            <div className="pt-2 border-t border-neutral-800">
+              <Label htmlFor="modalEditLimit" className="text-xs font-semibold text-neutral-300">
+                Faixa de Limite de Compra (Opcional)
+              </Label>
+              <Input
+                id="modalEditLimit"
+                value={form.limit || ""}
+                onChange={(e) => setForm({ ...form, limit: e.target.value })}
+                className="bg-neutral-900 border-neutral-700 text-amber-400 font-bold text-xs mt-1"
+                placeholder="Ex: 1500CX ou 10 UN"
+              />
+              <p className="text-[10px] text-neutral-400 mt-1">
+                Exibe a tarja laranja "LIMITE: ..." sobre a legenda bege do produto (igual na referência).
+              </p>
+            </div>
+
             {/* Alternância de Tipo Principal */}
             <div className="flex items-center justify-between pt-1 border-t border-neutral-800">
               <div>
