@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
-import type { ColecaoProduct } from "@/types/colecoes";
+import type { ColecaoProduct, ColecaoGridSettings, Rect } from "@/types/colecoes";
 import { DEFAULT_COLECAO_CONFIG } from "@/types/colecoes";
 import {
   resolveCardDisplayData,
   paginateColecaoProducts,
+  paginate,
   calculateGridCellPositions,
+  getCellRects,
+  zIndexFor,
   categorizeAndGroupColecaoProducts,
 } from "./colecoes-layout";
 import {
@@ -975,6 +978,119 @@ describe("Encarte de Coleções - Regras de Negócio e Testes Obrigatórios", ()
       expect(cellSource).not.toContain('mixBlendMode: "multiply"');
       expect(cellSource).not.toContain("bg-[#240407]");
       expect(cellSource).not.toContain("hover:brightness-105");
+    });
+  });
+
+  describe("11. Configuração da Grade e Paginação (ColecaoGridSettings, Rect, paginate, getCellRects, zIndexFor)", () => {
+    it("11.1 paginate divide itens em lotes respeitando perPage", () => {
+      const items = Array.from({ length: 45 }, (_, i) => `item-${i + 1}`);
+      const pages = paginate(items, 12);
+      expect(pages).toHaveLength(4);
+      expect(pages[0]).toHaveLength(12);
+      expect(pages[1]).toHaveLength(12);
+      expect(pages[2]).toHaveLength(12);
+      expect(pages[3]).toHaveLength(9);
+
+      // Array vazio retorna [[]]
+      expect(paginate([], 10)).toEqual([[]]);
+
+      // 20 itens com perPage 20 retorna 1 página
+      expect(paginate(Array.from({ length: 20 }, (_, i) => i), 20)).toHaveLength(1);
+    });
+
+    it("11.2 getCellRects calcula retângulos de células conforme colunas, linhas, gapX e gapY", () => {
+      const settings: ColecaoGridSettings = {
+        columns: 4,
+        rows: 5,
+        perPage: 20,
+        gapX: 0,
+        gapY: 0,
+        productScale: 1.3,
+        frontSide: "right",
+        showDividers: true,
+        footerText: "OFERTAS",
+      };
+
+      const area = { x: 29, y: 475, width: 1022, height: 1375 };
+      const rects = getCellRects(settings, area);
+
+      expect(rects).toHaveLength(20);
+
+      // Primeira célula (col 0, row 0)
+      expect(rects[0].col).toBe(0);
+      expect(rects[0].row).toBe(0);
+      expect(rects[0].x).toBe(29);
+      expect(rects[0].y).toBe(475);
+      expect(rects[0].w).toBe(1022 / 4);
+      expect(rects[0].h).toBe(1375 / 5);
+
+      // Célula col 1, row 0
+      expect(rects[1].col).toBe(1);
+      expect(rects[1].row).toBe(0);
+      expect(rects[1].x).toBe(29 + 1022 / 4);
+      expect(rects[1].y).toBe(475);
+
+      // Última célula (col 3, row 4)
+      expect(rects[19].col).toBe(3);
+      expect(rects[19].row).toBe(4);
+      expect(rects[19].w).toBe(1022 / 4);
+      expect(rects[19].h).toBe(1375 / 5);
+    });
+
+    it("11.3 getCellRects respeita gapX e gapY", () => {
+      const settings: ColecaoGridSettings = {
+        columns: 2,
+        rows: 2,
+        perPage: 4,
+        gapX: 10,
+        gapY: 20,
+        productScale: 1.2,
+        frontSide: "left",
+        showDividers: false,
+        footerText: "",
+      };
+
+      const area = { x: 0, y: 0, width: 110, height: 220 };
+      // cellW = (110 - 10 * 1) / 2 = 50
+      // cellH = (220 - 20 * 1) / 2 = 100
+      const rects = getCellRects(settings, area);
+
+      expect(rects).toHaveLength(4);
+      expect(rects[0]).toEqual({ x: 0, y: 0, w: 50, h: 100, col: 0, row: 0 });
+      expect(rects[1]).toEqual({ x: 60, y: 0, w: 50, h: 100, col: 1, row: 0 });
+      expect(rects[2]).toEqual({ x: 0, y: 120, w: 50, h: 100, col: 0, row: 1 });
+      expect(rects[3]).toEqual({ x: 60, y: 120, w: 50, h: 100, col: 1, row: 1 });
+    });
+
+    it("11.4 zIndexFor empilha da esquerda para a direita (frontSide: right) ou vice-versa (frontSide: left)", () => {
+      const rightSettings: ColecaoGridSettings = {
+        columns: 4,
+        rows: 5,
+        perPage: 20,
+        gapX: 0,
+        gapY: 0,
+        productScale: 1.3,
+        frontSide: "right",
+        showDividers: true,
+        footerText: "",
+      };
+
+      // frontSide right: coluna mais à direita tem maior zIndex (cobre a da esquerda)
+      expect(zIndexFor(0, rightSettings)).toBe(1);
+      expect(zIndexFor(1, rightSettings)).toBe(2);
+      expect(zIndexFor(2, rightSettings)).toBe(3);
+      expect(zIndexFor(3, rightSettings)).toBe(4);
+
+      const leftSettings: ColecaoGridSettings = {
+        ...rightSettings,
+        frontSide: "left",
+      };
+
+      // frontSide left: coluna mais à esquerda tem maior zIndex (cobre a da direita)
+      expect(zIndexFor(0, leftSettings)).toBe(4);
+      expect(zIndexFor(1, leftSettings)).toBe(3);
+      expect(zIndexFor(2, leftSettings)).toBe(2);
+      expect(zIndexFor(3, leftSettings)).toBe(1);
     });
   });
 });

@@ -1,4 +1,9 @@
-import type { ColecaoProduct, ColecaoGridArea } from "@/types/colecoes";
+import type {
+  ColecaoProduct,
+  ColecaoGridArea,
+  ColecaoGridSettings,
+  Rect,
+} from "@/types/colecoes";
 import { DEFAULT_COLECAO_GRID_AREA } from "@/types/colecoes";
 import {
   extractGenericBaseName,
@@ -8,6 +13,8 @@ import {
   extractBrand,
   normalizeText,
 } from "./colecoes-similarity";
+
+export type { ColecaoGridSettings, Rect };
 
 export interface CardDisplayData {
   photo1: string;
@@ -302,6 +309,46 @@ export function calculateGridCellPositions(
 }
 
 /**
+ * Pagina itens genéricos em lotes de tamanho `perPage`.
+ */
+export function paginate<T>(items: T[], perPage: number): T[][] {
+  const size = Math.max(1, Math.floor(perPage));
+  const pages: T[][] = [];
+  for (let i = 0; i < items.length; i += size) pages.push(items.slice(i, i + size));
+  return pages.length ? pages : [[]];
+}
+
+/**
+ * Calcula os retângulos de células da grade conforme as configurações e área informada.
+ */
+export function getCellRects(
+  s: ColecaoGridSettings,
+  area: { x: number; y: number; width: number; height: number }
+): Rect[] {
+  const cellW = (area.width - s.gapX * (s.columns - 1)) / s.columns;
+  const cellH = (area.height - s.gapY * (s.rows - 1)) / s.rows;
+  const rects: Rect[] = [];
+  for (let row = 0; row < s.rows; row++) {
+    for (let col = 0; col < s.columns; col++) {
+      rects.push({
+        x: area.x + col * (cellW + s.gapX),
+        y: area.y + row * (cellH + s.gapY),
+        w: cellW,
+        h: cellH,
+        col,
+        row,
+      });
+    }
+  }
+  return rects;
+}
+
+// Ordem de empilhamento: o lado escolhido fica na frente
+export function zIndexFor(col: number, s: ColecaoGridSettings): number {
+  return s.frontSide === "left" ? s.columns - col : col + 1;
+}
+
+/**
  * Divide a lista de produtos em páginas com no máximo `itemsPerPage` produtos por página (padrão: 20).
  * Exemplo:
  * - 21 produtos -> Página 1 com 20, Página 2 com 1
@@ -312,12 +359,5 @@ export function paginateColecaoProducts(
   itemsPerPage = 20
 ): ColecaoProduct[][] {
   const activeProducts = (products || []).filter((p) => p.included !== false);
-  if (activeProducts.length === 0) return [[]];
-
-  const pages: ColecaoProduct[][] = [];
-  for (let i = 0; i < activeProducts.length; i += itemsPerPage) {
-    pages.push(activeProducts.slice(i, i + itemsPerPage));
-  }
-
-  return pages;
+  return paginate(activeProducts, itemsPerPage);
 }

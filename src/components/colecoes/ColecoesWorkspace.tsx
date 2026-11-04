@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import type { ColecaoProduct, ColecaoConfig } from "@/types/colecoes";
+import type { ColecaoProduct, ColecaoConfig, ColecaoGridSettings, Rect } from "@/types/colecoes";
 import { DEFAULT_COLECAO_CONFIG } from "@/types/colecoes";
 import {
   paginateColecaoProducts,
+  paginate,
   categorizeAndGroupColecaoProducts,
   calculateGridCellPositions,
+  getCellRects,
+  zIndexFor,
 } from "@/lib/colecoes-layout";
 import { parseColecaoSpreadsheet } from "@/lib/colecoes-parser";
 import { exportColecaoPageAsPng, exportColecaoAllPagesZip } from "@/lib/colecoes-export";
@@ -204,10 +207,47 @@ export const ColecoesWorkspace: React.FC = () => {
   // Células da grade para a página atual
   const cols = config.columnsCount || 4;
   const rows = config.rowsCount || 5;
-  const cellSpacing = config.cellSpacing || 0;
+  const gapX = config.gapX ?? config.cellSpacing ?? 0;
+  const gapY = config.gapY ?? config.cellSpacing ?? 0;
+  const frontSide = config.frontSide || (config.stackOrder === "left-in-front" ? "left" : "right");
+  const showDividers = config.showDividers ?? (config.showDottedLines !== false);
+
+  const gridSettings: ColecaoGridSettings = useMemo(
+    () => ({
+      columns: cols,
+      rows,
+      perPage: itemsPerPageEffective,
+      gapX,
+      gapY,
+      productScale: config.productScale
+        ? config.productScale > 10
+          ? config.productScale / 100
+          : config.productScale
+        : 1.3,
+      frontSide,
+      showDividers,
+      footerText: config.footerText || "",
+    }),
+    [cols, rows, itemsPerPageEffective, gapX, gapY, config.productScale, frontSide, showDividers, config.footerText]
+  );
+
+  const gridAreaRect = useMemo(
+    () => ({
+      x: config.gridArea.xStart,
+      y: config.gridArea.yStart,
+      width: config.gridArea.xEnd - config.gridArea.xStart,
+      height: config.gridArea.yEnd - config.gridArea.yStart,
+    }),
+    [config.gridArea]
+  );
+
+  const gridRects = useMemo(() => {
+    return getCellRects(gridSettings, gridAreaRect);
+  }, [gridSettings, gridAreaRect]);
+
   const gridCells = useMemo(() => {
-    return calculateGridCellPositions(config.gridArea, cols, rows, cellSpacing);
-  }, [config.gridArea, cols, rows, cellSpacing]);
+    return calculateGridCellPositions(config.gridArea, cols, rows, config.cellSpacing || 0);
+  }, [config.gridArea, cols, rows, config.cellSpacing]);
 
   // Item selecionado atualmente
   const selectedProductItem = useMemo(() => {
@@ -667,12 +707,12 @@ export const ColecoesWorkspace: React.FC = () => {
             if (!current?.manuallyMoved) {
               const currentProdIdx =
                 pages[currentPage - 1]?.findIndex((p) => p.id === selectedProductId) ?? -1;
-              const cell = currentProdIdx >= 0 ? gridCells[currentProdIdx] : null;
-              if (cell) {
-                curX = cell.x - config.gridArea.xStart;
-                curY = cell.y - config.gridArea.yStart;
-                curW = cell.width;
-                curH = cell.height;
+              const rect = currentProdIdx >= 0 ? gridRects[currentProdIdx] : null;
+              if (rect) {
+                curX = rect.x - config.gridArea.xStart;
+                curY = rect.y - config.gridArea.yStart;
+                curW = rect.w;
+                curH = rect.h;
               }
             }
 
@@ -717,7 +757,7 @@ export const ColecoesWorkspace: React.FC = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedProductId, handleUndo, handleRedo, pages, currentPage, gridCells, config.gridArea]);
+  }, [selectedProductId, handleUndo, handleRedo, pages, currentPage, gridRects, gridCells, config.gridArea]);
 
   // Carregar produtos de exemplo para testar
   const handleLoadSample = () => {
@@ -1062,21 +1102,42 @@ export const ColecoesWorkspace: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <Label className="text-[10px] text-neutral-400">Espaçamento entre células (px)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={40}
-                    value={config.cellSpacing || 0}
-                    onChange={(e) =>
-                      setConfig({
-                        ...config,
-                        cellSpacing: Math.max(0, parseInt(e.target.value) || 0),
-                      })
-                    }
-                    className="h-8 bg-neutral-900 border-neutral-700 text-xs font-mono mt-1"
-                  />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-[10px] text-neutral-400">Espaço Horiz. (gapX px)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={40}
+                      value={config.gapX ?? config.cellSpacing ?? 0}
+                      onChange={(e) => {
+                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                        setConfig({
+                          ...config,
+                          gapX: val,
+                          cellSpacing: val,
+                        });
+                      }}
+                      className="h-8 bg-neutral-900 border-neutral-700 text-xs font-mono mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-neutral-400">Espaço Vert. (gapY px)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={40}
+                      value={config.gapY ?? config.cellSpacing ?? 0}
+                      onChange={(e) => {
+                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                        setConfig({
+                          ...config,
+                          gapY: val,
+                        });
+                      }}
+                      className="h-8 bg-neutral-900 border-neutral-700 text-xs font-mono mt-1"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1086,13 +1147,21 @@ export const ColecoesWorkspace: React.FC = () => {
                 <div>
                   <div className="flex justify-between text-[10px] text-neutral-400">
                     <span>Tamanho do Produto</span>
-                    <span className="font-mono text-white">{config.productScale || 130}%</span>
+                    <span className="font-mono text-white">
+                      {config.productScale
+                        ? (config.productScale > 10 ? `${config.productScale}%` : `${Math.round(config.productScale * 100)}%`)
+                        : "130%"}
+                    </span>
                   </div>
                   <input
                     type="range"
                     min={80}
                     max={180}
-                    value={config.productScale || 130}
+                    value={
+                      config.productScale
+                        ? (config.productScale > 10 ? config.productScale : Math.round(config.productScale * 100))
+                        : 130
+                    }
                     onChange={(e) => setConfig({ ...config, productScale: parseInt(e.target.value) })}
                     className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer mt-1"
                   />
@@ -1114,19 +1183,21 @@ export const ColecoesWorkspace: React.FC = () => {
                 </div>
 
                 <div>
-                  <Label className="text-[10px] text-neutral-400">Ordem de Empilhamento</Label>
+                  <Label className="text-[10px] text-neutral-400">Lado na Frente (Empilhamento)</Label>
                   <select
-                    value={config.stackOrder || "right-in-front"}
-                    onChange={(e) =>
+                    value={config.frontSide || (config.stackOrder === "left-in-front" ? "left" : "right")}
+                    onChange={(e) => {
+                      const side = e.target.value as "right" | "left";
                       setConfig({
                         ...config,
-                        stackOrder: e.target.value as "right-in-front" | "left-in-front",
-                      })
-                    }
+                        frontSide: side,
+                        stackOrder: side === "left" ? "left-in-front" : "right-in-front",
+                      });
+                    }}
                     className="w-full h-8 bg-neutral-900 border border-neutral-700 rounded-md px-2 text-xs text-white mt-1"
                   >
-                    <option value="right-in-front">Direita na frente (Padrão KV)</option>
-                    <option value="left-in-front">Esquerda na frente</option>
+                    <option value="right">Direita na frente (Padrão KV)</option>
+                    <option value="left">Esquerda na frente</option>
                   </select>
                 </div>
 
@@ -1134,12 +1205,18 @@ export const ColecoesWorkspace: React.FC = () => {
                   <input
                     type="checkbox"
                     id="chkShowDottedLines"
-                    checked={config.showDottedLines !== false}
-                    onChange={(e) => setConfig({ ...config, showDottedLines: e.target.checked })}
+                    checked={config.showDividers ?? (config.showDottedLines !== false)}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        showDividers: e.target.checked,
+                        showDottedLines: e.target.checked,
+                      })
+                    }
                     className="rounded"
                   />
                   <Label htmlFor="chkShowDottedLines" className="text-xs text-neutral-300 cursor-pointer">
-                    Linhas pontilhadas na grade
+                    Divisores / linhas pontilhadas na grade
                   </Label>
                 </div>
               </div>

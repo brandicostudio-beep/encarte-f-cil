@@ -40,6 +40,27 @@ export const DEFAULT_COLECAO_GRID_AREA: ColecaoGridArea = {
   canvasHeight: 1920,
 };
 
+export interface ColecaoGridSettings {
+  columns: number;          // 1–6
+  rows: number;             // 1–10
+  perPage: number;          // padrão = columns × rows
+  gapX: number;
+  gapY: number;
+  productScale: number;     // 1.0–1.6
+  frontSide: "left" | "right";
+  showDividers: boolean;
+  footerText: string;
+}
+
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  col: number;
+  row: number;
+}
+
 export interface ColecaoConfig {
   name: string;                  // Nome da coleção (ex: "Esquenta Black Cescom")
   templateImage: string;         // Imagem de fundo 1080x1920
@@ -48,11 +69,15 @@ export interface ColecaoConfig {
   columnsCount?: number;         // Colunas (1 a 6, padrão: 4)
   rowsCount?: number;            // Linhas (1 a 10, padrão: 5)
   autoItemsPerPage?: boolean;    // Se true, itemsPerPage = columnsCount * rowsCount
-  productScale?: number;         // Escala do produto em % (80 a 160, padrão: 130)
+  productScale?: number;         // Escala do produto (1.0 a 1.6 ou em % 80 a 160)
   overlapAmount?: number;        // Sobreposição entre fotos em % (0 a 40, padrão: 15)
   stackOrder?: "left-in-front" | "right-in-front"; // Ordem de empilhamento z-index
+  frontSide?: "left" | "right";  // Lado na frente ("left" | "right")
   showDottedLines?: boolean;     // Linhas pontilhadas vermelhas entre células (padrão: true)
+  showDividers?: boolean;        // Divisores entre células
   cellSpacing?: number;          // Espaçamento entre células em px (0 a 20, padrão: 0)
+  gapX?: number;                 // Espaço horizontal entre colunas
+  gapY?: number;                 // Espaço vertical entre linhas
   footerText?: string;           // Texto do rodapé de oferta
   exportScale?: number;          // 1 (1080x1920) ou 2 (2160x3840)
 }
@@ -68,8 +93,12 @@ export const DEFAULT_COLECAO_CONFIG: ColecaoConfig = {
   productScale: 130,
   overlapAmount: 15,
   stackOrder: "right-in-front",
+  frontSide: "right",
   showDottedLines: true,
+  showDividers: true,
   cellSpacing: 0,
+  gapX: 0,
+  gapY: 0,
   footerText: "OFERTA VÁLIDA DO DIA 02/11 AO DIA 07/11\nOU ENQUANTO DURAREM OS ESTOQUES PROMOCIONAIS.",
   exportScale: 1,
 };

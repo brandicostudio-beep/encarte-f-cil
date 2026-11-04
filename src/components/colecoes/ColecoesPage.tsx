@@ -1,7 +1,7 @@
 import React from "react";
-import type { ColecaoProduct, ColecaoConfig } from "@/types/colecoes";
+import type { ColecaoProduct, ColecaoConfig, ColecaoGridSettings, Rect } from "@/types/colecoes";
 import { DEFAULT_COLECAO_CONFIG } from "@/types/colecoes";
-import { calculateGridCellPositions } from "@/lib/colecoes-layout";
+import { calculateGridCellPositions, getCellRects, zIndexFor } from "@/lib/colecoes-layout";
 import { ColecaoCard } from "./ColecaoCard";
 import { TransformBoundingBox } from "@/components/encarte/editor/TransformBoundingBox";
 
@@ -58,29 +58,46 @@ export const ColecoesPage: React.FC<ColecoesPageProps> = ({
 }) => {
   const cols = config.columnsCount || 4;
   const rows = config.rowsCount || 5;
-  const cellSpacing = config.cellSpacing || 0;
+  const gapX = config.gapX ?? config.cellSpacing ?? 0;
+  const gapY = config.gapY ?? config.cellSpacing ?? 0;
+  const frontSide = config.frontSide || (config.stackOrder === "left-in-front" ? "left" : "right");
+  const showDividers = config.showDividers ?? (config.showDottedLines !== false);
 
-  const gridCells = calculateGridCellPositions(
-    config.gridArea,
-    cols,
-    rows,
-    cellSpacing
-  );
+  const gridSettings: ColecaoGridSettings = {
+    columns: cols,
+    rows: rows,
+    perPage: config.itemsPerPage || cols * rows,
+    gapX,
+    gapY,
+    productScale: config.productScale
+      ? (config.productScale > 10 ? config.productScale / 100 : config.productScale)
+      : 1.3,
+    frontSide,
+    showDividers,
+    footerText: config.footerText || "",
+  };
 
-  const stackOrder = config.stackOrder || "right-in-front";
+  const area = {
+    x: config.gridArea.xStart,
+    y: config.gridArea.yStart,
+    width: config.gridArea.xEnd - config.gridArea.xStart,
+    height: config.gridArea.yEnd - config.gridArea.yStart,
+  };
+
+  const gridRects = getCellRects(gridSettings, area);
 
   // Encontra item e bounding box selecionados na página atual
   const selectedIndex = products.findIndex((p) => p.id === selectedProductId);
   const selectedProduct = selectedIndex >= 0 ? products[selectedIndex] : null;
-  const selectedCell = selectedIndex >= 0 ? gridCells[selectedIndex] : null;
+  const selectedRect = selectedIndex >= 0 ? gridRects[selectedIndex] : null;
   const selectedCustom = selectedProduct ? customLayouts[selectedProduct.id] : null;
 
   let selectedBox = null;
-  if (selectedProduct && selectedCell) {
-    const defaultX = selectedCell.x - config.gridArea.xStart;
-    const defaultY = selectedCell.y - config.gridArea.yStart;
-    const defaultW = selectedCell.width;
-    const defaultH = selectedCell.height;
+  if (selectedProduct && selectedRect) {
+    const defaultX = selectedRect.x - config.gridArea.xStart;
+    const defaultY = selectedRect.y - config.gridArea.yStart;
+    const defaultW = selectedRect.w;
+    const defaultH = selectedRect.h;
 
     selectedBox = {
       x: selectedCustom?.manuallyMoved ? selectedCustom.x : defaultX,
@@ -133,17 +150,17 @@ export const ColecoesPage: React.FC<ColecoesPageProps> = ({
         }}
       >
         {products.map((product, idx) => {
-          const cell = gridCells[idx];
-          if (!cell) return null;
+          const rect = gridRects[idx];
+          if (!rect) return null;
 
           const custom = customLayouts[product.id];
           if (custom?.isHidden) return null;
 
           // Posição padrão da grade ou posição personalizada
-          const defaultX = cell.x - config.gridArea.xStart;
-          const defaultY = cell.y - config.gridArea.yStart;
-          const defaultW = cell.width;
-          const defaultH = cell.height;
+          const defaultX = rect.x - config.gridArea.xStart;
+          const defaultY = rect.y - config.gridArea.yStart;
+          const defaultW = rect.w;
+          const defaultH = rect.h;
 
           const posX = custom?.manuallyMoved ? custom.x : defaultX;
           const posY = custom?.manuallyMoved ? custom.y : defaultY;
@@ -152,11 +169,7 @@ export const ColecoesPage: React.FC<ColecoesPageProps> = ({
           const rotation = custom?.rotation || 0;
 
           // Ordem de empilhamento z-index
-          const defaultZIndex =
-            stackOrder === "left-in-front"
-              ? (rows - cell.rowIndex) * 10 + (cols - cell.colIndex)
-              : cell.rowIndex * 10 + cell.colIndex + 1;
-
+          const defaultZIndex = zIndexFor(rect.col, gridSettings);
           const zIndex = custom?.zIndex ?? defaultZIndex;
 
           const isSelected = selectedProductId === product.id;
@@ -200,12 +213,12 @@ export const ColecoesPage: React.FC<ColecoesPageProps> = ({
                 product={product}
                 width={posW}
                 height={posH}
-                productScale={config.productScale || 130}
+                productScale={gridSettings.productScale}
                 overlapAmount={config.overlapAmount || 15}
-                stackOrder={stackOrder}
-                showDottedLines={config.showDottedLines !== false}
-                isLastCol={cell.colIndex === cols - 1}
-                isLastRow={cell.rowIndex === rows - 1}
+                stackOrder={gridSettings.frontSide === "left" ? "left-in-front" : "right-in-front"}
+                showDottedLines={gridSettings.showDividers}
+                isLastCol={rect.col === cols - 1}
+                isLastRow={rect.row === rows - 1}
                 zIndex={zIndex}
                 onEdit={onEditProduct ? () => onEditProduct(product) : undefined}
               />
