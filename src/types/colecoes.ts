@@ -61,6 +61,18 @@ export interface Rect {
   row: number;
 }
 
+export interface ColecaoElement {
+  id: string;
+  productId: string;
+  x: number; y: number;          // px no canvas 1080×1920
+  w: number; h: number;
+  rotation: number;              // graus
+  z: number;
+  manual?: boolean;              // se true, mudar a grade não reposiciona
+  locked?: boolean;
+  hidden?: boolean;
+}
+
 export interface ColecaoConfig {
   name: string;                  // Nome da coleção (ex: "Esquenta Black Cescom")
   templateImage: string;         // Imagem de fundo 1080x1920

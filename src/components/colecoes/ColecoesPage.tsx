@@ -1,15 +1,23 @@
 import React from "react";
-import type { ColecaoProduct, ColecaoConfig, ColecaoGridSettings, Rect } from "@/types/colecoes";
+import type {
+  ColecaoProduct,
+  ColecaoConfig,
+  ColecaoGridSettings,
+  Rect,
+  ColecaoElement,
+} from "@/types/colecoes";
 import { DEFAULT_COLECAO_CONFIG } from "@/types/colecoes";
 import { calculateGridCellPositions, getCellRects, zIndexFor } from "@/lib/colecoes-layout";
 import { ColecaoCard } from "./ColecaoCard";
 import { TransformBoundingBox } from "@/components/encarte/editor/TransformBoundingBox";
 
-export interface CustomItemLayout {
+export type { ColecaoElement };
+
+export interface CustomItemLayout extends Partial<ColecaoElement> {
   x: number;
   y: number;
-  width: number;
-  height: number;
+  width?: number;
+  height?: number;
   rotation?: number;
   zIndex?: number;
   isLocked?: boolean;
@@ -99,11 +107,13 @@ export const ColecoesPage: React.FC<ColecoesPageProps> = ({
     const defaultW = selectedRect.w;
     const defaultH = selectedRect.h;
 
+    const isManual = selectedCustom?.manual ?? selectedCustom?.manuallyMoved ?? false;
+
     selectedBox = {
-      x: selectedCustom?.manuallyMoved ? selectedCustom.x : defaultX,
-      y: selectedCustom?.manuallyMoved ? selectedCustom.y : defaultY,
-      width: selectedCustom?.manuallyMoved ? selectedCustom.width : defaultW,
-      height: selectedCustom?.manuallyMoved ? selectedCustom.height : defaultH,
+      x: isManual ? selectedCustom!.x : defaultX,
+      y: isManual ? selectedCustom!.y : defaultY,
+      width: isManual ? (selectedCustom!.w ?? selectedCustom!.width ?? defaultW) : defaultW,
+      height: isManual ? (selectedCustom!.h ?? selectedCustom!.height ?? defaultH) : defaultH,
       rotation: selectedCustom?.rotation || 0,
     };
   }
@@ -154,7 +164,8 @@ export const ColecoesPage: React.FC<ColecoesPageProps> = ({
           if (!rect) return null;
 
           const custom = customLayouts[product.id];
-          if (custom?.isHidden) return null;
+          const isHidden = custom?.hidden ?? custom?.isHidden ?? false;
+          if (isHidden) return null;
 
           // Posição padrão da grade ou posição personalizada
           const defaultX = rect.x - config.gridArea.xStart;
@@ -162,15 +173,17 @@ export const ColecoesPage: React.FC<ColecoesPageProps> = ({
           const defaultW = rect.w;
           const defaultH = rect.h;
 
-          const posX = custom?.manuallyMoved ? custom.x : defaultX;
-          const posY = custom?.manuallyMoved ? custom.y : defaultY;
-          const posW = custom?.manuallyMoved ? custom.width : defaultW;
-          const posH = custom?.manuallyMoved ? custom.height : defaultH;
+          const isManual = custom?.manual ?? custom?.manuallyMoved ?? false;
+          const posX = isManual ? custom!.x : defaultX;
+          const posY = isManual ? custom!.y : defaultY;
+          const posW = isManual ? (custom!.w ?? custom!.width ?? defaultW) : defaultW;
+          const posH = isManual ? (custom!.h ?? custom!.height ?? defaultH) : defaultH;
           const rotation = custom?.rotation || 0;
 
           // Ordem de empilhamento z-index
           const defaultZIndex = zIndexFor(rect.col, gridSettings);
-          const zIndex = custom?.zIndex ?? defaultZIndex;
+          const zIndex = custom?.z ?? custom?.zIndex ?? defaultZIndex;
+          const isLocked = custom?.locked ?? custom?.isLocked ?? false;
 
           const isSelected = selectedProductId === product.id;
 
@@ -191,7 +204,7 @@ export const ColecoesPage: React.FC<ColecoesPageProps> = ({
               onPointerDown={(e) => {
                 if (interactive && onStartDrag) {
                   onSelectProduct?.(product.id);
-                  if (!custom?.isLocked) {
+                  if (!isLocked) {
                     onStartDrag(product.id, e, {
                       x: posX,
                       y: posY,

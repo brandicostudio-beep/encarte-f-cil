@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { ColecaoProduct, ColecaoGridSettings, Rect } from "@/types/colecoes";
+import type { ColecaoProduct, ColecaoGridSettings, Rect, ColecaoElement } from "@/types/colecoes";
 import { DEFAULT_COLECAO_CONFIG } from "@/types/colecoes";
 import {
   resolveCardDisplayData,
@@ -8,6 +8,7 @@ import {
   calculateGridCellPositions,
   getCellRects,
   zIndexFor,
+  toColecaoElement,
   categorizeAndGroupColecaoProducts,
 } from "./colecoes-layout";
 import {
@@ -1091,6 +1092,84 @@ describe("Encarte de Coleções - Regras de Negócio e Testes Obrigatórios", ()
       expect(zIndexFor(1, leftSettings)).toBe(3);
       expect(zIndexFor(2, leftSettings)).toBe(2);
       expect(zIndexFor(3, leftSettings)).toBe(1);
+    });
+  });
+
+  describe("12. Elemento Livre para o Editor Estilo Canva (ColecaoElement e toColecaoElement)", () => {
+    it("12.1 Cria ColecaoElement padrão a partir de célula da grade quando manual for falso", () => {
+      const rect: Rect = { x: 50, y: 100, w: 200, h: 250, col: 0, row: 0 };
+      const elem = toColecaoElement("prod-1", rect, undefined, 2);
+
+      expect(elem).toEqual({
+        id: "elem-prod-1",
+        productId: "prod-1",
+        x: 50,
+        y: 100,
+        w: 200,
+        h: 250,
+        rotation: 0,
+        z: 2,
+        manual: false,
+        locked: false,
+        hidden: false,
+      });
+    });
+
+    it("12.2 Quando manual for true, mudar a grade não altera as coordenadas customizadas", () => {
+      const customElement: ColecaoElement = {
+        id: "elem-prod-1",
+        productId: "prod-1",
+        x: 120,
+        y: 340,
+        w: 280,
+        h: 310,
+        rotation: 15,
+        z: 7,
+        manual: true,
+        locked: true,
+        hidden: false,
+      };
+
+      // Simula reconfiguração da grade com nova posição para a célula (x=100, y=200, w=150, h=180)
+      const newGridRect: Rect = { x: 100, y: 200, w: 150, h: 180, col: 1, row: 1 };
+      const resolved = toColecaoElement("prod-1", newGridRect, customElement, 1);
+
+      // As coordenadas manuais são preservadas intactas
+      expect(resolved.x).toBe(120);
+      expect(resolved.y).toBe(340);
+      expect(resolved.w).toBe(280);
+      expect(resolved.h).toBe(310);
+      expect(resolved.rotation).toBe(15);
+      expect(resolved.z).toBe(7);
+      expect(resolved.manual).toBe(true);
+      expect(resolved.locked).toBe(true);
+      expect(resolved.hidden).toBe(false);
+    });
+
+    it("12.3 Suporta compatibilidade bidirecional com aliases width/height/zIndex/isLocked/isHidden/manuallyMoved", () => {
+      const rect: Rect = { x: 0, y: 0, w: 100, h: 100, col: 0, row: 0 };
+      const legacyLayout = {
+        x: 77,
+        y: 88,
+        width: 300,
+        height: 350,
+        rotation: -10,
+        zIndex: 9,
+        manuallyMoved: true,
+        isLocked: true,
+        isHidden: true,
+      };
+
+      const elem = toColecaoElement("prod-legacy", rect, legacyLayout);
+      expect(elem.x).toBe(77);
+      expect(elem.y).toBe(88);
+      expect(elem.w).toBe(300);
+      expect(elem.h).toBe(350);
+      expect(elem.rotation).toBe(-10);
+      expect(elem.z).toBe(9);
+      expect(elem.manual).toBe(true);
+      expect(elem.locked).toBe(true);
+      expect(elem.hidden).toBe(true);
     });
   });
 });

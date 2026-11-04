@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import type { ColecaoProduct, ColecaoConfig, ColecaoGridSettings, Rect } from "@/types/colecoes";
+import type { ColecaoProduct, ColecaoConfig, ColecaoGridSettings, Rect, ColecaoElement } from "@/types/colecoes";
 import { DEFAULT_COLECAO_CONFIG } from "@/types/colecoes";
 import {
   paginateColecaoProducts,
@@ -486,11 +486,18 @@ export const ColecoesWorkspace: React.FC = () => {
             ...prev,
             [productId]: {
               ...prevCustom,
+              id: prevCustom.id || `elem-${productId}`,
+              productId,
               x: Math.round(initialBox.x + deltaX),
               y: Math.round(initialBox.y + deltaY),
+              w: initialBox.width,
+              h: initialBox.height,
               width: initialBox.width,
               height: initialBox.height,
               rotation: initialBox.rotation || 0,
+              z: prevCustom.z ?? prevCustom.zIndex ?? 1,
+              zIndex: prevCustom.z ?? prevCustom.zIndex ?? 1,
+              manual: true,
               manuallyMoved: true,
             },
           };
@@ -521,11 +528,18 @@ export const ColecoesWorkspace: React.FC = () => {
         ...prev,
         [productId]: {
           ...prevCustom,
+          id: prevCustom.id || `elem-${productId}`,
+          productId,
           x: newBox.x,
           y: newBox.y,
+          w: newBox.width,
+          h: newBox.height,
           width: newBox.width,
           height: newBox.height,
           rotation: newBox.rotation ?? prevCustom.rotation ?? 0,
+          z: prevCustom.z ?? prevCustom.zIndex ?? 1,
+          zIndex: prevCustom.z ?? prevCustom.zIndex ?? 1,
+          manual: true,
           manuallyMoved: true,
         },
       };
@@ -545,8 +559,8 @@ export const ColecoesWorkspace: React.FC = () => {
 
     setCustomLayouts((prev) => {
       const current = prev[selectedProductId];
-      const curW = current?.width || 255;
-      const curH = current?.height || 275;
+      const curW = current?.w ?? current?.width ?? 255;
+      const curH = current?.h ?? current?.height ?? 275;
 
       let nextX = current?.x ?? 0;
       let nextY = current?.y ?? 0;
@@ -562,10 +576,17 @@ export const ColecoesWorkspace: React.FC = () => {
         ...prev,
         [selectedProductId]: {
           ...current,
+          id: current?.id || `elem-${selectedProductId}`,
+          productId: selectedProductId,
           x: nextX,
           y: nextY,
+          w: curW,
+          h: curH,
           width: curW,
           height: curH,
+          z: current?.z ?? current?.zIndex ?? 1,
+          zIndex: current?.z ?? current?.zIndex ?? 1,
+          manual: true,
           manuallyMoved: true,
         },
       };
@@ -579,18 +600,24 @@ export const ColecoesWorkspace: React.FC = () => {
     if (!selectedProductId) return;
     setCustomLayouts((prev) => {
       const current = prev[selectedProductId];
-      const currentZ = current?.zIndex ?? 5;
+      const currentZ = current?.z ?? current?.zIndex ?? 5;
       const nextZ = direction === "up" ? currentZ + 1 : Math.max(1, currentZ - 1);
 
       const nextLayouts = {
         ...prev,
         [selectedProductId]: {
           ...current,
+          id: current?.id || `elem-${selectedProductId}`,
+          productId: selectedProductId,
           x: current?.x ?? 0,
           y: current?.y ?? 0,
-          width: current?.width ?? 255,
-          height: current?.height ?? 275,
+          w: current?.w ?? current?.width ?? 255,
+          h: current?.h ?? current?.height ?? 275,
+          width: current?.w ?? current?.width ?? 255,
+          height: current?.h ?? current?.height ?? 275,
+          z: nextZ,
           zIndex: nextZ,
+          manual: true,
           manuallyMoved: true,
         },
       };
@@ -603,15 +630,21 @@ export const ColecoesWorkspace: React.FC = () => {
   const handleToggleLock = (productId: string) => {
     setCustomLayouts((prev) => {
       const current = prev[productId];
-      const nextLocked = !current?.isLocked;
+      const currentLocked = current?.locked ?? current?.isLocked ?? false;
+      const nextLocked = !currentLocked;
       const nextLayouts = {
         ...prev,
         [productId]: {
           ...current,
+          id: current?.id || `elem-${productId}`,
+          productId,
           x: current?.x ?? 0,
           y: current?.y ?? 0,
-          width: current?.width ?? 255,
-          height: current?.height ?? 275,
+          w: current?.w ?? current?.width ?? 255,
+          h: current?.h ?? current?.height ?? 275,
+          width: current?.w ?? current?.width ?? 255,
+          height: current?.h ?? current?.height ?? 275,
+          locked: nextLocked,
           isLocked: nextLocked,
         },
       };
@@ -624,15 +657,21 @@ export const ColecoesWorkspace: React.FC = () => {
   const handleToggleHide = (productId: string) => {
     setCustomLayouts((prev) => {
       const current = prev[productId];
-      const nextHidden = !current?.isHidden;
+      const currentHidden = current?.hidden ?? current?.isHidden ?? false;
+      const nextHidden = !currentHidden;
       const nextLayouts = {
         ...prev,
         [productId]: {
           ...current,
+          id: current?.id || `elem-${productId}`,
+          productId,
           x: current?.x ?? 0,
           y: current?.y ?? 0,
-          width: current?.width ?? 255,
-          height: current?.height ?? 275,
+          w: current?.w ?? current?.width ?? 255,
+          h: current?.h ?? current?.height ?? 275,
+          width: current?.w ?? current?.width ?? 255,
+          height: current?.h ?? current?.height ?? 275,
+          hidden: nextHidden,
           isHidden: nextHidden,
         },
       };
@@ -697,14 +736,16 @@ export const ColecoesWorkspace: React.FC = () => {
           e.preventDefault();
           setCustomLayouts((prev) => {
             const current = prev[selectedProductId];
-            if (current?.isLocked) return prev;
+            const isLocked = current?.locked ?? current?.isLocked ?? false;
+            if (isLocked) return prev;
 
+            const isManual = current?.manual ?? current?.manuallyMoved ?? false;
             let curX = current?.x;
             let curY = current?.y;
-            let curW = current?.width;
-            let curH = current?.height;
+            let curW = current?.w ?? current?.width;
+            let curH = current?.h ?? current?.height;
 
-            if (!current?.manuallyMoved) {
+            if (!isManual) {
               const currentProdIdx =
                 pages[currentPage - 1]?.findIndex((p) => p.id === selectedProductId) ?? -1;
               const rect = currentProdIdx >= 0 ? gridRects[currentProdIdx] : null;
@@ -729,10 +770,15 @@ export const ColecoesWorkspace: React.FC = () => {
               ...prev,
               [selectedProductId]: {
                 ...current,
+                id: current?.id || `elem-${selectedProductId}`,
+                productId: selectedProductId,
                 x: nextX,
                 y: nextY,
+                w: curW || 255,
+                h: curH || 275,
                 width: curW || 255,
                 height: curH || 275,
+                manual: true,
                 manuallyMoved: true,
               },
             };

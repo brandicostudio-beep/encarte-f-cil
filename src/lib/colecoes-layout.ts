@@ -3,6 +3,7 @@ import type {
   ColecaoGridArea,
   ColecaoGridSettings,
   Rect,
+  ColecaoElement,
 } from "@/types/colecoes";
 import { DEFAULT_COLECAO_GRID_AREA } from "@/types/colecoes";
 import {
@@ -14,7 +15,7 @@ import {
   normalizeText,
 } from "./colecoes-similarity";
 
-export type { ColecaoGridSettings, Rect };
+export type { ColecaoGridSettings, Rect, ColecaoElement };
 
 export interface CardDisplayData {
   photo1: string;
@@ -346,6 +347,47 @@ export function getCellRects(
 // Ordem de empilhamento: o lado escolhido fica na frente
 export function zIndexFor(col: number, s: ColecaoGridSettings): number {
   return s.frontSide === "left" ? s.columns - col : col + 1;
+}
+
+/**
+ * Converte ou cria um ColecaoElement a partir de um produto, retângulo de célula e eventuais customizações manuais.
+ */
+export function toColecaoElement(
+  productId: string,
+  rect: Rect,
+  custom?: Partial<ColecaoElement> | Partial<{
+    width?: number;
+    height?: number;
+    zIndex?: number;
+    isLocked?: boolean;
+    isHidden?: boolean;
+    manuallyMoved?: boolean;
+  }>,
+  defaultZ: number = 1
+): ColecaoElement {
+  const isManual = custom?.manual ?? (custom as any)?.manuallyMoved ?? false;
+  const w = isManual ? (custom?.w ?? (custom as any)?.width ?? rect.w) : rect.w;
+  const h = isManual ? (custom?.h ?? (custom as any)?.height ?? rect.h) : rect.h;
+  const x = isManual ? (custom?.x ?? rect.x) : rect.x;
+  const y = isManual ? (custom?.y ?? rect.y) : rect.y;
+  const rotation = custom?.rotation ?? 0;
+  const z = custom?.z ?? (custom as any)?.zIndex ?? defaultZ;
+  const locked = custom?.locked ?? (custom as any)?.isLocked ?? false;
+  const hidden = custom?.hidden ?? (custom as any)?.isHidden ?? false;
+
+  return {
+    id: custom?.id || `elem-${productId}`,
+    productId,
+    x,
+    y,
+    w,
+    h,
+    rotation,
+    z,
+    manual: isManual,
+    locked,
+    hidden,
+  };
 }
 
 /**
