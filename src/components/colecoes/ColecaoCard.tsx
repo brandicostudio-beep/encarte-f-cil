@@ -74,7 +74,7 @@ export const ColecaoCard: React.FC<ColecaoCardProps> = ({
   return (
     <div
       className={`relative overflow-visible text-white select-none transition-all ${
-        onEdit ? "cursor-pointer group hover:brightness-105" : ""
+        onEdit ? "cursor-pointer group" : ""
       }`}
       style={{
         width: `${width}px`,

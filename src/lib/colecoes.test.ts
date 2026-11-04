@@ -962,5 +962,19 @@ describe("Encarte de Coleções - Regras de Negócio e Testes Obrigatórios", ()
     it("10.3 Componente ProductCell está definido como função React", () => {
       expect(typeof ProductCell).toBe("function");
     });
+
+    it("10.4 ColecaoCard e ProductCell não possuem escurecimento (mixBlendMode multiply, bg-[#240407], hover:brightness-105)", async () => {
+      const fs = await import("fs");
+      const cardSource = fs.readFileSync("src/components/colecoes/ColecaoCard.tsx", "utf-8");
+      const cellSource = fs.readFileSync("src/components/colecoes/ProductCell.tsx", "utf-8");
+
+      expect(cardSource).not.toContain('mixBlendMode: "multiply"');
+      expect(cardSource).not.toContain("bg-[#240407]");
+      expect(cardSource).not.toContain("hover:brightness-105");
+
+      expect(cellSource).not.toContain('mixBlendMode: "multiply"');
+      expect(cellSource).not.toContain("bg-[#240407]");
+      expect(cellSource).not.toContain("hover:brightness-105");
+    });
   });
 });
