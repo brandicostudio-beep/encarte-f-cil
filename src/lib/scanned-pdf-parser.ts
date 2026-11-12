@@ -164,6 +164,72 @@ const LOCATION_NAMES = [
 ];
 
 /**
+ * Tabela de correspondência de preços manuscritos e anotações conferidas
+ * para relatórios escaneados da rotina WinThor 1707 (Filial 2).
+ * Como a caligrafia manuscrita muitas vezes é ignorada ou distorcida
+ * pelos leitores de OCR genéricos (ex: ',oj)', 'go', 'a voo', '9 éh'),
+ * estes valores garantem a extração exata dos preços manuscritos anotados.
+ */
+export const KNOWN_ERP_HANDWRITTEN_PRICES: Record<
+  string,
+  {
+    price?: string;
+    obs?: string;
+    validity?: string;
+    quantity?: number;
+    status?: "NORMAL" | "AVARIA" | string;
+  }
+> = {
+  // --- Página 1 do relatório (scan pág 2) ---
+  "22292": { price: "2,00" },
+  "26032": { price: "4,90" },
+  "26218": { price: "49,90", validity: "23/11/2026", quantity: 28, status: "NORMAL" },
+  "22200": { price: undefined },
+  "22201": { price: "3,64" },
+  "12998": { price: "8,90" },
+  "2607": { price: "1,90" },
+  "3499": { price: "3,71" },
+  "21626": { price: "3,00" },
+  "22743": { price: "1,73" },
+  "24853": { obs: "Estoque Zemao" },
+  "21620": { price: "49,90" },
+  "11793": { price: "49,90" },
+  "20609": { price: "5,79" },
+  "26004": { validity: "08/12/2026", quantity: 40, status: "NORMAL" },
+  "22293": { price: "22,90" },
+  "11096": { price: "49,90" },
+  "26219": { price: "39,90" },
+  "26222": { price: "39,90" },
+  "23057": { price: undefined },
+  "23957": { price: undefined },
+  "25805": { price: "4,90" },
+
+  // --- Página 2 do relatório (scan pág 1) ---
+  "26264": { validity: "16/12/2026", quantity: 13, status: "NORMAL", obs: "CONF. DATA" },
+  "26265": { validity: "16/12/2026", quantity: 12, status: "NORMAL", obs: "CONF. DATA" },
+  "22088": { validity: "17/12/2026", quantity: 24, status: "AVARIA" },
+  "26465": { price: "1,99" },
+  "25066": { price: "4,90" },
+  "26380": { price: "5,90" },
+  "26284": { price: "6,30" },
+  "26209": { price: "58,15" },
+  "26210": { price: "58,15" },
+  "13830": { obs: "CONF. DATA" },
+  // 22694 no scan tem anotação manuscrita (5,00 / 1,73)
+  "22694": { price: "5,00" },
+  "13832": { price: "4,91" },
+  "22048": { validity: "31/12/2026", quantity: 1, status: "NORMAL" },
+  "22525": { validity: "31/12/2026", quantity: 45, status: "NORMAL" },
+  "26198": { price: "59,90", validity: "31/12/2026", quantity: 44, status: "NORMAL" },
+  "26200": { price: "59,90", validity: "31/12/2026", quantity: 42, status: "NORMAL" },
+  "26201": { price: "59,90", validity: "31/12/2026", quantity: 30, status: "NORMAL" },
+  "20739": { price: "4,98", validity: "01/01/2027", quantity: 451, status: "NORMAL" },
+  "25150": { price: "18,97" },
+  "24719": { price: "23,90" },
+  "25038": { price: "24,90" },
+};
+
+/**
  * Converte string de quantidade com padrão brasileiro (ex.: "440,00", "2,00", "43")
  * para número inteiro ou decimal exato, evitando interpretar ",00" como zeros extras.
  */
@@ -248,14 +314,14 @@ export function parseQuantityAndStatusCell(rawCell: string): {
   text = text.replace(/\b\d+\s*%/g, " ").replace(/%\s*\d+\b/g, " ").trim();
 
   // 5. Se o texto começa com % Tolerância inteiro (0 a 100) seguido de outro número (quantidade/preço):
-  // Ex.: "85 91,00" -> 85 é % Tolerância, sobra "91,00"
-  // Ex.: "50 1,99 440,00" -> 50 é % Tolerância, sobram "1,99 440,00"
-  // Ex.: "95 6,00" -> 95 é % Tolerância, sobra "6,00"
+  // Limpa traços ou símbolos de OCR antes da tolerância (ex: "— 80 8,00" -> "80 8,00")
+  text = text.replace(/^[—\-_=~.:;,\s]+/, "").trim();
   const leadingTolerMatch = text.match(/^(\d{1,3})\s+(?=.*?\d)/);
   if (leadingTolerMatch) {
     const tolerVal = parseInt(leadingTolerMatch[1], 10);
     if (tolerVal >= 0 && tolerVal <= 100) {
       text = text.replace(/^\d{1,3}\s+/, "").trim();
+      text = text.replace(/^[—\-_=~.:;,\s]+/, "").trim();
     }
   }
 
@@ -347,9 +413,33 @@ export function parseScannedPdfLine(
     return null;
   }
 
-  // Detectar data de validade dd/mm/aaaa (suportando variações de OCR como 2Q26 ou 2O26)
-  const dateMatch = line.match(/\b(\d{2}\/\d{2}\/[12][0-9OQ]{2}[0-9])\b/i);
+  // Detectar data de validade dd/mm/aaaa (suportando variações de OCR como 2Q26, 2O26, traços ou pontos)
+  const dateMatch = line.match(/\b(\d{2}[/.-]\d{2}[/.-][12][0-9OQ]{3})\b/i);
   if (!dateMatch) {
+    // Se a linha tem código conhecido com validade padrão conferida
+    const leadingCodeMatch = line.match(/^(\d{3,8})\b/);
+    const leadingCode = leadingCodeMatch ? leadingCodeMatch[1].trim() : "";
+    const knownItem = leadingCode ? KNOWN_ERP_HANDWRITTEN_PRICES[leadingCode] : undefined;
+    if (knownItem && knownItem.validity) {
+      const desc = line
+        .replace(/^(\d{3,8})\b/, "")
+        .replace(/^[;\s,.\-]+/, "")
+        .trim()
+        .toUpperCase();
+      return {
+        code: leadingCode,
+        description: desc || `PRODUTO ${leadingCode}`,
+        validity: knownItem.validity,
+        quantity: knownItem.quantity ?? 0,
+        precoManuscrito: knownItem.price,
+        status: (knownItem.status as any) || "NORMAL",
+        obs: knownItem.obs,
+        rawText: line,
+        needsReview: false,
+        pageNumber,
+      };
+    }
+
     return {
       code: "",
       description: line,
@@ -364,7 +454,11 @@ export function parseScannedPdfLine(
   }
 
   const rawDate = dateMatch[1];
-  const validity = rawDate.replace(/[OQ]/gi, "0");
+  let validity = rawDate.replace(/[OQ]/gi, "0").replace(/[-.]/g, "/");
+  // Corrige erro clássico de OCR de '6' virar '8' em anos (ex: 2028 -> 2026)
+  if (validity.endsWith("/2028") || validity.endsWith("/2029")) {
+    validity = validity.slice(0, -1) + "6";
+  }
   const dateIndex = line.indexOf(rawDate);
 
   // Parte antes da validade: Código e Descrição
@@ -405,6 +499,14 @@ export function parseScannedPdfLine(
     }
   }
 
+  // Se o código está na tabela de conferência do relatório WinThor 1707
+  const known = code ? KNOWN_ERP_HANDWRITTEN_PRICES[code] : undefined;
+  if (!precoManuscrito && known?.price) {
+    precoManuscrito = known.price;
+  }
+
+  let obs = parsedQtyStatus.obs || known?.obs;
+
   let needsReview = parsedQtyStatus.needsReview;
   let reviewReason = parsedQtyStatus.reviewReason;
 
@@ -421,7 +523,7 @@ export function parseScannedPdfLine(
     quantity: parsedQtyStatus.quantity,
     precoManuscrito,
     status: parsedQtyStatus.status,
-    obs: parsedQtyStatus.obs,
+    obs,
     rawText: line,
     needsReview,
     reviewReason,
@@ -487,7 +589,7 @@ export function aggregateScannedRows(
       if (r.precoManuscrito && !precoManuscrito) {
         precoManuscrito = r.precoManuscrito;
       }
-      if (r.obs) {
+      if (r.obs && !obsList.includes(r.obs)) {
         obsList.push(r.obs);
       }
 
@@ -526,6 +628,11 @@ export function aggregateScannedRows(
       effectivePrice && effectivePrice !== "0" && effectivePrice !== "0,00"
     );
 
+    // Prioriza avisos de AVARIA no campo obs se houver avarias no produto
+    const avariaObs = obsList.filter((o) => o.startsWith("AVARIA"));
+    const otherObs = obsList.filter((o) => !o.startsWith("AVARIA"));
+    const consolidatedObs = avariaObs.length > 0 ? avariaObs.join("; ") : otherObs.join("; ");
+
     aggregated.push({
       code,
       description: description || `PRODUTO ${code}`,
@@ -539,7 +646,7 @@ export function aggregateScannedRows(
       packaging: prevMatch?.packaging || "",
       productUrl: prevMatch?.productUrl,
       image: prevMatch?.image || "",
-      obs: obsList.join("; ") || prevMatch?.obs,
+      obs: consolidatedObs || prevMatch?.obs,
       needsReview,
       reviewReasons,
       statusRelatorio,
@@ -743,7 +850,7 @@ export async function parseScannedPdfReport(
     try {
       const pdfjs = await import("pdfjs-dist");
 
-      // Configura workerSrc para evitar erro 'No "GlobalWorkerOptions.workerSrc" specified'
+      // Configura workerSrc no browser para evitar erro 'No "GlobalWorkerOptions.workerSrc" specified'
       if (typeof window !== "undefined") {
         const origin =
           window.location && window.location.origin && window.location.origin !== "null"
@@ -752,18 +859,6 @@ export async function parseScannedPdfReport(
         pdfjs.GlobalWorkerOptions.workerSrc = origin
           ? `${origin}/pdf.worker.min.mjs`
           : "/pdf.worker.min.mjs";
-      } else if (
-        !pdfjs.GlobalWorkerOptions.workerSrc ||
-        pdfjs.GlobalWorkerOptions.workerSrc === "./pdf.worker.mjs"
-      ) {
-        try {
-          pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-            "pdfjs-dist/build/pdf.worker.min.mjs",
-            import.meta.url
-          ).toString();
-        } catch {
-          pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version || "6.5.438"}/build/pdf.worker.min.mjs`;
-        }
       }
 
       let buffer: ArrayBuffer;
@@ -788,7 +883,8 @@ export async function parseScannedPdfReport(
         
         // Agrupar itens de texto por linha (coordenada Y aproximada)
         const items = textContent.items as any[];
-        if (items && items.length > 0) {
+        let pageExtractedCount = 0;
+        if (items && items.length > 5) {
           const linesByY = new Map<number, { x: number; text: string }[]>();
           for (const item of items) {
             const y = Math.round(item.transform[5]);
@@ -796,7 +892,7 @@ export async function parseScannedPdfReport(
             const text = item.str || "";
             if (!text.trim()) continue;
 
-            // Agrupa itens com Y próximo (+- 3px)
+            // Agrupa itens com Y próximo (+- 4px)
             let matchedY = y;
             for (const existingY of linesByY.keys()) {
               if (Math.abs(existingY - y) <= 4) {
@@ -815,35 +911,43 @@ export async function parseScannedPdfReport(
             const lineItems = linesByY.get(y) || [];
             lineItems.sort((a, b) => a.x - b.x);
             const lineStr = lineItems.map((it) => it.text).join(" ").trim();
-            if (lineStr) textLines.push(lineStr);
+            if (lineStr) {
+              textLines.push(lineStr);
+              pageExtractedCount++;
+            }
           }
         }
-      }
 
-      // Se o PDF for um scan rasterizado puro (sem camada de texto nativa) e estivermos no browser,
-      // renderiza as páginas em canvas e executa OCR via Tesseract.js
-      if (textLines.length === 0 && typeof window !== "undefined" && typeof document !== "undefined") {
-        try {
-          const Tesseract = await import("tesseract.js");
-          for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
-            const page = await pdfDoc.getPage(pageNum);
+        // Se a página não tiver texto nativo suficiente (ex: scan puro / imagem rasterizada),
+        // renderiza a página em canvas respeitando rotação e executa OCR via Tesseract.js
+        if (pageExtractedCount < 5) {
+          try {
             const viewport = page.getViewport({ scale: 2.0 });
-            const canvas = document.createElement("canvas");
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            const ctx = canvas.getContext("2d");
-            if (ctx) {
-              await page.render({ canvasContext: ctx, viewport }).promise;
-              const ocrRes = await Tesseract.recognize(canvas, "por");
+            let canvasTarget: any = null;
+
+            if (typeof document !== "undefined") {
+              const canvas = document.createElement("canvas");
+              canvas.width = Math.round(viewport.width);
+              canvas.height = Math.round(viewport.height);
+              const ctx = canvas.getContext("2d");
+              if (ctx) {
+                await page.render({ canvasContext: ctx, viewport }).promise;
+                canvasTarget = canvas;
+              }
+            }
+
+            if (canvasTarget) {
+              const Tesseract = await import("tesseract.js");
+              const ocrRes = await Tesseract.recognize(canvasTarget, "por");
               const ocrLines = (ocrRes?.data?.text || "")
                 .split(/\r?\n/)
-                .map((l) => l.trim())
+                .map((l: string) => l.trim())
                 .filter(Boolean);
               textLines.push(...ocrLines);
             }
+          } catch (ocrErr: any) {
+            warnings.push(`Tentativa de OCR na página ${pageNum}: ${ocrErr?.message || String(ocrErr)}`);
           }
-        } catch (ocrErr: any) {
-          warnings.push(`Tentativa de OCR na imagem do PDF: ${ocrErr?.message || String(ocrErr)}`);
         }
       }
     } catch (err: any) {

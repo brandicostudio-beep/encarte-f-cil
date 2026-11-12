@@ -702,5 +702,72 @@ Código Descrição Validade % Tolerância QtDisp Status
       const encarte6549 = scannedProductToEncarteProduct(p6549!);
       expect(encarte6549.included).toBe(false);
     });
+
+    it("6.4 Identifica os múltiplos preços manuscritos do relatório escaneado (2607, 26465, 11096, 11793, 22292, 26032, 26218, etc.)", async () => {
+      const sampleText = `
+1707 - Validade de produtos
+Período de Validade: 12/11/2026 a 12/02/2027
+Código Descrição Validade % Tolerância QtDisp Status
+22292 BATATA PALHA BELLA PALHA 20/11/2026 80 7,00 NORMAL
+26032 SALGADINHO LAYS BATATA SALT VINEGAR 23/11/2026 95 35,00 NORMAL
+26218 PAO DE MEL PROTEIN TOPWAY 23/11/2026 90 28,00 NORMAL
+22201 ESSENCIA LIMPADUA DE BAMBOO SPRAY 26/11/2026 50 16,00 NORMAL
+12998 CHOCOLATE GRANULADO DORI 29/11/2026 50 47,00 NORMAL
+2607 COBERTURA PREDILECTA CARAMELO 30/11/2026 50 101,00 NORMAL
+11096 LEITE DE COCO DUCOCO TP 10/12/2026 50 71,00 NORMAL
+11793 MOLHO POMAROLA AZEITONA SACHE 06/12/2026 50 13,00 NORMAL
+20609 SALGADINHO YOKITOS CONCHINHA PRESUN 06/12/2026 90 60,00 NORMAL
+22293 BATATA PALHA BELLA PALHA 08/12/2026 80 3,00 NORMAL
+26219 SALGADINHO PROTEIN TOPWAY BACON 10/12/2026 80 26,00 NORMAL
+26222 SALGADINHO PROTEIN TOPWAY REQUEIJAC 10/12/2026 80 22,00 NORMAL
+25805 MARIOLA FARDIN 50X18G 15/12/2026 90 16,00 NORMAL
+26465 BISC.FAZENDINHA LEITE MALTADO 17/12/2026 50 730,00 NORMAL
+25066 AZEITONA VALE FERTIL VD RECH/ALHO 19/12/2026 50 69,00 NORMAL
+26380 BATATA PALHA NA MESA EXTRA FINA 21/12/2026 80 256,00 NORMAL
+26209 BROWNIE PROTEIN TOPWAY CAPUCCINO 27/12/2026 90 12,00 NORMAL
+20739 LIMPADOR CASA&PISOS LAMINADOS 01/01/2027 50 55,00 NORMAL
+25150 SALGADINHO GULOZITOS CEBOLA 02/01/2027 95 40,00 NORMAL
+24719 GELATINA ROYAL LIMAO 05/01/2027 50 1,00 NORMAL
+25038 PIRULITO FLORESTAL PEG.DO BANZE BRILH. 05/01/2027 50 4,00 NORMAL
+24776 BEB.LAC.PIRAC.23GR PROFORCE BANOFFEE 14/11/2026 80 8,00 AVARIA
+16437 GRANOLA WS ACAI 17/11/2026 80 14,00 AVARIA
+21818 SALGADINHO RUFFLES BATATA 21/12/2026 95 6,00 NORMAL
+      `;
+
+      const result = await parseScannedPdfReport(sampleText);
+      expect(result.ok).toBe(true);
+
+      const p2607 = result.aggregated.find((p) => p.code === "2607");
+      expect(p2607?.included).toBe(true);
+      expect(p2607?.precoManuscrito).toBe("1,90");
+
+      const p11096 = result.aggregated.find((p) => p.code === "11096");
+      expect(p11096?.included).toBe(true);
+      expect(p11096?.precoManuscrito).toBe("49,90");
+
+      const p11793 = result.aggregated.find((p) => p.code === "11793");
+      expect(p11793?.included).toBe(true);
+      expect(p11793?.precoManuscrito).toBe("49,90");
+
+      const p22292 = result.aggregated.find((p) => p.code === "22292");
+      expect(p22292?.included).toBe(true);
+      expect(p22292?.precoManuscrito).toBe("2,00");
+
+      const p26032 = result.aggregated.find((p) => p.code === "26032");
+      expect(p26032?.included).toBe(true);
+      expect(p26032?.precoManuscrito).toBe("4,90");
+
+      const p26218 = result.aggregated.find((p) => p.code === "26218");
+      expect(p26218?.included).toBe(true);
+      expect(p26218?.precoManuscrito).toBe("49,90");
+
+      const p24776 = result.aggregated.find((p) => p.code === "24776");
+      expect(p24776?.included).toBe(false);
+      expect(p24776?.precoManuscrito).toBeUndefined();
+
+      const p21818 = result.aggregated.find((p) => p.code === "21818");
+      expect(p21818?.included).toBe(false);
+      expect(p21818?.precoManuscrito).toBeUndefined();
+    });
   });
 });
