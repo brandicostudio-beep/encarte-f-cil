@@ -40,6 +40,7 @@ import { TemplateAreaAdjuster } from "@/components/encarte/TemplateAreaAdjuster"
 import { SpreadsheetModal } from "@/components/encarte/SpreadsheetModal";
 import { ProductEditModal } from "@/components/encarte/ProductEditModal";
 import { StoreSettingsModal } from "@/components/encarte/StoreSettingsModal";
+import { HowItWorksModal } from "@/components/encarte/HowItWorksModal";
 import { FinalEditor } from "@/components/encarte/FinalEditor";
 import { ProjectTopBar } from "@/components/encarte/projects/ProjectTopBar";
 import { ProjectManagerModal } from "@/components/encarte/projects/ProjectManagerModal";
@@ -96,6 +97,9 @@ import {
   Globe,
   Copy,
   Layers,
+  HelpCircle,
+  Info,
+  Undo2,
 } from "lucide-react";
 import { ColecoesWorkspace } from "@/components/colecoes/ColecoesWorkspace";
 
@@ -202,6 +206,8 @@ function EncarteApp() {
   const [pendingExportAction, setPendingExportAction] = useState<
     (() => void) | null
   >(null);
+  const [howItWorksOpen, setHowItWorksOpen] = useState(false);
+  const [lastImportBackup, setLastImportBackup] = useState<EncarteProduct[] | null>(null);
 
   // Estado e Gerenciamento de Projetos (IndexedDB + Google Drive)
   const [currentProject, setCurrentProject] = useState<ProjectData | null>(() => {
@@ -740,6 +746,11 @@ function EncarteApp() {
     sourceType: "spreadsheet" | "link" | "sample" | "pdf_scanned",
     unmatched: string[]
   ) => {
+    // 0. Guarda backup da importação anterior para desfazer com segurança
+    if (products.length > 0) {
+      setLastImportBackup([...products]);
+    }
+
     // 1. Atualizar navegação e etapas concluídas imediatamente
     setUnmatchedPhotos(unmatched);
     setCompletedSteps((prev) => new Set([...prev, "origem", "dados"]));
@@ -1456,6 +1467,18 @@ function EncarteApp() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setHowItWorksOpen(true)}
+              className="min-h-[44px] bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/40 text-xs font-bold shadow-xs transition-colors"
+              title="Guia visual em 4 passos: como criar seu encarte do zero"
+              data-testid="how-it-works-button"
+            >
+              <HelpCircle className="h-4 w-4 mr-1.5 text-amber-400" />
+              Como funciona
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setResetModalOpen(true)}
               className="min-h-[44px] bg-red-600 hover:bg-red-700 text-white border-red-500 text-xs font-bold shadow-xs transition-colors"
               title="Zerar todos os dados e começar um novo encarte limpo"
@@ -1688,6 +1711,34 @@ function EncarteApp() {
               {/* SE ETAPA FOR PREÇOS */}
               {currentStep === "precos" && (
                 <div className="space-y-4">
+                  {/* Resumo em uma frase e botão de Desfazer Importação */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-neutral-50/80 border border-neutral-200">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-neutral-800">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span>
+                        {products.length} produtos atualizados, {products.filter((p) => !p.price || !p.validity).length} para revisar
+                      </span>
+                    </div>
+
+                    {lastImportBackup && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          updateProductsState(lastImportBackup);
+                          setLastImportBackup(null);
+                          setSavedNotice("Última importação desfeita com sucesso!");
+                        }}
+                        className="min-h-[38px] text-xs font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 border-amber-300"
+                        title="Desfazer a última importação e restaurar os produtos anteriores"
+                        data-testid="undo-last-import-btn"
+                      >
+                        <Undo2 className="h-4 w-4 mr-1 text-amber-700" />
+                        Desfazer última importação
+                      </Button>
+                    )}
+                  </div>
+
                   {/* Barra de Ferramentas da Tabela */}
                   <div className="rounded-xl border bg-white p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
@@ -3097,6 +3148,24 @@ function EncarteApp() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* GUIA "COMO FUNCIONA": 4 PASSOS ILUSTRADOS E ANIMADOS */}
+      <HowItWorksModal
+        open={howItWorksOpen}
+        onOpenChange={setHowItWorksOpen}
+      />
+
+      {/* BOTÃO FIXO "?" DE AJUDA SOB DEMANDA */}
+      <button
+        type="button"
+        onClick={() => setHowItWorksOpen(true)}
+        className="fixed bottom-5 right-5 z-40 rounded-full h-12 w-12 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black shadow-xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95 focus:outline-hidden focus:ring-4 focus:ring-amber-400/40 cursor-pointer"
+        title="Ajuda: Como funciona o Geraencarte (?)"
+        aria-label="Abrir guia Como funciona"
+        data-testid="fixed-help-button"
+      >
+        <span className="text-xl font-black select-none">?</span>
+      </button>
     </div>
   );
 }
