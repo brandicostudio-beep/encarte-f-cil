@@ -60,8 +60,8 @@ export const ScannedPdfInventorySection: React.FC<ScannedPdfInventorySectionProp
   const [siteSuccessInfo, setSiteSuccessInfo] = useState<string | null>(null);
   const [fetchedSiteProducts, setFetchedSiteProducts] = useState<EncarteProduct[]>([]);
 
-  // Filtro de visualização (todos vs apenas em revisão)
-  const [viewFilter, setViewFilter] = useState<"todos" | "revisao">("todos");
+  // Filtro de visualização (com_preco por padrão, todos, revisao, sem_preco)
+  const [viewFilter, setViewFilter] = useState<"com_preco" | "todos" | "revisao" | "sem_preco">("com_preco");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -158,7 +158,14 @@ export const ScannedPdfInventorySection: React.FC<ScannedPdfInventorySectionProp
     setAggregatedProducts(updated);
   };
 
-  // Edição manual de campos de um produto em revisão
+  // Alternar inclusão individual do produto
+  const handleToggleIncluded = (code: string) => {
+    setAggregatedProducts((prev) =>
+      prev.map((p) => (p.code === code ? { ...p, included: !p.included } : p))
+    );
+  };
+
+  // Edição manual de campos de um produto em revisão ou ajuste
   const handleUpdateProductField = (
     code: string,
     field: "description" | "validity" | "totalStock" | "price",
@@ -167,6 +174,16 @@ export const ScannedPdfInventorySection: React.FC<ScannedPdfInventorySectionProp
     setAggregatedProducts((prev) =>
       prev.map((p) => {
         if (p.code !== code) return p;
+        if (field === "price") {
+          const cleanPrice = String(value || "").trim();
+          const hasValidPrice = cleanPrice !== "" && cleanPrice !== "0" && cleanPrice !== "0,00";
+          return {
+            ...p,
+            price: cleanPrice,
+            precoManuscrito: hasValidPrice ? cleanPrice : p.precoManuscrito,
+            included: hasValidPrice ? true : p.included, // Ao digitar preço, inclui automaticamente!
+          };
+        }
         if (field === "totalStock") {
           const qty = parseInt(value, 10) || 0;
           return {
@@ -187,21 +204,50 @@ export const ScannedPdfInventorySection: React.FC<ScannedPdfInventorySectionProp
     );
   };
 
-  // Confirmar e aplicar ao Encarte de Validade
+  // Confirmar e aplicar ao Encarte de Validade (só puxa as com preço na frente; sem preço desconsidera)
   const handleApplyToEncarte = () => {
     if (aggregatedProducts.length === 0) return;
 
-    // Converte os produtos agregados para o formato final EncarteProduct
+    // Regra do usuário: só deve puxar as que estão com preço na frente. As que estão sem, não considerar.
     const encarteProducts = aggregatedProducts
-      .filter((p) => p.statusRelatorio !== "fora_do_ultimo_relatorio")
+      .filter(
+        (p) =>
+          p.statusRelatorio !== "fora_do_ultimo_relatorio" &&
+          p.included &&
+          Boolean(p.price || p.precoManuscrito)
+      )
       .map(scannedProductToEncarteProduct);
+
+    if (encarteProducts.length === 0) {
+      setErrors([
+        "Nenhum produto com preço está selecionado para o encarte. Digite o preço na coluna 'Preço Manuscrito' dos produtos que deseja puxar.",
+      ]);
+      return;
+    }
 
     onDataLoaded(encarteProducts, "pdf_scanned", []);
   };
 
+  const withPriceCount = aggregatedProducts.filter(
+    (p) => Boolean(p.price || p.precoManuscrito) && p.statusRelatorio !== "fora_do_ultimo_relatorio"
+  ).length;
+  const withoutPriceCount = aggregatedProducts.filter(
+    (p) => !p.price && !p.precoManuscrito && p.statusRelatorio !== "fora_do_ultimo_relatorio"
+  ).length;
   const reviewItemsCount = aggregatedProducts.filter((p) => p.needsReview).length;
+  const includedCount = aggregatedProducts.filter(
+    (p) =>
+      p.included &&
+      Boolean(p.price || p.precoManuscrito) &&
+      p.statusRelatorio !== "fora_do_ultimo_relatorio"
+  ).length;
+
   const filteredProducts =
-    viewFilter === "revisao"
+    viewFilter === "com_preco"
+      ? aggregatedProducts.filter((p) => Boolean(p.price || p.precoManuscrito))
+      : viewFilter === "sem_preco"
+      ? aggregatedProducts.filter((p) => !p.price && !p.precoManuscrito)
+      : viewFilter === "revisao"
       ? aggregatedProducts.filter((p) => p.needsReview)
       : aggregatedProducts;
 
@@ -303,7 +349,12 @@ export const ScannedPdfInventorySection: React.FC<ScannedPdfInventorySectionProp
             <div className="flex items-center gap-4 text-xs text-neutral-300">
               <span>Páginas: {metadata.totalPages}</span>
               <span>Linhas lidas: {metadata.totalRows}</span>
-              <span>Válidas: {metadata.validRows}</span>
+              <span className="text-emerald-400 font-bold">
+                Com preço na frente: {metadata.productsWithPrice ?? withPriceCount}
+              </span>
+              <span className="text-neutral-400">
+                Sem preço (desconsiderados): {metadata.productsWithoutPrice ?? withoutPriceCount}
+              </span>
               {metadata.reviewRows > 0 && (
                 <span className="text-amber-400 font-bold">
                   Revisão pendente: {metadata.reviewRows}
@@ -380,21 +431,37 @@ export const ScannedPdfInventorySection: React.FC<ScannedPdfInventorySectionProp
             <div>
               <h4 className="font-bold text-sm text-neutral-900 flex items-center gap-2">
                 <FileText className="h-4 w-4 text-neutral-700" />
-                Produtos do Relatório ({aggregatedProducts.length} itens)
+                Produtos do Relatório ({aggregatedProducts.length} itens lidos)
               </h4>
               <p className="text-xs text-neutral-500">
-                Estoque somado por código. Cada código exibe suas validades correspondentes.
+                Apenas produtos com preço na frente são puxados para o encarte. Os itens sem preço são desconsiderados.
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <Button
                 size="sm"
-                variant={viewFilter === "todos" ? "default" : "outline"}
-                onClick={() => setViewFilter("todos")}
-                className={`text-xs h-8 ${viewFilter === "todos" ? "bg-neutral-900" : ""}`}
+                variant={viewFilter === "com_preco" ? "default" : "outline"}
+                onClick={() => setViewFilter("com_preco")}
+                className={`text-xs h-8 ${
+                  viewFilter === "com_preco"
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700 font-bold"
+                    : "border-neutral-300 text-neutral-700"
+                }`}
               >
-                Todos ({aggregatedProducts.length})
+                Com Preço ({withPriceCount})
+              </Button>
+              <Button
+                size="sm"
+                variant={viewFilter === "sem_preco" ? "default" : "outline"}
+                onClick={() => setViewFilter("sem_preco")}
+                className={`text-xs h-8 ${
+                  viewFilter === "sem_preco"
+                    ? "bg-neutral-800 text-white"
+                    : "border-neutral-300 text-neutral-500"
+                }`}
+              >
+                Sem Preço ({withoutPriceCount})
               </Button>
               <Button
                 size="sm"
@@ -402,13 +469,23 @@ export const ScannedPdfInventorySection: React.FC<ScannedPdfInventorySectionProp
                 onClick={() => setViewFilter("revisao")}
                 className={`text-xs h-8 ${
                   viewFilter === "revisao"
-                    ? "bg-amber-600 text-white hover:bg-amber-700"
+                    ? "bg-amber-600 text-white hover:bg-amber-700 font-bold"
                     : reviewItemsCount > 0
                     ? "border-amber-400 text-amber-800 bg-amber-50"
-                    : ""
+                    : "border-neutral-300 text-neutral-700"
                 }`}
               >
-                Revisão Pendente ({reviewItemsCount})
+                Revisão ({reviewItemsCount})
+              </Button>
+              <Button
+                size="sm"
+                variant={viewFilter === "todos" ? "default" : "outline"}
+                onClick={() => setViewFilter("todos")}
+                className={`text-xs h-8 ${
+                  viewFilter === "todos" ? "bg-neutral-900 text-white" : "border-neutral-300 text-neutral-700"
+                }`}
+              >
+                Todos ({aggregatedProducts.length})
               </Button>
             </div>
           </div>
@@ -418,6 +495,7 @@ export const ScannedPdfInventorySection: React.FC<ScannedPdfInventorySectionProp
             <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-neutral-100 text-neutral-700 font-bold sticky top-0 z-10 border-b border-neutral-200">
                 <tr>
+                  <th className="py-2.5 px-3 w-16 text-center">Puxar</th>
                   <th className="py-2.5 px-3">Status</th>
                   <th className="py-2.5 px-3">Código</th>
                   <th className="py-2.5 px-3">Descrição (PDF / Site)</th>
@@ -431,13 +509,29 @@ export const ScannedPdfInventorySection: React.FC<ScannedPdfInventorySectionProp
               <tbody className="divide-y divide-neutral-200">
                 {filteredProducts.map((p) => {
                   const isReview = p.needsReview;
+                  const hasPrice = Boolean(p.price || p.precoManuscrito);
                   return (
                     <tr
                       key={p.code}
                       className={`hover:bg-neutral-50/80 transition-colors ${
-                        isReview ? "bg-amber-50/40" : ""
+                        isReview ? "bg-amber-50/40" : !hasPrice ? "opacity-60 bg-neutral-50/30" : ""
                       }`}
                     >
+                      {/* Checkbox de Inclusão no Encarte */}
+                      <td className="py-2.5 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(p.included)}
+                          onChange={() => handleToggleIncluded(p.code)}
+                          className="h-4 w-4 rounded border-neutral-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          title={
+                            p.included
+                              ? "Produto incluído para puxar ao encarte"
+                              : "Produto desconsiderado (não será puxado)"
+                          }
+                        />
+                      </td>
+
                       {/* Badge do Status do Relatório */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
                         {p.statusRelatorio === "fora_do_ultimo_relatorio" ? (
@@ -571,12 +665,20 @@ export const ScannedPdfInventorySection: React.FC<ScannedPdfInventorySectionProp
                             onChange={(e) =>
                               handleUpdateProductField(p.code, "price", e.target.value)
                             }
-                            className="w-16 bg-transparent border-b border-transparent hover:border-neutral-300 focus:border-red-600 focus:bg-white px-1 py-0.5 text-xs font-mono font-bold outline-hidden"
+                            className={`w-20 bg-transparent border-b px-1 py-0.5 text-xs font-mono font-bold outline-hidden ${
+                              hasPrice
+                                ? "border-emerald-500 text-emerald-700 bg-emerald-50/30"
+                                : "border-neutral-300 text-neutral-400 focus:border-red-600 focus:bg-white"
+                            }`}
                           />
                         </div>
-                        {p.precoManuscrito && (
-                          <span className="text-[10px] text-amber-700 block font-sans">
+                        {p.precoManuscrito ? (
+                          <span className="text-[10px] font-bold text-emerald-700 block font-sans">
                             manuscrito: R$ {p.precoManuscrito}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-neutral-400 block font-sans">
+                            Sem preço (desconsiderado)
                           </span>
                         )}
                       </td>
@@ -614,20 +716,25 @@ export const ScannedPdfInventorySection: React.FC<ScannedPdfInventorySectionProp
           {/* Rodapé da tabela com botão de aplicar */}
           <div className="p-4 bg-neutral-50 border-t border-neutral-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="text-xs text-neutral-600">
-              <span>
-                {aggregatedProducts.filter((p) => p.statusRelatorio !== "fora_do_ultimo_relatorio").length}{" "}
-                produtos ativos serão inseridos ou atualizados no encarte.
+              <span className="font-medium">
+                <strong className="text-emerald-700 font-bold">{includedCount}</strong> produto(s) com preço na frente serão puxados para o encarte.
               </span>
+              {withoutPriceCount > 0 && (
+                <span className="text-neutral-500 block text-[11px] mt-0.5">
+                  {withoutPriceCount} produto(s) sem preço desconsiderados automaticamente (não irão para o encarte).
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
               <Button
                 type="button"
+                disabled={includedCount === 0}
                 onClick={handleApplyToEncarte}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-4"
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs h-9 px-4 shadow-xs"
               >
                 <Check className="h-4 w-4 mr-1.5" />
-                Confirmar e Aplicar ao Encarte de Validade
+                Confirmar e Puxar {includedCount} Produtos com Preço para o Encarte
               </Button>
             </div>
           </div>

@@ -662,5 +662,45 @@ Código Descrição Validade % Tolerância QtDisp Status
       const p23054 = result.aggregated.find((p) => p.code === "23054");
       expect(p23054?.totalStock).toBe(10);
     });
+
+    it("6.3 Só puxa os produtos com preço na frente; os sem preço não devem ser considerados (included: false)", async () => {
+      const reportText = `
+1707 - Validade de produtos
+Período de Validade: 12/11/2026 a 12/02/2027
+Código Descrição Validade % Tolerância QtDisp Status
+26465 BISC.FAZENDINHA LEITE MALTADO 17/12/2026 50 1,99 440,00 NORMAL
+6549 OLEO MILHO SINHA 18/12/2026 85 91,00 NORMAL
+21818 SALGADINHO RUFFLES BATATA 21/12/2026 95 6,00 NORMAL
+22694 MARIA MOLE MORANGO APTI 30/12/2026 50 5,00 43,00 NORMAL
+      `;
+
+      const result = await parseScannedPdfReport(reportText);
+      expect(result.ok).toBe(true);
+      expect(result.metadata.productsWithPrice).toBe(2);
+      expect(result.metadata.productsWithoutPrice).toBe(2);
+
+      const p26465 = result.aggregated.find((p) => p.code === "26465");
+      expect(p26465?.included).toBe(true);
+      expect(p26465?.precoManuscrito).toBe("1,99");
+
+      const p22694 = result.aggregated.find((p) => p.code === "22694");
+      expect(p22694?.included).toBe(true);
+      expect(p22694?.precoManuscrito).toBe("5,00");
+
+      const p6549 = result.aggregated.find((p) => p.code === "6549");
+      expect(p6549?.included).toBe(false);
+      expect(p6549?.precoManuscrito).toBeUndefined();
+
+      const p21818 = result.aggregated.find((p) => p.code === "21818");
+      expect(p21818?.included).toBe(false);
+      expect(p21818?.precoManuscrito).toBeUndefined();
+
+      // Ao converter para EncarteProduct:
+      const encarte26465 = scannedProductToEncarteProduct(p26465!);
+      expect(encarte26465.included).toBe(true);
+
+      const encarte6549 = scannedProductToEncarteProduct(p6549!);
+      expect(encarte6549.included).toBe(false);
+    });
   });
 });

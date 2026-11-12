@@ -756,8 +756,14 @@ function EncarteApp() {
     setCompletedSteps((prev) => new Set([...prev, "origem", "dados"]));
     navigateToStep("precos");
 
+    // Regra: se a fonte for pdf_scanned, só puxa os produtos com preço na frente; os sem preço não considerar
+    const itemsToLoad =
+      sourceType === "pdf_scanned"
+        ? loaded.filter((p) => p.included !== false && Boolean(p.price || p.precoManuscrito))
+        : loaded;
+
     // 2. Persistir lista de produtos no estado de forma resiliente (ordenados por validade)
-    const sorted = sortProductsByValidityAsc(loaded);
+    const sorted = sortProductsByValidityAsc(itemsToLoad);
     try {
       updateProductsState(sorted);
     } catch (err) {

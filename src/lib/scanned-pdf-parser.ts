@@ -25,6 +25,8 @@ export interface ScannedPdfReportMetadata {
   totalRows: number;
   validRows: number;
   reviewRows: number;
+  productsWithPrice?: number;
+  productsWithoutPrice?: number;
   fileHash?: string;
 }
 
@@ -383,6 +385,21 @@ export function parseScannedPdfLine(
   // Analisar quantidade e status após a validade
   const parsedQtyStatus = parseQuantityAndStatusCell(afterDate);
 
+  let precoManuscrito = parsedQtyStatus.precoManuscrito;
+
+  // Se não encontrou preço na célula de quantidade, verifica se foi manuscrito antes da data
+  // (ex: "26465 BISC.FAZENDINHA 1,99 17/12/2026" ou "26465 1,99 BISC.FAZENDINHA")
+  if (!precoManuscrito) {
+    const priceBeforeMatch = beforeDate.match(/(?:R\$\s*)?(\b\d{1,3}[.,]\d{2}\b)/i);
+    if (priceBeforeMatch) {
+      precoManuscrito = formatPrice(priceBeforeMatch[1]);
+      description = description
+        .replace(priceBeforeMatch[0], "")
+        .replace(/^[;\s,.\-]+|[;\s,.\-]+$/g, "")
+        .trim();
+    }
+  }
+
   let needsReview = parsedQtyStatus.needsReview;
   let reviewReason = parsedQtyStatus.reviewReason;
 
@@ -397,7 +414,7 @@ export function parseScannedPdfLine(
     description,
     validity,
     quantity: parsedQtyStatus.quantity,
-    precoManuscrito: parsedQtyStatus.precoManuscrito,
+    precoManuscrito,
     status: parsedQtyStatus.status,
     obs: parsedQtyStatus.obs,
     rawText: line,
@@ -499,6 +516,11 @@ export function aggregateScannedRows(
     const prevMatch = previousProducts.find((p) => p.code.trim() === code);
     const statusRelatorio = prevMatch ? "atualizado" : "novo";
 
+    const effectivePrice = precoManuscrito || prevMatch?.precoManuscrito || prevMatch?.price || "";
+    const hasPrice = Boolean(
+      effectivePrice && effectivePrice !== "0" && effectivePrice !== "0,00"
+    );
+
     aggregated.push({
       code,
       description: description || `PRODUTO ${code}`,
@@ -506,7 +528,7 @@ export function aggregateScannedRows(
       validityEntries,
       totalStock,
       precoManuscrito: precoManuscrito || prevMatch?.precoManuscrito,
-      price: precoManuscrito || prevMatch?.price || "",
+      price: effectivePrice,
       unit: prevMatch?.unit || "UND",
       unitSource: prevMatch?.unitSource || "padrao",
       packaging: prevMatch?.packaging || "",
@@ -518,7 +540,7 @@ export function aggregateScannedRows(
       statusRelatorio,
       reportDate,
       originalSnippets,
-      included: true,
+      included: hasPrice, // Regra: só deve puxar as que estão com preço na frente; as que estão sem, não considerar
     });
   }
 
@@ -666,7 +688,7 @@ export function scannedProductToEncarteProduct(
     stock: stockStr,
     badge: "nenhum",
     image: p.image || "",
-    included: p.included !== false,
+    included: p.included !== false && Boolean(p.price || p.precoManuscrito),
     productUrl: p.productUrl,
     precoManuscrito: p.precoManuscrito,
     obs: p.obs,
@@ -838,6 +860,13 @@ export async function parseScannedPdfReport(
 
   // 3. Agregar por código e comparar com produtos anteriores
   const aggregated = aggregateScannedRows(rows, previousProducts, metadata.reportDate);
+
+  metadata.productsWithPrice = aggregated.filter(
+    (p) => p.included && Boolean(p.precoManuscrito || p.price)
+  ).length;
+  metadata.productsWithoutPrice = aggregated.filter(
+    (p) => !p.precoManuscrito && !p.price
+  ).length;
 
   return {
     ok: aggregated.length > 0,
