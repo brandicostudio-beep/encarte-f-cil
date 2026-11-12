@@ -137,9 +137,10 @@ export const ScannedPdfInventorySection: React.FC<ScannedPdfInventorySectionProp
       const updated = enrichProductsWithSiteData(aggregatedProducts, allExtracted, manualUnits);
       setAggregatedProducts(updated);
 
-      const matchedCount = updated.filter((p) => p.unitSource === "site").length;
+      const photosCount = updated.filter((p) => Boolean(p.image)).length;
+      const matchedCount = updated.filter((p) => p.unitSource === "site" || Boolean(p.image)).length;
       setSiteSuccessInfo(
-        `${allExtracted.length} itens encontrados no site. ${matchedCount} produtos do relatório enriquecidos com unidade de venda e embalagem.`
+        `${allExtracted.length} itens encontrados no site. ${matchedCount} produtos do relatório enriquecidos com fotos, unidade e embalagem (${photosCount} com foto carregada).`
       );
     } catch (err: any) {
       setErrors([`Erro ao consultar o site: ${err?.message || String(err)}`]);
@@ -496,6 +497,7 @@ export const ScannedPdfInventorySection: React.FC<ScannedPdfInventorySectionProp
               <thead className="bg-neutral-100 text-neutral-700 font-bold sticky top-0 z-10 border-b border-neutral-200">
                 <tr>
                   <th className="py-2.5 px-3 w-16 text-center">Puxar</th>
+                  <th className="py-2.5 px-2 w-12 text-center">Foto</th>
                   <th className="py-2.5 px-3">Status</th>
                   <th className="py-2.5 px-3">Código</th>
                   <th className="py-2.5 px-3">Descrição (PDF / Site)</th>
@@ -530,6 +532,21 @@ export const ScannedPdfInventorySection: React.FC<ScannedPdfInventorySectionProp
                               : "Produto desconsiderado (não será puxado)"
                           }
                         />
+                      </td>
+
+                      {/* Foto do Produto */}
+                      <td className="py-2 px-2 text-center whitespace-nowrap">
+                        {p.image ? (
+                          <img
+                            src={p.image}
+                            alt={p.description}
+                            className="w-10 h-10 object-contain rounded border border-neutral-200 bg-white shadow-2xs mx-auto"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded border border-dashed border-neutral-200 bg-neutral-50 flex items-center justify-center text-[9px] text-neutral-400 mx-auto font-medium">
+                            Sem foto
+                          </div>
+                        )}
                       </td>
 
                       {/* Badge do Status do Relatório */}

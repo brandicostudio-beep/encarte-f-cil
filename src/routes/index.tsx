@@ -830,13 +830,25 @@ function EncarteApp() {
     setResetModalOpen(false);
   };
 
-  // Conexão com a Server Function de categoria
+  // Conexão com a Server Function de categoria ou produto individual
   const handleExtractCategoryUrl = async (url: string) => {
-    const res = await extractCategory({ data: { url } });
-    if (!res.ok) {
-      return { ok: false, error: res.error };
+    try {
+      const res = await extractCategory({ data: { url } });
+      if (res.ok && res.products && res.products.length > 0) {
+        return { ok: true, products: res.products };
+      }
+      // Se não encontrou produtos como categoria, tenta como página de produto individual
+      const prodRes = await extractProduct({ data: { url } });
+      if (prodRes.ok && prodRes.product) {
+        return { ok: true, products: [prodRes.product] };
+      }
+      return {
+        ok: false,
+        error: res.error || prodRes.error || "Nenhum produto encontrado na URL informada.",
+      };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || "Erro ao consultar o site." };
     }
-    return { ok: true, products: res.products };
   };
 
   // Preenchimento em massa de preços pela planilha

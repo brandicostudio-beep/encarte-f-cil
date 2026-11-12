@@ -1,5 +1,10 @@
 import type { EncarteProduct } from "@/types/encarte";
-import { normalizeSaleUnit, deriveSaleUnit, formatPrice } from "./parse-product";
+import {
+  normalizeSaleUnit,
+  deriveSaleUnit,
+  formatPrice,
+  getThumbnailFallbackUrl,
+} from "./parse-product";
 
 export interface ScannedPdfRow {
   code: string;
@@ -614,7 +619,7 @@ export function enrichProductsWithSiteData(
     let unitSource = prod.unitSource;
     let packaging = prod.packaging;
     let productUrl = prod.productUrl || siteMatch?.productUrl;
-    let image = prod.image || siteMatch?.image || "";
+    let image = siteMatch?.image || prod.image || "";
     let description = prod.description;
     let needsReview = prod.needsReview;
     const reviewReasons = [...prod.reviewReasons];
@@ -639,6 +644,10 @@ export function enrichProductsWithSiteData(
       if ((!description || description.startsWith("PRODUTO ")) && siteMatch.name) {
         description = siteMatch.name;
       }
+      // Foto do produto vinda do site
+      if (siteMatch.image) {
+        image = siteMatch.image;
+      }
     } else {
       // 3. Sem unidade no site e sem correção manual
       if (unitSource !== "manual" && (!finalUnit || finalUnit === "UND" && !prod.packaging)) {
@@ -646,6 +655,15 @@ export function enrichProductsWithSiteData(
         if (!reviewReasons.includes("Unidade de venda ausente (verificar no site ou corrigir manualmente)")) {
           reviewReasons.push("Unidade de venda ausente (verificar no site ou corrigir manualmente)");
         }
+      }
+    }
+
+    // Se ainda não tem foto, tenta fallback oficial pelo código do produto
+    if (!image && prod.code) {
+      const cleanCode = prod.code.trim();
+      const fallbackUrl = getThumbnailFallbackUrl(cleanCode, productUrl || "cescom");
+      if (fallbackUrl) {
+        image = fallbackUrl;
       }
     }
 
@@ -726,30 +744,41 @@ export async function parseScannedPdfReport(
       const pdfjs = await import("pdfjs-dist");
 
       // Configura workerSrc para evitar erro 'No "GlobalWorkerOptions.workerSrc" specified'
-      if (!pdfjs.GlobalWorkerOptions.workerSrc) {
-        if (typeof window !== "undefined") {
-          const origin = window.location.origin || "";
-          pdfjs.GlobalWorkerOptions.workerSrc = origin ? `${origin}/pdf.worker.min.mjs` : "/pdf.worker.min.mjs";
-        } else {
-          try {
-            pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-              "pdfjs-dist/build/pdf.worker.min.mjs",
-              import.meta.url
-            ).toString();
-          } catch {
-            pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version || "6.5.438"}/build/pdf.worker.min.mjs`;
-          }
+      if (typeof window !== "undefined") {
+        const origin =
+          window.location && window.location.origin && window.location.origin !== "null"
+            ? window.location.origin
+            : "";
+        pdfjs.GlobalWorkerOptions.workerSrc = origin
+          ? `${origin}/pdf.worker.min.mjs`
+          : "/pdf.worker.min.mjs";
+      } else if (
+        !pdfjs.GlobalWorkerOptions.workerSrc ||
+        pdfjs.GlobalWorkerOptions.workerSrc === "./pdf.worker.mjs"
+      ) {
+        try {
+          pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+            "pdfjs-dist/build/pdf.worker.min.mjs",
+            import.meta.url
+          ).toString();
+        } catch {
+          pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version || "6.5.438"}/build/pdf.worker.min.mjs`;
         }
       }
 
       let buffer: ArrayBuffer;
       if (typeof (fileOrBuffer as File).arrayBuffer === "function") {
         buffer = await (fileOrBuffer as File).arrayBuffer();
+      } else if (fileOrBuffer instanceof ArrayBuffer) {
+        buffer = fileOrBuffer;
+      } else if (ArrayBuffer.isView(fileOrBuffer)) {
+        buffer = (fileOrBuffer as Uint8Array).buffer as ArrayBuffer;
       } else {
         buffer = fileOrBuffer as ArrayBuffer;
       }
 
-      const loadingTask = pdfjs.getDocument({ data: buffer });
+      const uint8 = new Uint8Array(buffer);
+      const loadingTask = pdfjs.getDocument({ data: uint8 });
       const pdfDoc = await loadingTask.promise;
       totalPages = pdfDoc.numPages;
 
