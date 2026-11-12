@@ -734,10 +734,10 @@ function EncarteApp() {
     }
   };
 
-  // Carregar produtos de qualquer origem (Planilha ou Link)
+  // Carregar produtos de qualquer origem (Planilha, Link ou PDF Escaneado)
   const handleDataLoaded = (
     loaded: EncarteProduct[],
-    sourceType: "spreadsheet" | "link" | "sample",
+    sourceType: "spreadsheet" | "link" | "sample" | "pdf_scanned",
     unmatched: string[]
   ) => {
     // 1. Atualizar navegação e etapas concluídas imediatamente

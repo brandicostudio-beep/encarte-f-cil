@@ -38,6 +38,7 @@ import { DriveConnectorCard } from "./DriveConnectorCard";
 import type { EncarteProduct } from "@/types/encarte";
 import { DropzoneUpload } from "./DropzoneUpload";
 import { EmptyState } from "./EmptyState";
+import { ScannedPdfInventorySection } from "./ScannedPdfInventorySection";
 import {
   FileSpreadsheet,
   Link2,
@@ -67,7 +68,7 @@ import {
 interface SourceSelectorProps {
   onDataLoaded: (
     products: EncarteProduct[],
-    sourceType: "spreadsheet" | "link" | "sample",
+    sourceType: "spreadsheet" | "link" | "sample" | "pdf_scanned",
     unmatchedPhotos: string[]
   ) => void;
   onExtractCategoryUrl: (url: string) => Promise<{ ok: boolean; products?: EncarteProduct[]; error?: string }>;
@@ -87,7 +88,7 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
   onReset,
   onUpdateExistingProductsPhotos,
 }) => {
-  const [sourceMode, setSourceMode] = useState<"spreadsheet" | "link">("spreadsheet");
+  const [sourceMode, setSourceMode] = useState<"spreadsheet" | "link" | "pdf_scanned">("spreadsheet");
 
   // Estados de Planilha
   const [parsingSpreadsheet, setParsingSpreadsheet] = useState(false);
@@ -884,8 +885,8 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
         </div>
       </div>
 
-      {/* Seletor de Modo: Planilha ou Link (Áreas de toque mínimas de 44px) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {/* Seletor de Modo: Planilha, Link ou Relatório PDF Escaneado */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <button
           type="button"
           onClick={() => setSourceMode("spreadsheet")}
@@ -934,6 +935,32 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
             </div>
             <div className="text-xs text-neutral-500">
               Extrair da página do fornecedor (ex.: "validade próxima").
+            </div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSourceMode("pdf_scanned")}
+          className={`flex items-center gap-3 p-4 rounded-xl border text-left transition-all min-h-[56px] focus-visible:ring-2 focus-visible:ring-red-600 ${
+            sourceMode === "pdf_scanned"
+              ? "border-red-600 bg-red-50/50 shadow-xs ring-1 ring-red-500"
+              : "border-neutral-200 hover:border-neutral-300 bg-neutral-50/50"
+          }`}
+        >
+          <div
+            className={`p-2.5 rounded-lg ${
+              sourceMode === "pdf_scanned" ? "bg-red-600 text-white" : "bg-neutral-200 text-neutral-600"
+            }`}
+          >
+            <FileText className="h-6 w-6" />
+          </div>
+          <div>
+            <div className="font-bold text-sm text-neutral-900">
+              C) Relatório PDF Escaneado
+            </div>
+            <div className="text-xs text-neutral-500">
+              Estoque, validade e OCR com busca no site.
             </div>
           </div>
         </button>
@@ -1048,6 +1075,15 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
             />
           )}
         </div>
+      )}
+
+      {/* ÁREA DA OPÇÃO C: RELATÓRIO PDF ESCANEADO COM OCR E BUSCA NO SITE */}
+      {sourceMode === "pdf_scanned" && (
+        <ScannedPdfInventorySection
+          existingProducts={existingProducts}
+          onDataLoaded={onDataLoaded as any}
+          onExtractCategoryUrl={onExtractCategoryUrl}
+        />
       )}
 
       {/* BANCO DE FOTOS EM LOTE (Opcional: Upload do Computador ou Link do Google Drive) */}

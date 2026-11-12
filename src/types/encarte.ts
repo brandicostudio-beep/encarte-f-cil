@@ -198,6 +198,22 @@ export interface EncarteProduct {
     isPrimary?: boolean;
     source?: "drive" | "zip" | "upload" | "folder";
   }[];
+  precoManuscrito?: string | undefined;   // Preço manuscrito detectado no relatório/OCR (ex: "3,50")
+  obs?: string | undefined;               // Observações / avarias (ex: "AVARIA: 5 UND")
+  status?: string | undefined;            // Status do produto no relatório ("NORMAL", "AVARIA", etc.)
+  statusRelatorio?: ("novo" | "atualizado" | "fora_do_ultimo_relatorio" | "revisao") | undefined;
+  originalSnippet?: string | undefined;   // Trecho original de OCR/leitura duvidosa para revisão
+  reportDate?: string | undefined;        // Data do relatório (ex: Período de Validade do cabeçalho)
+  unitSource?: ("manual" | "site" | "padrao") | undefined; // "manual" prevalece sobre o site
+  validityEntries?: {
+    validity: string;
+    quantity: number;
+    status: string;
+    precoManuscrito?: string;
+    obs?: string;
+  }[] | undefined;
+  needsReview?: boolean | undefined;
+  reviewReason?: string | undefined;
 }
 
 export interface StoreConfig {
