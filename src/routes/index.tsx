@@ -1874,18 +1874,6 @@ function EncarteApp() {
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={isBalancingImages}
-                        onClick={handleAutoBalanceImages}
-                        className="min-h-[44px] text-xs font-bold text-indigo-900 bg-indigo-50 border-indigo-200 hover:bg-indigo-100"
-                        title="Normaliza o tamanho visual e recorta sobras brancas de todas as fotos para ficarem na mesma proporção"
-                      >
-                        <Scale className="h-4 w-4 mr-1.5 text-indigo-600" />
-                        {isBalancingImages ? "Equilibrando..." : "Equilibrar Proporções"}
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="outline"
                         onClick={() => setPdfStockOpen(true)}
                         className="min-h-[44px] text-xs font-bold text-red-800 bg-red-50 border-red-300 hover:bg-red-100"
                         title="Suba o relatório escaneado em PDF para associar o estoque a cada código automaticamente"
@@ -1903,16 +1891,6 @@ function EncarteApp() {
                       >
                         <Tag className="h-4 w-4 mr-1.5 text-emerald-600" />
                         Subir PDF de Preços
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setSpreadsheetOpen(true)}
-                        className="min-h-[44px] text-xs font-bold text-green-800 bg-green-50 border-green-300 hover:bg-green-100"
-                      >
-                        <FileSpreadsheet className="h-4 w-4 mr-1.5 text-green-600" />
-                        Colar Planilha de Preços
                       </Button>
 
                       <Button
