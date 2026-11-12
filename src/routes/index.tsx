@@ -876,6 +876,13 @@ function EncarteApp() {
     updateProductsState(updated);
   };
 
+  const handleStockChange = (id: string, newStock: string) => {
+    const updated = products.map((p) =>
+      p.id === id ? { ...p, stock: newStock } : p
+    );
+    updateProductsState(updated);
+  };
+
   const handleUnitChange = (id: string, newUnit: string) => {
     const updated = products.map((p) =>
       p.id === id ? { ...p, unit: newUnit, unitConfirmed: true } : p
@@ -1828,6 +1835,7 @@ function EncarteApp() {
                   <ReviewTable
                     products={filteredProducts}
                     onPriceChange={handlePriceChange}
+                    onStockChange={handleStockChange}
                     onUnitChange={handleUnitChange}
                     onToggleIncluded={handleToggleIncluded}
                     onEditProduct={(p) => setEditProduct(p)}

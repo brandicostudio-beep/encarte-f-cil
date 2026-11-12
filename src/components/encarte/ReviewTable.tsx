@@ -1,7 +1,13 @@
 import React, { useRef } from "react";
 import type { EncarteProduct } from "@/types/encarte";
 import { isDateExpired } from "@/lib/encarte-helpers";
-import { formatPrice, deriveSaleUnit, SALE_UNITS } from "@/lib/parse-product";
+import {
+  formatPrice,
+  deriveSaleUnit,
+  SALE_UNITS,
+  evaluateStockExpression,
+  previewStockCalculation,
+} from "@/lib/parse-product";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,11 +19,13 @@ import {
   Package,
   Layers,
   Tag,
+  HelpCircle,
 } from "lucide-react";
 
 interface ReviewTableProps {
   products: EncarteProduct[];
   onPriceChange: (id: string, price: string) => void;
+  onStockChange?: (id: string, stock: string) => void;
   onUnitChange?: (id: string, unit: string) => void;
   onToggleIncluded: (id: string, included: boolean) => void;
   onEditProduct: (product: EncarteProduct) => void;
@@ -27,6 +35,7 @@ interface ReviewTableProps {
 export const ReviewTable: React.FC<ReviewTableProps> = ({
   products = [],
   onPriceChange,
+  onStockChange,
   onUnitChange,
   onToggleIncluded,
   onEditProduct,
@@ -34,6 +43,8 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
 }) => {
   // Referências para os inputs de preço para navegar com Enter para o próximo pendente
   const priceInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  // Referências para os inputs de estoque para navegar com Enter
+  const stockInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   // Tratar formatação de preço com duas casas decimais
   const handlePriceBlur = (id: string, rawVal: string) => {
@@ -41,6 +52,50 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
     if (!val) return;
     const formatted = formatPrice(val);
     if (formatted) onPriceChange(id, formatted);
+  };
+
+  // Tratar avaliação de estoque (ex: somas como 80+53)
+  const handleStockBlur = (id: string, rawVal: string, unit?: string) => {
+    const val = String(rawVal || "").trim();
+    if (!val) {
+      if (onStockChange) onStockChange(id, "");
+      return;
+    }
+    const evaluated = evaluateStockExpression(val, unit);
+    if (onStockChange) onStockChange(id, evaluated);
+  };
+
+  // Tecla Enter no estoque: salva/avalia e salta automaticamente para o próximo estoque
+  const handleStockKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    currentIndex: number,
+    unit?: string
+  ) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleStockBlur(products[currentIndex].id, e.currentTarget.value, unit);
+
+      // Salta para o próximo estoque
+      for (let i = currentIndex + 1; i < products.length; i++) {
+        const nextProd = products[i];
+        const el = stockInputRefs.current.get(nextProd.id);
+        if (el) {
+          el.focus();
+          el.select();
+          return;
+        }
+      }
+      // Se não encontrou depois, busca do início
+      for (let i = 0; i < currentIndex; i++) {
+        const prevProd = products[i];
+        const el = stockInputRefs.current.get(prevProd.id);
+        if (el) {
+          el.focus();
+          el.select();
+          return;
+        }
+      }
+    }
   };
 
   // Tecla Enter no preço: salva e salta automaticamente para o próximo produto sem preço
@@ -98,7 +153,18 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                 Código & Nome
               </th>
               <th scope="col" className="p-3 w-28">
-                Embalagem / Estoque
+                Embalagem
+              </th>
+              <th scope="col" className="p-3 w-36">
+                <div className="flex items-center gap-1">
+                  <span>Estoque</span>
+                  <span
+                    className="text-neutral-400 hover:text-neutral-600 cursor-help"
+                    title="Edição rápida de estoque. Você pode digitar valores (ex: 50) ou somas (ex: 80+53) para calcular automaticamente."
+                  >
+                    <HelpCircle className="h-3 w-3" />
+                  </span>
+                </div>
               </th>
               <th scope="col" className="p-3 w-28">
                 Validade
@@ -306,20 +372,53 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                     </div>
                   </td>
 
-                  {/* Embalagem e Estoque */}
+                  {/* Embalagem */}
                   <td className="p-3 align-middle">
-                    <div className="text-neutral-700 font-semibold truncate">
+                    <div className="text-neutral-700 font-semibold truncate text-xs" title={p.packaging || ""}>
                       {p.packaging || (
                         <span className="text-neutral-400 italic font-normal text-[11px]">
                           Não informada
                         </span>
                       )}
                     </div>
-                    {p.stock && (
-                      <div className="text-[10px] text-neutral-500 font-mono mt-0.5">
-                        Estoque: {p.stock}
-                      </div>
-                    )}
+                  </td>
+
+                  {/* Edição Rápida de Estoque (como é o de preço) */}
+                  <td className="p-3 align-middle">
+                    <div className="relative">
+                      <label htmlFor={`stock-${p.id}`} className="sr-only">
+                        Estoque para {p.name}
+                      </label>
+                      <input
+                        id={`stock-${p.id}`}
+                        ref={(el) => {
+                          if (el) stockInputRefs.current.set(p.id, el);
+                          else stockInputRefs.current.delete(p.id);
+                        }}
+                        type="text"
+                        placeholder="Ex: 50"
+                        value={p.stock || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (onStockChange) {
+                            onStockChange(p.id, val);
+                          } else {
+                            onEditProduct({ ...p, stock: val });
+                          }
+                        }}
+                        onBlur={(e) => handleStockBlur(p.id, e.target.value, p.unit)}
+                        onKeyDown={(e) => handleStockKeyDown(e, idx, p.unit)}
+                        className="w-full min-h-[44px] px-2.5 text-xs font-mono font-bold rounded-lg border border-neutral-300 bg-white text-neutral-900 focus:outline-hidden focus:ring-2 focus:ring-red-600 focus:border-red-600 transition-colors placeholder:text-neutral-400 placeholder:font-normal"
+                        title="Digite a quantidade ou somas (ex: 80+53)"
+                      />
+                      {previewStockCalculation(p.stock, p.unit) && (
+                        <div className="absolute -bottom-2 right-1 z-10 pointer-events-none">
+                          <span className="text-[9px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-1 py-0.2 rounded shadow-2xs">
+                            ={previewStockCalculation(p.stock, p.unit)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </td>
 
                   {/* Validade */}
