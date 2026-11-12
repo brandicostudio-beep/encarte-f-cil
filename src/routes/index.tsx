@@ -38,6 +38,7 @@ import { A4Page } from "@/components/encarte/A4Page";
 import { StoryPage916 } from "@/components/encarte/StoryPage916";
 import { TemplateAreaAdjuster } from "@/components/encarte/TemplateAreaAdjuster";
 import { SpreadsheetModal } from "@/components/encarte/SpreadsheetModal";
+import { PdfStockModal } from "@/components/encarte/PdfStockModal";
 import { ProductEditModal } from "@/components/encarte/ProductEditModal";
 import { StoreSettingsModal } from "@/components/encarte/StoreSettingsModal";
 import { HowItWorksModal } from "@/components/encarte/HowItWorksModal";
@@ -188,6 +189,7 @@ function EncarteApp() {
 
   // Modais
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false);
+  const [pdfStockOpen, setPdfStockOpen] = useState(false);
   const [storeSettingsOpen, setStoreSettingsOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<EncarteProduct | null>(null);
@@ -867,6 +869,51 @@ function EncarteApp() {
 
     updateProductsState(updated);
     setSavedNotice(`${updates.length} preços atualizados pela planilha`);
+  };
+
+  // Preenchimento em massa de estoque e dados pelo relatório PDF escaneado
+  const handleApplyPdfStock = (
+    updates: {
+      code: string;
+      stock: string;
+      validity?: string;
+      price?: string;
+      obs?: string;
+    }[],
+    newProductsToAdd?: EncarteProduct[]
+  ) => {
+    const updateMap = new Map(
+      updates.map((u) => [u.code.toLowerCase().trim(), u])
+    );
+
+    let updatedCount = 0;
+    const updated = products.map((p) => {
+      const match = updateMap.get(p.code.toLowerCase().trim());
+      if (match) {
+        updatedCount++;
+        return {
+          ...p,
+          stock: match.stock || p.stock,
+          validity: match.validity || p.validity,
+          price:
+            match.price && (!p.price || p.price === "0,00" || p.price === "0" || p.price.trim() === "")
+              ? match.price
+              : p.price,
+          obs: match.obs || p.obs,
+        };
+      }
+      return p;
+    });
+
+    const finalList =
+      newProductsToAdd && newProductsToAdd.length > 0
+        ? [...updated, ...newProductsToAdd]
+        : updated;
+
+    updateProductsState(finalList);
+    setSavedNotice(
+      `Estoque de ${updatedCount} produto(s) preenchido automaticamente pelo PDF!`
+    );
   };
 
   const handlePriceChange = (id: string, newPrice: string) => {
@@ -1812,6 +1859,17 @@ function EncarteApp() {
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => setPdfStockOpen(true)}
+                        className="min-h-[44px] text-xs font-bold text-red-800 bg-red-50 border-red-300 hover:bg-red-100"
+                        title="Suba o relatório escaneado em PDF para associar o estoque e preços manuscritos a cada código automaticamente"
+                      >
+                        <FileText className="h-4 w-4 mr-1.5 text-red-600" />
+                        Subir PDF de Estoque
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => setSpreadsheetOpen(true)}
                         className="min-h-[44px] text-xs font-bold text-green-800 bg-green-50 border-green-300 hover:bg-green-100"
                       >
@@ -2465,6 +2523,14 @@ function EncarteApp() {
         onOpenChange={setSpreadsheetOpen}
         products={products}
         onApplyPrices={handleApplySpreadsheetPrices}
+      />
+
+      {/* 1b. Atualização Automática de Estoque por Relatório PDF Escaneado */}
+      <PdfStockModal
+        open={pdfStockOpen}
+        onOpenChange={setPdfStockOpen}
+        products={products}
+        onApplyStock={handleApplyPdfStock}
       />
 
       {/* 2. Edição Detalhada por Item */}
