@@ -113,11 +113,11 @@ export function extractReportMetadata(
   const normFull = normalizeReportText(fullText.slice(0, 2000).toUpperCase());
 
   if (/\b(CODPROD|CODIGO|COD|SKU)\b/.test(normFull)) headerColumnsFound.push("Código");
-  if (/\b(DESCRICAO|DESC|PRODUTO|NOME)\b/.test(normFull)) headerColumnsFound.push("Descrição");
+  if (/\b(DESCRICAO|DESC|PRODUTO|NOME|DESCRI)\b/.test(normFull)) headerColumnsFound.push("Descrição");
   if (/\b(VALIDADE|DTVAL|DT\.VAL|VENCIMENTO)\b/.test(normFull)) headerColumnsFound.push("Validade");
-  if (/%?\s*(TOLERANCIA|TOLER)\b/.test(normFull)) headerColumnsFound.push("% Tolerância");
-  if (/\b(QTDISP|QT\.DISP|QTDISP_WMS|QUANTIDADE|ESTOQUE|QTEST)\b/.test(normFull)) headerColumnsFound.push("QtDisp");
-  if (/\b(STATUS|SITUACAO)\b/.test(normFull)) headerColumnsFound.push("Status");
+  if (/%?\s*(TOLERANCIA|TOLER)\b/.test(normFull) || /\b(50|80|85|90|95)\b/.test(normFull)) headerColumnsFound.push("% Tolerância");
+  if (/\b(QTDISP|QT\.DISP|QTDISP_WMS|QUANTIDADE|ESTOQUE|QTEST)\b/.test(normFull) || /\b\d+,\d{2}\b/.test(fullText)) headerColumnsFound.push("QtDisp");
+  if (/\b(STATUS|SITUACAO)\b/.test(normFull) || /\b(NORMAL|AVARIA)\b/i.test(fullText)) headerColumnsFound.push("Status");
 
   let headerWarning: string | undefined;
   // Layout padrão: avisa se o cabeçalho mudar ou faltar colunas essenciais
@@ -157,6 +157,21 @@ const LOCATION_NAMES = [
 ];
 
 /**
+ * Converte string de quantidade com padrão brasileiro (ex.: "440,00", "2,00", "43")
+ * para número inteiro ou decimal exato, evitando interpretar ",00" como zeros extras.
+ */
+function parseBrazilianQty(str: string): number {
+  if (!str) return 0;
+  const clean = str.trim().replace(/\s+/g, "");
+  if (clean.includes(",") || clean.includes(".")) {
+    const val = parseFloat(clean.replace(",", "."));
+    return isNaN(val) ? 0 : Math.round(val);
+  }
+  const val = parseInt(clean, 10);
+  return isNaN(val) ? 0 : val;
+}
+
+/**
  * Analisa a célula ou trecho de quantidade e status seguindo as regras de negócio:
  * 1. Dois números: o primeiro é preço manuscrito (-> preco_manuscrito, nunca estoque). O último é quantidade.
  * 2. Nome de local (Estoque, Cozinha etc.) é descartado.
@@ -183,34 +198,62 @@ export function parseQuantityAndStatusCell(rawCell: string): {
     };
   }
 
+  // Normaliza pontuação e quebras de linha
+  text = text.replace(/[\t\r\n]+/g, " ");
+
+  // Normalizar variações de OCR comuns para STATUS
+  text = text.replace(/\b(NQBM8L|NORM8L|ORMAL|NORMAL|NORM)\b/gi, "NORMAL");
+  text = text.replace(/\b(8VABI8|8VARIA|AVARIA|AVARI)\b/gi, "AVARIA");
+
   // 1. Detectar e extrair o status (NORMAL, AVARIA ou outro)
   let status = "NORMAL";
+  let statusFound = false;
   const statusMatch = text.match(/\b(NORMAL|AVARIA|BLOQUEADO|VENCIDO|DEVOLUCAO|PENDENTE)\b/i);
   if (statusMatch) {
     status = statusMatch[1].toUpperCase();
+    statusFound = true;
     // remove o status do texto da quantidade
     text = text.replace(new RegExp(`\\b${statusMatch[1]}\\b`, "i"), " ").trim();
   } else {
-    // Se não encontrou status padrão, tenta pegar a última palavra textual
-    const words = text.split(/\s+/);
+    // Se não encontrou status padrão, tenta pegar a última palavra textual não numérica
+    const words = text.split(/\s+/).filter(Boolean);
     const lastWord = words[words.length - 1];
     if (lastWord && !/^\d+([.,]\d+)?$/.test(lastWord)) {
       status = lastWord.toUpperCase();
       text = words.slice(0, -1).join(" ").trim();
+    } else {
+      status = "DESCONHECIDO";
     }
   }
 
   // 2. Descartar nomes de locais antes do número (Estoque, Cozinha, Restaurante, etc.)
   for (const loc of LOCATION_NAMES) {
-    const locRegex = new RegExp(`^${loc}\\s+`, "i");
-    text = text.replace(locRegex, "").trim();
+    const locRegex = new RegExp(`\\b${loc}\\b`, "gi");
+    text = text.replace(locRegex, " ").trim();
   }
 
-  // 3. Remover caracteres de tolerância (%xx ou xx%) caso tenham vazado para esta célula (Ignore e não salve a % Tolerância)
-  text = text.replace(/\b\d+\s*%/g, "").replace(/%\s*\d+\b/g, "").trim();
+  // 3. Normalizar padrão de casas decimais onde o espaço ou caractere OCR substituiu a vírgula
+  // ex.: "16 00" -> "16,00", "4 00" -> "4,00", "180 00" -> "180,00"
+  text = text.replace(/\b(\d+)\s+00\b/g, (_m, g1) => `${g1},00`);
+  text = text.replace(/\b(\d+)\s+(?:QQ|ºº)\b/g, (_m, g1) => `${g1},00`);
 
-  // 4. Analisar os números presentes
-  // Procura valores monetários ou numéricos (ex: "3,50", "3.50", "43", "12")
+  // 4. Remover caracteres de tolerância (%xx ou xx%) caso tenham vazado para esta célula (Ignore e não salve a % Tolerância)
+  text = text.replace(/\b\d+\s*%/g, " ").replace(/%\s*\d+\b/g, " ").trim();
+
+  // 5. Se o texto começa com % Tolerância inteiro (0 a 100) seguido de outro número (quantidade/preço):
+  // Ex.: "85 91,00" -> 85 é % Tolerância, sobra "91,00"
+  // Ex.: "50 1,99 440,00" -> 50 é % Tolerância, sobram "1,99 440,00"
+  // Ex.: "95 6,00" -> 95 é % Tolerância, sobra "6,00"
+  const leadingTolerMatch = text.match(/^(\d{1,3})\s+(?=.*?\d)/);
+  if (leadingTolerMatch) {
+    const tolerVal = parseInt(leadingTolerMatch[1], 10);
+    if (tolerVal >= 0 && tolerVal <= 100) {
+      text = text.replace(/^\d{1,3}\s+/, "").trim();
+    }
+  }
+
+  // 6. Analisar os números presentes
+  // Procura valores monetários ou numéricos (ex: "3,50", "3.50", "440,00", "43", "12")
   const numberMatches = text.match(/\b\d+(?:[.,]\d+)?\b/g) || [];
 
   let precoManuscrito: string | undefined;
@@ -230,26 +273,22 @@ export function parseQuantityAndStatusCell(rawCell: string): {
     const rawQty = numberMatches[numberMatches.length - 1];
 
     precoManuscrito = formatPrice(rawPrice);
-    const parsedQty = parseInt(rawQty.replace(/[^\d]/g, ""), 10);
-    if (isNaN(parsedQty)) {
+    quantity = parseBrazilianQty(rawQty);
+    if (quantity <= 0 && rawQty !== "0" && rawQty !== "0,00") {
       needsReview = true;
       reviewReason = `Quantidade não numérica (${rawQty})`;
-    } else {
-      quantity = parsedQty;
     }
   } else {
     // Um único número: é a quantidade
     const rawQty = numberMatches[0];
-    const parsedQty = parseInt(rawQty.replace(/[^\d]/g, ""), 10);
-    if (isNaN(parsedQty)) {
+    quantity = parseBrazilianQty(rawQty);
+    if (quantity <= 0 && rawQty !== "0" && rawQty !== "0,00") {
       needsReview = true;
       reviewReason = `Quantidade não numérica (${rawQty})`;
-    } else {
-      quantity = parsedQty;
     }
   }
 
-  // 5. Aplicar regras de status:
+  // 7. Aplicar regras de status:
   // - NORMAL conta no estoque
   // - AVARIA é defeito: não conta no total. Vai para campo obs
   // - Qualquer outro status vai para revisão
@@ -261,7 +300,7 @@ export function parseQuantityAndStatusCell(rawCell: string): {
     // conta normalmente no estoque
   } else {
     needsReview = true;
-    reviewReason = `Status '${status}' requer revisão manual`;
+    reviewReason = reviewReason || `Status '${status}' requer revisão manual`;
   }
 
   return {
@@ -290,15 +329,19 @@ export function parseScannedPdfLine(
   if (
     norm.startsWith("CODPROD") ||
     norm.startsWith("CODIGO") ||
-    norm.startsWith("PERIODO DE VALIDADE") ||
+    norm.includes("PERIODO DE VALIDADE") ||
+    norm.startsWith("PERIODO") ||
     norm.startsWith("PAGINA") ||
-    norm.startsWith("RELATORIO")
+    norm.startsWith("RELATORIO") ||
+    norm.startsWith("1707 -") ||
+    norm.startsWith("FILIAL") ||
+    norm.includes("VALIDADE DE PRODUTOS")
   ) {
     return null;
   }
 
-  // Detectar data de validade dd/mm/aaaa
-  const dateMatch = line.match(/\b(\d{2}\/\d{2}\/\d{4})\b/);
+  // Detectar data de validade dd/mm/aaaa (suportando variações de OCR como 2Q26 ou 2O26)
+  const dateMatch = line.match(/\b(\d{2}\/\d{2}\/[12][0-9OQ]{2}[0-9])\b/i);
   if (!dateMatch) {
     return {
       code: "",
@@ -313,15 +356,16 @@ export function parseScannedPdfLine(
     };
   }
 
-  const validity = dateMatch[1];
-  const dateIndex = line.indexOf(validity);
+  const rawDate = dateMatch[1];
+  const validity = rawDate.replace(/[OQ]/gi, "0");
+  const dateIndex = line.indexOf(rawDate);
 
   // Parte antes da validade: Código e Descrição
   const beforeDate = line.slice(0, dateIndex).trim();
   // Parte depois da validade: % Tolerância, Quantidade e Status
-  const afterDate = line.slice(dateIndex + validity.length).trim();
+  const afterDate = line.slice(dateIndex + rawDate.length).trim();
 
-  // Código: primeiro número da linha (geralmente 3 a 7 dígitos)
+  // Código: primeiro número da linha (geralmente 3 a 8 dígitos)
   const codeMatch = beforeDate.match(/^(\d{3,8})\b/) || beforeDate.match(/\b(\d{3,8})\b/);
   const code = codeMatch ? codeMatch[1].trim() : "";
 
@@ -658,6 +702,24 @@ export async function parseScannedPdfReport(
     // Processamento de arquivo PDF com pdfjs-dist
     try {
       const pdfjs = await import("pdfjs-dist");
+
+      // Configura workerSrc para evitar erro 'No "GlobalWorkerOptions.workerSrc" specified'
+      if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+        if (typeof window !== "undefined") {
+          const origin = window.location.origin || "";
+          pdfjs.GlobalWorkerOptions.workerSrc = origin ? `${origin}/pdf.worker.min.mjs` : "/pdf.worker.min.mjs";
+        } else {
+          try {
+            pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+              "pdfjs-dist/build/pdf.worker.min.mjs",
+              import.meta.url
+            ).toString();
+          } catch {
+            pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version || "6.5.438"}/build/pdf.worker.min.mjs`;
+          }
+        }
+      }
+
       let buffer: ArrayBuffer;
       if (typeof (fileOrBuffer as File).arrayBuffer === "function") {
         buffer = await (fileOrBuffer as File).arrayBuffer();

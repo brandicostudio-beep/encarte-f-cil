@@ -105,6 +105,72 @@ describe("Scanned PDF Inventory Parser & OCR Rules", () => {
       expect(unknownStatus.status).toBe("BLOQUEADO");
       expect(unknownStatus.reviewReason).toContain("Status 'BLOQUEADO' requer revisão manual");
     });
+
+    it("2.5 % Tolerância puro (sem %) é ignorado e não vira preço nem estoque", () => {
+      // "85 91,00 AVARIA" -> 85 é % Tolerância, 91 é qt, AVARIA não conta no estoque
+      const res1 = parseQuantityAndStatusCell("85 91,00 AVARIA");
+      expect(res1.precoManuscrito).toBeUndefined();
+      expect(res1.quantity).toBe(0);
+      expect(res1.obs).toBe("AVARIA: 91 UND");
+      expect(res1.status).toBe("AVARIA");
+      expect(res1.needsReview).toBe(false);
+
+      // "80 256,00 NORMAL" -> 80 é tolerância, 256 é qt
+      const res2 = parseQuantityAndStatusCell("80 256,00 NORMAL");
+      expect(res2.precoManuscrito).toBeUndefined();
+      expect(res2.quantity).toBe(256);
+      expect(res2.status).toBe("NORMAL");
+      expect(res2.needsReview).toBe(false);
+
+      // "95 6,00 NORMAL" -> Ruffles 21818
+      const res3 = parseQuantityAndStatusCell("95 6,00 NORMAL");
+      expect(res3.precoManuscrito).toBeUndefined();
+      expect(res3.quantity).toBe(6);
+      expect(res3.status).toBe("NORMAL");
+
+      // "95 10,00 NORMAL" -> Ruffles 23054
+      const res4 = parseQuantityAndStatusCell("95 10,00 NORMAL");
+      expect(res4.quantity).toBe(10);
+    });
+
+    it("2.6 Trata decimais brasileiros (,00) sem multiplicar por 100", () => {
+      const res1 = parseQuantityAndStatusCell("50 440,00 NORMAL");
+      expect(res1.quantity).toBe(440);
+
+      const res2 = parseQuantityAndStatusCell("50 2,00 NORMAL");
+      expect(res2.quantity).toBe(2);
+
+      const res3 = parseQuantityAndStatusCell("50 101,00 NORMAL");
+      expect(res3.quantity).toBe(101);
+    });
+
+    it("2.7 Identifica preço manuscrito e quantidade com % Tolerância", () => {
+      // "50 1,99 440,00 AVARIA" -> 50 tolerância, 1,99 preço, 440 quantidade AVARIA
+      const res1 = parseQuantityAndStatusCell("50 1,99 440,00 AVARIA");
+      expect(res1.precoManuscrito).toBe("1,99");
+      expect(res1.quantity).toBe(0);
+      expect(res1.obs).toBe("AVARIA: 440 UND");
+
+      // "50 49,90 71,00 NORMAL" -> 50 tolerância, 49,90 preço, 71 quantidade NORMAL
+      const res2 = parseQuantityAndStatusCell("50 49,90 71,00 NORMAL");
+      expect(res2.precoManuscrito).toBe("49,90");
+      expect(res2.quantity).toBe(71);
+      expect(res2.status).toBe("NORMAL");
+
+      // "50 1,90 101,00 NORMAL"
+      const res3 = parseQuantityAndStatusCell("50 1,90 101,00 NORMAL");
+      expect(res3.precoManuscrito).toBe("1,90");
+      expect(res3.quantity).toBe(101);
+    });
+
+    it("2.8 Tolera variações de OCR em status (ex: NQBM8L -> NORMAL, 8VABI8 -> AVARIA)", () => {
+      const resNorm = parseQuantityAndStatusCell("80 25 NORMAL");
+      expect(resNorm.status).toBe("NORMAL");
+
+      const resAvaria = parseQuantityAndStatusCell("50 12 AVARIA");
+      expect(resAvaria.status).toBe("AVARIA");
+      expect(resAvaria.obs).toBe("AVARIA: 12 UND");
+    });
   });
 
   describe("3. Validação Linha a Linha (parseScannedPdfLine)", () => {
@@ -529,6 +595,72 @@ Código Descrição Validade % Tolerância QtDisp Status
       const azeite = result.aggregated.find((p) => p.code === "3946");
       expect(azeite?.totalStock).toBe(0);
       expect(azeite?.obs).toBe("AVARIA: 8 UND");
+    });
+
+    it("6.2 Processa linhas reais do ERP com % Tolerância inteiro, preços manuscritos e avarias", async () => {
+      const realReportText = `
+1707 - Validade de produtos Page 2 of 5
+Filial: 2 12/11/2026 09:45:54
+Período de Validade: 12/11/2026 a 12/02/2027
+Código Descrição Validade % Tolerância QtDisp Status
+26465 BISC.FAZENDINHA LEITE MALTADO 17/12/2026 50 1,99 440,00 AVARIA
+26465 BISC.FAZENDINHA LEITE MALTADO 17/12/2026 50 730,00 NORMAL
+2607 LEITE CONDENSADO MOCA 10/12/2026 50 1,90 101,00 NORMAL
+24853 DOCE DE LEITE BALDE 20/12/2026 50 Estoque 2,00 NORMAL
+11096 CHOCOLATE BIS LAKA 15/12/2026 50 7,00 NORMAL
+11096 CHOCOLATE BIS LAKA 22/12/2026 50 49,90 71,00 NORMAL
+11096 CHOCOLATE BIS LAKA 29/12/2026 50 150,00 NORMAL
+11793 BISC RECHEADO OREO 18/12/2026 50 2,00 NORMAL
+11793 BISC RECHEADO OREO 25/12/2026 50 49,90 13,00 NORMAL
+13830 CAFE 3 CORACOES EXTRA FORTE 30/12/2026 50 4,00 AVARIA
+13830 CAFE 3 CORACOES EXTRA FORTE 30/12/2026 50 45,00 NORMAL
+13830 CAFE 3 CORACOES EXTRA FORTE 30/12/2026 50 54,00 NORMAL
+21818 SALGADINHO RUFFLES BATATA CES.SALSA 21/12/2026 95 6,00 NORMAL
+23054 SALGADINHO RUFFLES BATATA CES.SALSA 21/12/2026 95 10,00 NORMAL
+      `;
+
+      const result = await parseScannedPdfReport(realReportText);
+      expect(result.ok).toBe(true);
+      expect(result.metadata.reportDate).toBe("12/11/2026 a 12/02/2027");
+
+      // 26465: 440 AVARIA com preço 1,99 e 730 NORMAL -> estoque total = 730, preco = 1,99, obs = "AVARIA: 440 UND"
+      const p26465 = result.aggregated.find((p) => p.code === "26465");
+      expect(p26465).toBeDefined();
+      expect(p26465?.totalStock).toBe(730);
+      expect(p26465?.precoManuscrito).toBe("1,99");
+      expect(p26465?.obs).toBe("AVARIA: 440 UND");
+
+      // 2607: preço manuscrito 1,90 e estoque 101
+      const p2607 = result.aggregated.find((p) => p.code === "2607");
+      expect(p2607?.totalStock).toBe(101);
+      expect(p2607?.precoManuscrito).toBe("1,90");
+
+      // 24853: descarta Estoque, estoque = 2
+      const p24853 = result.aggregated.find((p) => p.code === "24853");
+      expect(p24853?.totalStock).toBe(2);
+
+      // 11096: 3 entradas (7 + 71 + 150 = 228), preço manuscrito 49,90
+      const p11096 = result.aggregated.find((p) => p.code === "11096");
+      expect(p11096?.totalStock).toBe(228);
+      expect(p11096?.precoManuscrito).toBe("49,90");
+      expect(p11096?.validityEntries).toHaveLength(3);
+
+      // 11793: 2 entradas (2 + 13 = 15), preço 49,90
+      const p11793 = result.aggregated.find((p) => p.code === "11793");
+      expect(p11793?.totalStock).toBe(15);
+      expect(p11793?.precoManuscrito).toBe("49,90");
+
+      // 13830: 4 AVARIA e (45 + 54 = 99) NORMAL
+      const p13830 = result.aggregated.find((p) => p.code === "13830");
+      expect(p13830?.totalStock).toBe(99);
+      expect(p13830?.obs).toBe("AVARIA: 4 UND");
+
+      // Ruffles 21818 e 23054
+      const p21818 = result.aggregated.find((p) => p.code === "21818");
+      expect(p21818?.totalStock).toBe(6);
+
+      const p23054 = result.aggregated.find((p) => p.code === "23054");
+      expect(p23054?.totalStock).toBe(10);
     });
   });
 });
