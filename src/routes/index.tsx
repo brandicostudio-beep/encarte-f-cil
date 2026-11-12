@@ -39,6 +39,7 @@ import { StoryPage916 } from "@/components/encarte/StoryPage916";
 import { TemplateAreaAdjuster } from "@/components/encarte/TemplateAreaAdjuster";
 import { SpreadsheetModal } from "@/components/encarte/SpreadsheetModal";
 import { PdfStockModal } from "@/components/encarte/PdfStockModal";
+import { PdfPriceModal } from "@/components/encarte/PdfPriceModal";
 import { ProductEditModal } from "@/components/encarte/ProductEditModal";
 import { StoreSettingsModal } from "@/components/encarte/StoreSettingsModal";
 import { HowItWorksModal } from "@/components/encarte/HowItWorksModal";
@@ -101,6 +102,7 @@ import {
   HelpCircle,
   Info,
   Undo2,
+  Tag,
 } from "lucide-react";
 import { ColecoesWorkspace } from "@/components/colecoes/ColecoesWorkspace";
 
@@ -190,6 +192,7 @@ function EncarteApp() {
   // Modais
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false);
   const [pdfStockOpen, setPdfStockOpen] = useState(false);
+  const [pdfPriceOpen, setPdfPriceOpen] = useState(false);
   const [storeSettingsOpen, setStoreSettingsOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<EncarteProduct | null>(null);
@@ -913,6 +916,30 @@ function EncarteApp() {
     updateProductsState(finalList);
     setSavedNotice(
       `Estoque de ${updatedCount} produto(s) preenchido automaticamente pelo PDF!`
+    );
+  };
+
+  // Preenchimento em massa de preços pelo relatório PDF
+  const handleApplyPdfPrices = (
+    updates: { code: string; price: string }[]
+  ) => {
+    const priceMap = new Map(
+      updates.map((u) => [u.code.toLowerCase().trim(), u.price])
+    );
+
+    let updatedCount = 0;
+    const updated = products.map((p) => {
+      const newPrice = priceMap.get(p.code.toLowerCase().trim());
+      if (newPrice) {
+        updatedCount++;
+        return { ...p, price: newPrice };
+      }
+      return p;
+    });
+
+    updateProductsState(updated);
+    setSavedNotice(
+      `Preços de ${updatedCount} produto(s) preenchidos automaticamente pelo PDF!`
     );
   };
 
@@ -1861,10 +1888,21 @@ function EncarteApp() {
                         variant="outline"
                         onClick={() => setPdfStockOpen(true)}
                         className="min-h-[44px] text-xs font-bold text-red-800 bg-red-50 border-red-300 hover:bg-red-100"
-                        title="Suba o relatório escaneado em PDF para associar o estoque e preços manuscritos a cada código automaticamente"
+                        title="Suba o relatório escaneado em PDF para associar o estoque a cada código automaticamente"
                       >
                         <FileText className="h-4 w-4 mr-1.5 text-red-600" />
                         Subir PDF de Estoque
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPdfPriceOpen(true)}
+                        className="min-h-[44px] text-xs font-bold text-emerald-800 bg-emerald-50 border-emerald-300 hover:bg-emerald-100"
+                        title="Suba o relatório ou tabela de preços em PDF para associar os preços de venda a cada código automaticamente"
+                      >
+                        <Tag className="h-4 w-4 mr-1.5 text-emerald-600" />
+                        Subir PDF de Preços
                       </Button>
 
                       <Button
@@ -2531,6 +2569,14 @@ function EncarteApp() {
         onOpenChange={setPdfStockOpen}
         products={products}
         onApplyStock={handleApplyPdfStock}
+      />
+
+      {/* 1c. Atualização Automática de Preços por Relatório PDF */}
+      <PdfPriceModal
+        open={pdfPriceOpen}
+        onOpenChange={setPdfPriceOpen}
+        products={products}
+        onApplyPrices={handleApplyPdfPrices}
       />
 
       {/* 2. Edição Detalhada por Item */}
