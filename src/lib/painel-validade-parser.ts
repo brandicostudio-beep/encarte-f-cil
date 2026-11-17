@@ -84,6 +84,15 @@ export function mapHeaderToField(headerKey: string): keyof ValidadeLoteRaw | nul
   if (k === "codcomprador" || k === "cod_comprador") return "codcomprador";
   if (k === "nome" || k === "comprador" || k === "nomecomprador" || k === "comprador_nome") return "nomeComprador";
   if (k === "lote" || k === "numlote" || k === "nu_lote") return "loteNumero";
+  if (
+    k === "foto" ||
+    k === "imagem" ||
+    k === "image" ||
+    k === "urlfoto" ||
+    k === "url_foto" ||
+    k === "fotoproduto" ||
+    k === "foto_produto"
+  ) return "foto";
 
   return null;
 }

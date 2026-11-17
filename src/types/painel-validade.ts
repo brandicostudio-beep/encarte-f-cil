@@ -59,6 +59,7 @@ export interface ValidadeLoteRaw {
   codcomprador?: string;
   nomeComprador?: string;
   loteNumero?: string;
+  foto?: string;
 }
 
 export interface ValidadeDiagnosticoSobra {

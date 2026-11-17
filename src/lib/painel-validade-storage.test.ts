@@ -6,10 +6,18 @@ import {
   setActiveSnapshotId,
   refreshEncartePinsOnActiveSnapshot,
   getActiveEncarteProductCodes,
+  getActiveEncarteInfo,
+  getActiveEncartePhotoMap,
+  saveLastProjectEncarteCache,
+  syncLastEncarteData,
   getStorage,
   MAX_SNAPSHOTS,
   SNAPSHOTS_STORAGE_KEY,
 } from "./painel-validade-storage";
+import {
+  normalizeProductCode,
+  resolverFotoProduto,
+} from "./painel-validade-analytics";
 import type { ValidadeLoteRaw } from "@/types/painel-validade";
 
 describe("Painel de Validade - Gerenciador de Snapshots e Storage", () => {
@@ -116,5 +124,74 @@ describe("Painel de Validade - Gerenciador de Snapshots e Storage", () => {
     const updated = refreshEncartePinsOnActiveSnapshot();
     const updated102 = updated?.lotes.find((l) => l.codprod === "102");
     expect(updated102?.noEncarte).toBe(true);
+  });
+
+  it("considera o último encarte feito mesmo com zeros à esquerda no código e recupera foto", () => {
+    // Encarte tem código sem zero à esquerda mas com foto vinculada
+    const encarteProducts = [
+      {
+        id: "p-22743",
+        code: "22743",
+        name: "MARIA MOLE CHOCOLATE APTI",
+        image: "https://minha-loja.com/fotos/22743.png",
+        included: true,
+      },
+    ];
+    getStorage().setItem("encarte-products-v2", JSON.stringify(encarteProducts));
+
+    // Planilha traz o produto como "022743" (com zero à esquerda)
+    const rawComZeros: ValidadeLoteRaw[] = [
+      {
+        codprod: "022743",
+        descricao: "MARIA MOLE CHOCOLATE APTI",
+        embalagem: "1X50 GR",
+        dtval: "30/11/2026",
+        qtdisp_wms: 17,
+        preco_venda: 1.67,
+      },
+    ];
+
+    const snap = createSnapshotFromRaw(rawComZeros, "teste-zeros.csv");
+    const lote = snap.lotes[0];
+
+    // Deve reconhecer presença no último encarte feito e puxar a foto vinculada
+    expect(lote.noEncarte).toBe(true);
+    expect(lote.foto).toBe("https://minha-loja.com/fotos/22743.png");
+  });
+
+  it("considera o último projeto salvo em cache quando encarte-products-v2 estiver vazio", () => {
+    // Sem nada em encarte-products-v2
+    getStorage().removeItem("encarte-products-v2");
+
+    // Salva o último projeto no cache
+    saveLastProjectEncarteCache({
+      id: "proj-123",
+      name: "Encarte Semanal 46",
+      products: [
+        {
+          code: "101",
+          name: "BATATA PALHA",
+          image: "data:image/jpeg;base64,mockBatata",
+          included: true,
+        },
+      ],
+    });
+
+    const info = getActiveEncarteInfo();
+    expect(info.codes.has("101")).toBe(true);
+    expect(info.photoByCode.get("101")).toBe("data:image/jpeg;base64,mockBatata");
+    expect(info.sourceEncarteName).toBe("Encarte Semanal 46");
+
+    const snap = createSnapshotFromRaw(mockRawLotes, "teste-cache.csv");
+    const lote101 = snap.lotes.find((l) => l.codprod === "101");
+    expect(lote101?.noEncarte).toBe(true);
+    expect(lote101?.foto).toBe("data:image/jpeg;base64,mockBatata");
+  });
+
+  it("puxa fallback de foto do Cescom AgileCDN se o produto não estiver no encarte nem no drive", () => {
+    // Produto 11782 não está no encarte
+    getStorage().clear();
+    const foto = resolverFotoProduto("11782");
+    expect(foto).toBe("https://cescom.agilecdn.com.br/11782_thumb_1.jpg");
   });
 });

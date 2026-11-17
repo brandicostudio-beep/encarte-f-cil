@@ -24,6 +24,71 @@ import type {
   FaixaCobertura,
   RitmoMesStatus,
 } from "@/types/painel-validade";
+import { getThumbnailFallbackUrl } from "./parse-product";
+import { getCachedPhoto } from "./drive-cache";
+
+/**
+ * Normaliza código de produto para comparação robusta
+ * Remove zeros à esquerda caso seja numérico (ex: "022743" -> "22743")
+ */
+export function normalizeProductCode(code: string | number | undefined | null): string {
+  if (code === undefined || code === null) return "";
+  const str = String(code).trim();
+  if (!str) return "";
+  if (/^\d+$/.test(str)) {
+    const num = parseInt(str, 10);
+    return isNaN(num) ? str : String(num);
+  }
+  return str.toUpperCase();
+}
+
+/**
+ * Resolve a melhor foto disponível para um produto
+ * Prioridades:
+ * 1. Foto explícita informada na planilha/raw
+ * 2. Foto vinculada no último encarte feito (seja upload, dataURL ou link)
+ * 3. Foto no cache local do Google Drive / Nuvem / Banco de Fotos
+ * 4. Fallback padrão Cescom AgileCDN por código do produto
+ */
+export function resolverFotoProduto(
+  codprod: string,
+  rawFoto?: string,
+  encartePhotoMap?: Map<string, string>
+): string | undefined {
+  if (rawFoto && typeof rawFoto === "string" && rawFoto.trim()) {
+    return rawFoto.trim();
+  }
+
+  const clean = (codprod || "").trim();
+  if (!clean) return undefined;
+  const normalized = normalizeProductCode(clean);
+
+  // 1. Foto do último encarte feito
+  if (encartePhotoMap) {
+    const encartePhoto = encartePhotoMap.get(clean) || encartePhotoMap.get(normalized);
+    if (encartePhoto && encartePhoto.trim()) {
+      return encartePhoto.trim();
+    }
+  }
+
+  // 2. Cache local do Google Drive / Nuvem
+  try {
+    const driveCached = getCachedPhoto(clean) || getCachedPhoto(normalized);
+    if (driveCached?.dataUrl) {
+      return driveCached.dataUrl;
+    }
+  } catch {}
+
+  // 3. Fallback do CDN Cescom AgileCDN
+  try {
+    const cdnUrl = getThumbnailFallbackUrl(clean);
+    if (cdnUrl) {
+      return cdnUrl;
+    }
+  } catch {}
+
+  return undefined;
+}
 
 /**
  * Converte data em formato brasileiro "dd/mm/aaaa" para objeto Date à meia-noite
@@ -158,7 +223,8 @@ export function processarLote(
   referenceDate: Date = new Date(),
   activeEncarteCodes: Set<string> = new Set(),
   previousBatchKeys?: Set<string>,
-  previousEncarteBatchKeys?: Set<string>
+  previousEncarteBatchKeys?: Set<string>,
+  encartePhotoMap?: Map<string, string>
 ): ValidadeLoteCalculado {
   const codprod = String(raw.codprod).trim();
   const dtval = raw.dtval;
@@ -315,8 +381,13 @@ export function processarLote(
   const faixaGiroMes = classifyFaixaGiroMes(giroMesPercent);
   const faixaCobertura = classifyFaixaCobertura(coberturaMeses);
 
-  // Integração com Encarte (Pino NO ENCARTE)
-  const noEncarte = activeEncarteCodes.has(codprod);
+  // Integração com Encarte (Pino NO ENCARTE considerando o último encarte feito)
+  const noEncarte =
+    activeEncarteCodes.has(codprod) ||
+    activeEncarteCodes.has(normalizeProductCode(codprod));
+
+  // Foto do produto (Planilha > Último Encarte > Cache Drive > AgileCDN)
+  const foto = resolverFotoProduto(codprod, raw.foto, encartePhotoMap);
 
   // Chave única do lote
   const loteId = `${codprod}_${dtval}_${raw.loteNumero || "0"}`;
@@ -370,6 +441,7 @@ export function processarLote(
     nomeComprador: raw.nomeComprador || "Não informado",
     prazoval: raw.prazoval,
     percentTolerancia: raw.percentTolerancia,
+    foto,
     multiplicadorEsforco,
     nivelEsforco,
     recomendacaoComercial,
@@ -388,7 +460,8 @@ export function processarListaLotes(
   referenceDate: Date = new Date(),
   activeEncarteCodes: Set<string> = new Set(),
   previousBatchKeys?: Set<string>,
-  previousEncarteBatchKeys?: Set<string>
+  previousEncarteBatchKeys?: Set<string>,
+  encartePhotoMap?: Map<string, string>
 ): ValidadeLoteCalculado[] {
   return rawList.map((raw) =>
     processarLote(
@@ -396,7 +469,8 @@ export function processarListaLotes(
       referenceDate,
       activeEncarteCodes,
       previousBatchKeys,
-      previousEncarteBatchKeys
+      previousEncarteBatchKeys,
+      encartePhotoMap
     )
   );
 }

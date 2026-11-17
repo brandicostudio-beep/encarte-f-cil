@@ -1079,4 +1079,56 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
     expect(html).toContain("Sem Estoque");
     expect(html).toContain("Sem estoque");
   });
+
+  it("exibe foto do produto no Card e no Modal de Detalhes com fallback seguro", () => {
+    const rawProd: ValidadeLoteRaw = {
+      codprod: "22743",
+      descricao: "MARIA MOLE CHOCOLATE APTI",
+      embalagem: "1X50 GR",
+      dtval: "30/11/2026",
+      qtdisp_wms: 17,
+      preco_venda: 1.67,
+      qtvendmes: 4,
+      qtvendmes1: 0,
+      qtvendmes2: 0,
+      qtvendmes3: 0,
+    };
+
+    // 1. Lote COM foto vinculada (ex: vinda do último encarte ou CDN)
+    const loteComFoto: ValidadeLoteCalculado = {
+      ...processarLote(rawProd, new Date("2026-11-17T00:00:00")),
+      foto: "https://cescom.agilecdn.com.br/22743_thumb_1.jpg",
+      noEncarte: true,
+    };
+
+    const cardHtml = renderToString(<PainelValidadeCard lote={loteComFoto} />);
+    expect(cardHtml).toContain("https://cescom.agilecdn.com.br/22743_thumb_1.jpg");
+    expect(cardHtml).toContain("NO ENCARTE");
+
+    const modalHtml = renderToString(<PainelValidadeItemDetailContent lote={loteComFoto} />);
+    expect(modalHtml).toContain("https://cescom.agilecdn.com.br/22743_thumb_1.jpg");
+    expect(modalHtml).toContain("MARIA MOLE CHOCOLATE APTI");
+
+    // 2. Lote SEM foto (renderiza placeholder com código do produto e ícone sem quebrar)
+    const rawSemFoto: ValidadeLoteRaw = {
+      codprod: "99999",
+      descricao: "PRODUTO TESTE SEM FOTO",
+      embalagem: "UN",
+      dtval: "30/11/2026",
+      qtdisp_wms: 10,
+      preco_venda: 5.0,
+    };
+    const loteSemFoto: ValidadeLoteCalculado = {
+      ...processarLote(rawSemFoto, new Date("2026-11-17T00:00:00")),
+      foto: undefined,
+      noEncarte: false,
+    };
+
+    const cardSemFotoHtml = renderToString(<PainelValidadeCard lote={loteSemFoto} />);
+    expect(cardSemFotoHtml).toContain("99999");
+    expect(cardSemFotoHtml).not.toContain("NO ENCARTE");
+
+    const modalSemFotoHtml = renderToString(<PainelValidadeItemDetailContent lote={loteSemFoto} />);
+    expect(modalSemFotoHtml).toContain("PRODUTO TESTE SEM FOTO");
+  });
 });

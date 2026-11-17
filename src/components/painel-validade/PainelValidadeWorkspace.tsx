@@ -19,6 +19,7 @@ import {
   setActiveSnapshotId,
   createSnapshotFromRaw,
   refreshEncartePinsOnActiveSnapshot,
+  syncLastEncarteData,
 } from "@/lib/painel-validade-storage";
 import {
   filtrarLotes,
@@ -65,15 +66,43 @@ export function PainelValidadeWorkspace({
 
   // Carrega snapshot inicial e lista
   const reloadData = useCallback(() => {
+    // Sincroniza pinos e fotos de forma síncrona imediatamente
     refreshEncartePinsOnActiveSnapshot();
     const active = getActiveSnapshot();
     const list = loadSnapshotsList();
     setSnapshot(active);
     setSnapshotsList(list);
+
+    // E sincroniza com o IndexedDB de forma assíncrona para buscar o último encarte salvo
+    if (typeof window !== "undefined") {
+      syncLastEncarteData()
+        .then(() => {
+          const refreshed = getActiveSnapshot();
+          if (refreshed) {
+            setSnapshot(refreshed);
+          }
+        })
+        .catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
     reloadData();
+  }, [reloadData]);
+
+  // Sincronização ao focar a janela ou detectar alteração no localStorage (ex: salvou encarte em outra aba)
+  useEffect(() => {
+    const handleSync = () => {
+      reloadData();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", handleSync);
+      window.addEventListener("storage", handleSync);
+      return () => {
+        window.removeEventListener("focus", handleSync);
+        window.removeEventListener("storage", handleSync);
+      };
+    }
   }, [reloadData]);
 
   // Atualização periódica a cada 4 minutos para checar alterações de encarte

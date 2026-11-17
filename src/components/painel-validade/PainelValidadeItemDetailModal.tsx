@@ -29,6 +29,7 @@ import {
   gerarDiagnosticoSobraCompleto,
   formatRitmoBR,
 } from "@/lib/painel-validade-analytics";
+import { PainelValidadeProductImage } from "./PainelValidadeProductImage";
 
 export interface PainelValidadeItemDetailContentProps {
   lote: ValidadeLoteCalculado;
@@ -51,42 +52,53 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
   return (
     <div className="space-y-6">
       <div className="border-b pb-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="font-mono font-bold text-sm bg-neutral-100 text-neutral-800 px-2 py-0.5 rounded border">
-              {lote.codprod}
-            </span>
-            {lote.noEncarte && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-black bg-yellow-400 text-yellow-950 uppercase">
-                <Sparkles className="h-3.5 w-3.5" />
-                NO ENCARTE
+        <div className="flex items-start gap-4">
+          <PainelValidadeProductImage
+            src={lote.foto}
+            alt={lote.descricao}
+            codprod={lote.codprod}
+            size="lg"
+          />
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono font-bold text-sm bg-neutral-100 text-neutral-800 px-2 py-0.5 rounded border">
+                  {lote.codprod}
+                </span>
+                {lote.noEncarte && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-black bg-yellow-400 text-yellow-950 uppercase">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    NO ENCARTE
+                  </span>
+                )}
+              </div>
+
+              <span
+                className={`px-3 py-1 rounded-xl text-xs font-black font-mono border ${
+                  lote.isVencido
+                    ? "bg-red-950 text-white border-red-900"
+                    : lote.diasParaVencer <= 7
+                    ? "bg-red-600 text-white border-red-700"
+                    : lote.diasParaVencer <= 30
+                    ? "bg-orange-500 text-white border-orange-600"
+                    : "bg-emerald-600 text-white border-emerald-700"
+                }`}
+              >
+                {lote.isVencido
+                  ? `Vencido (${Math.abs(lote.diasParaVencer)}d)`
+                  : `Vence em ${lote.diasParaVencer} dias`}
               </span>
-            )}
+            </div>
+
+            <h3 className="text-xl sm:text-2xl font-black text-neutral-900 mt-2 leading-tight">
+              {lote.descricao}
+            </h3>
+            <p className="text-xs text-neutral-500 mt-1">
+              Embalagem: <strong className="text-neutral-700">{lote.embalagem}</strong> • Data de Validade: <strong className="text-neutral-800 font-mono">{lote.dtval}</strong>
+            </p>
           </div>
-
-          <span
-            className={`px-3 py-1 rounded-xl text-xs font-black font-mono border ${
-              lote.isVencido
-                ? "bg-red-950 text-white border-red-900"
-                : lote.diasParaVencer <= 7
-                ? "bg-red-600 text-white border-red-700"
-                : lote.diasParaVencer <= 30
-                ? "bg-orange-500 text-white border-orange-600"
-                : "bg-emerald-600 text-white border-emerald-700"
-            }`}
-          >
-            {lote.isVencido
-              ? `Vencido (${Math.abs(lote.diasParaVencer)}d)`
-              : `Vence em ${lote.diasParaVencer} dias`}
-          </span>
         </div>
-
-        <h3 className="text-xl sm:text-2xl font-black text-neutral-900 mt-2 leading-tight">
-          {lote.descricao}
-        </h3>
-        <p className="text-xs text-neutral-500 mt-0.5">
-          Embalagem: {lote.embalagem} • Data de Validade: {lote.dtval}
-        </p>
       </div>
 
       <div className="space-y-6">

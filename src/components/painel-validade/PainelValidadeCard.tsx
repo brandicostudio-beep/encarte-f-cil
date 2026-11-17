@@ -24,6 +24,7 @@ import {
   gerarExplicacaoSobraLinha,
   formatRitmoBR,
 } from "@/lib/painel-validade-analytics";
+import { PainelValidadeProductImage } from "./PainelValidadeProductImage";
 
 interface PainelValidadeCardProps {
   lote: ValidadeLoteCalculado;
@@ -227,19 +228,27 @@ export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
               </span>
             </div>
 
-            {/* 2. NOME DO PRODUTO (>= 22px em negrito para 70+ e clareza visual) */}
-            <div>
-              <h2
-                className="font-black text-neutral-900 tracking-tight leading-snug line-clamp-2 group-hover:text-red-700 transition-colors"
-                style={{ fontSize: "22px" }}
-                title={lote.descricao}
-              >
-                {lote.descricao}
-              </h2>
-              <div className="text-xs text-neutral-500 font-medium mt-1 flex items-center gap-2">
-                <span>Embalagem: <strong className="text-neutral-700">{lote.embalagem}</strong></span>
-                <span>•</span>
-                <span>Validade: <strong className="text-neutral-800 font-mono">{lote.dtval}</strong></span>
+            {/* 2. NOME DO PRODUTO COM FOTO (>= 22px em negrito para 70+ e clareza visual) */}
+            <div className="flex items-start gap-3 sm:gap-4">
+              <PainelValidadeProductImage
+                src={lote.foto}
+                alt={lote.descricao}
+                codprod={lote.codprod}
+                size="md"
+              />
+              <div className="flex-1 min-w-0">
+                <h2
+                  className="font-black text-neutral-900 tracking-tight leading-snug line-clamp-2 group-hover:text-red-700 transition-colors"
+                  style={{ fontSize: "22px" }}
+                  title={lote.descricao}
+                >
+                  {lote.descricao}
+                </h2>
+                <div className="text-xs text-neutral-500 font-medium mt-1 flex items-center gap-2 flex-wrap">
+                  <span>Embalagem: <strong className="text-neutral-700">{lote.embalagem}</strong></span>
+                  <span>•</span>
+                  <span>Validade: <strong className="text-neutral-800 font-mono">{lote.dtval}</strong></span>
+                </div>
               </div>
             </div>
 
