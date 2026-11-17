@@ -185,6 +185,7 @@ export const PainelValidadeFilters: React.FC<PainelValidadeFiltersProps> = ({
     const labels: Record<string, string> = {
       no_limite: "No limite (60% a 99%)",
       escoa_tempo: "100% no prazo",
+      sem_estoque: "Sem estoque",
     };
     activeChips.push({
       id: "faixaEscoaTempo",
@@ -676,6 +677,7 @@ export const PainelValidadeFilters: React.FC<PainelValidadeFiltersProps> = ({
                 <option value="todas">Todas as situações</option>
                 <option value="no_limite">⚠️ No limite (60% a 99%)</option>
                 <option value="escoa_tempo">✓ 100% no prazo</option>
+                <option value="sem_estoque">📦 Sem estoque</option>
               </select>
             </div>
 

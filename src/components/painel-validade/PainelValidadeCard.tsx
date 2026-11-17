@@ -2,6 +2,7 @@ import React from "react";
 import type { ValidadeLoteCalculado } from "@/types/painel-validade";
 import {
   Package,
+  PackageX,
   Clock,
   TrendingDown,
   User,
@@ -123,9 +124,13 @@ export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
 
   const escoaBar = getEscoaBarColors();
 
-  // Destaque de borda para casos críticos
+  // Destaque de borda para casos críticos e sem estoque
+  const isSemEstoque = lote.isSemEstoque || lote.estoque === 0;
   const isCritico =
-    lote.diasParaVencer <= 30 && lote.escoaTempoPercent < 60 && !lote.isVencido;
+    !isSemEstoque &&
+    lote.diasParaVencer <= 30 &&
+    lote.escoaTempoPercent < 60 &&
+    !lote.isVencido;
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -149,7 +154,9 @@ export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
               }
             }}
             className={`rounded-2xl border bg-white p-5 shadow-xs hover:shadow-md transition-all cursor-pointer text-left flex flex-col justify-between gap-4 group ${
-              lote.isVencido
+              isSemEstoque
+                ? "border-neutral-200 bg-neutral-50/50 opacity-90"
+                : lote.isVencido
                 ? "border-red-900/50 bg-red-50/20"
                 : isCritico
                 ? "border-l-8 border-l-red-600 border-neutral-200"
@@ -165,6 +172,17 @@ export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
                 <span className="font-mono font-bold text-sm bg-neutral-100 text-neutral-800 px-2 py-0.5 rounded-md border border-neutral-200">
                   {lote.codprod}
                 </span>
+
+                {/* Selo SEM ESTOQUE quando estoque for zero no Winthor */}
+                {isSemEstoque && (
+                  <span
+                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-black bg-neutral-200 text-neutral-800 border border-neutral-300 shadow-2xs uppercase tracking-wider"
+                    title="Produto sem estoque disponível no Winthor"
+                  >
+                    <PackageX className="h-3.5 w-3.5 text-neutral-600 shrink-0" />
+                    SEM ESTOQUE
+                  </span>
+                )}
 
                 {/* Selo Amarelo Grande NO ENCARTE (Conforme Especificação) */}
                 {lote.noEncarte && (
@@ -225,51 +243,89 @@ export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
               </div>
             </div>
 
-            {/* 3. BARRA DE ESCOA A TEMPO (%) COM NÚMERO ESCRITO */}
-            <div className="bg-neutral-50 p-3 rounded-xl border border-neutral-200/80 space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-bold">
-                <span className="text-neutral-600">Escoa a tempo até o vencimento:</span>
-                <span className={`font-mono text-sm font-black ${escoaBar.textClass}`}>
-                  {escoaBar.label}
-                </span>
-              </div>
-
-              {/* Barra de Progresso Colorida */}
-              <div className="w-full h-3 rounded-full bg-neutral-200 overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${escoaBar.barBg}`}
-                  style={{ width: `${Math.min(100, Math.max(3, lote.escoaTempoPercent))}%` }}
-                />
-              </div>
-
-              {/* Projeção de Sobra ou Saída */}
-              <div className="flex items-center justify-between text-[11px] text-neutral-500 font-medium pt-0.5">
-                <span>Ritmo atual: <strong>{formatRitmoBR(lote.ritmoAtualDia)} un/dia</strong></span>
-                {lote.sobraPrevistaUnidades > 0 ? (
-                  <span className="text-red-700 font-bold">
-                    Previsão de sobra: ~{Math.round(lote.sobraPrevistaUnidades)} un
+            {/* 3. BARRA DE ESCOA A TEMPO (%) OU SITUAÇÃO SEM ESTOQUE */}
+            {isSemEstoque ? (
+              <div className="bg-neutral-100/70 p-3 rounded-xl border border-neutral-200/90 space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className="text-neutral-600 flex items-center gap-1.5">
+                    <PackageX className="h-4 w-4 text-neutral-500" />
+                    Situação do Estoque:
                   </span>
-                ) : (
-                  <span className="text-emerald-700 font-bold">
-                    Estoque deve escoar totalmente
+                  <span className="font-mono text-xs font-black text-neutral-700 uppercase bg-neutral-200 px-2 py-0.5 rounded border border-neutral-300">
+                    Sem Estoque
                   </span>
-                )}
+                </div>
+
+                {/* Barra de Progresso Zerada */}
+                <div className="w-full h-2.5 rounded-full bg-neutral-200 overflow-hidden">
+                  <div className="h-full rounded-full bg-neutral-400 w-0" />
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-neutral-500 font-medium pt-0.5">
+                  <span>Estoque zerado no Winthor</span>
+                  <span className="text-neutral-600 font-bold">Sem sobra prevista</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-neutral-50 p-3 rounded-xl border border-neutral-200/80 space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className="text-neutral-600">Escoa a tempo até o vencimento:</span>
+                  <span className={`font-mono text-sm font-black ${escoaBar.textClass}`}>
+                    {escoaBar.label}
+                  </span>
+                </div>
+
+                {/* Barra de Progresso Colorida */}
+                <div className="w-full h-3 rounded-full bg-neutral-200 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${escoaBar.barBg}`}
+                    style={{ width: `${Math.min(100, Math.max(3, lote.escoaTempoPercent))}%` }}
+                  />
+                </div>
+
+                {/* Projeção de Sobra ou Saída */}
+                <div className="flex items-center justify-between text-[11px] text-neutral-500 font-medium pt-0.5">
+                  <span>Ritmo atual: <strong>{formatRitmoBR(lote.ritmoAtualDia)} un/dia</strong></span>
+                  {lote.sobraPrevistaUnidades > 0 ? (
+                    <span className="text-red-700 font-bold">
+                      Previsão de sobra: ~{Math.round(lote.sobraPrevistaUnidades)} un
+                    </span>
+                  ) : (
+                    <span className="text-emerald-700 font-bold">
+                      Estoque deve escoar totalmente
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* 4. RODAPÉ DO CARD: ESTOQUE, COMPRADOR E BOTÃO DETALHES */}
             <div className="flex items-center justify-between pt-2 border-t border-neutral-100 text-xs">
               {/* Estoque em destaque */}
               <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-700">
-                  <Package className="h-4 w-4" />
+                <div
+                  className={`h-8 w-8 rounded-lg flex items-center justify-center ${
+                    isSemEstoque
+                      ? "bg-neutral-100 text-neutral-400"
+                      : "bg-neutral-100 text-neutral-700"
+                  }`}
+                >
+                  {isSemEstoque ? <PackageX className="h-4 w-4" /> : <Package className="h-4 w-4" />}
                 </div>
                 <div>
                   <div className="text-[10px] text-neutral-500 uppercase font-semibold">
-                    Estoque (QTDISP_WMS)
+                    {isSemEstoque ? "Estoque (Winthor)" : "Estoque Atual"}
                   </div>
                   <div className="text-base font-black text-neutral-900 font-mono leading-none">
-                    {lote.estoque} <span className="text-xs font-normal text-neutral-500">{lote.embalagem}</span>
+                    {isSemEstoque ? (
+                      <span className="text-xs sm:text-sm font-bold text-neutral-500">
+                        Sem estoque
+                      </span>
+                    ) : (
+                      <>
+                        {lote.estoque} <span className="text-xs font-normal text-neutral-500">{lote.embalagem}</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

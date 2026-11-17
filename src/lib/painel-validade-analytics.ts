@@ -78,7 +78,8 @@ export function classifyFaixaVencimento(dias: number | null | undefined): FaixaV
 /**
  * Classifica a porcentagem de escoamento a tempo
  */
-export function classifyFaixaEscoaTempo(escoaPercent: number): FaixaEscoaTempo {
+export function classifyFaixaEscoaTempo(escoaPercent: number, estoque: number = 1): FaixaEscoaTempo {
+  if (estoque <= 0) return "sem_estoque";
   if (escoaPercent < 60) return "vai_sobrar";
   if (escoaPercent < 100) return "no_limite";
   return "escoa_tempo";
@@ -165,13 +166,28 @@ export function processarLote(
   const diasParaVencer = calcDaysToExpiry(dtval, referenceDate);
   const isVencido = diasParaVencer < 0;
 
-  // Estoque atual considerado: QTDISP_WMS e também QEST_WINTHOR
-  const estoqueWms = raw.qtdisp_wms !== undefined && raw.qtdisp_wms !== null ? raw.qtdisp_wms : 0;
-  const estoqueWinthor = raw.qtest_winthor !== undefined && raw.qtest_winthor !== null ? raw.qtest_winthor : 0;
-  const estoque = Math.max(
-    0,
-    estoqueWms > 0 ? estoqueWms : (estoqueWinthor > 0 ? estoqueWinthor : (estoqueWms || estoqueWinthor || 0))
-  );
+  // Estoque atual considerado: QEST_WINTHOR e QTDISP_WMS
+  // Regra do Winthor: Se QEST_WINTHOR for zerado (<= 0), o produto está SEM ESTOQUE.
+  const hasWinthor = raw.qtest_winthor !== undefined && raw.qtest_winthor !== null;
+  const hasWms = raw.qtdisp_wms !== undefined && raw.qtdisp_wms !== null;
+  const estoqueWinthor = hasWinthor ? raw.qtest_winthor! : null;
+  const estoqueWms = hasWms ? raw.qtdisp_wms! : null;
+
+  let estoque = 0;
+  if (hasWinthor) {
+    // Se o Winthor está zerado (QEST_WINTHOR <= 0), o produto está SEM ESTOQUE
+    if (estoqueWinthor! <= 0) {
+      estoque = 0;
+    } else if (hasWms && estoqueWms! > 0) {
+      estoque = Math.min(estoqueWinthor!, estoqueWms!);
+    } else {
+      estoque = Math.max(0, estoqueWinthor!);
+    }
+  } else if (hasWms) {
+    estoque = Math.max(0, estoqueWms!);
+  }
+
+  const isSemEstoque = estoque === 0 || (hasWinthor && estoqueWinthor! <= 0);
   const precoVenda = Math.max(0, raw.preco_venda || 0);
 
   // Vendas com preservação de ausência de dados (null) vs zero numérico (0)
@@ -199,12 +215,12 @@ export function processarLote(
 
   // Ritmo necessário para escoar todo o lote (unidades / dia)
   const ritmoNecessarioDia =
-    diasParaVencer > 0
+    diasParaVencer > 0 && estoque > 0
       ? Math.round((estoque / diasParaVencer) * 100) / 100
       : 0;
 
   // Escoa a tempo (%)
-  let escoaTempoPercent = 100;
+  let escoaTempoPercent = 0;
   if (estoque > 0) {
     if (diasParaVencer <= 0) {
       escoaTempoPercent = 0;
@@ -264,7 +280,10 @@ export function processarLote(
   let nivelEsforco: "normal" | "atencao" | "alerta_promocao" | "critico_queima" = "normal";
   let recomendacaoComercial = "Demanda suficiente para escoar todo o lote no ritmo natural.";
 
-  if (isVencido || diasParaVencer < 0) {
+  if (isSemEstoque || estoque === 0) {
+    nivelEsforco = "normal";
+    recomendacaoComercial = "Produto sem estoque disponível no Winthor. Não há sobra prevista para este lote.";
+  } else if (isVencido || diasParaVencer < 0) {
     nivelEsforco = "critico_queima";
     recomendacaoComercial = "Lote vencido. Retirar da área de venda e providenciar descarte ou devolução.";
   } else if (isSemVenda || mediaMensalFechada === 0) {
@@ -292,7 +311,7 @@ export function processarLote(
 
   // Faixas
   const faixaVencimento = classifyFaixaVencimento(diasParaVencer);
-  const faixaEscoaTempo = classifyFaixaEscoaTempo(escoaTempoPercent);
+  const faixaEscoaTempo = classifyFaixaEscoaTempo(escoaTempoPercent, estoque);
   const faixaGiroMes = classifyFaixaGiroMes(giroMesPercent);
   const faixaCobertura = classifyFaixaCobertura(coberturaMeses);
 
@@ -318,8 +337,9 @@ export function processarLote(
     diasParaVencer,
     isVencido,
     estoque,
-    qtdisp_wms: estoqueWms,
-    qtest_winthor: estoqueWinthor,
+    isSemEstoque,
+    qtdisp_wms: estoqueWms !== null ? estoqueWms : undefined,
+    qtest_winthor: estoqueWinthor !== null ? estoqueWinthor : undefined,
     precoVenda,
     precoTotalPlanilha: raw.preco_total,
     valorEmRisco,
@@ -455,6 +475,11 @@ export function calcularAlertCounts(lotes: ValidadeLoteCalculado[]): ValidadeAle
   let saiuDoEncarte = 0;
 
   for (const lote of lotes) {
+    // Produtos sem estoque no Winthor não disparam alertas operacionais
+    if (lote.isSemEstoque || lote.estoque <= 0) {
+      continue;
+    }
+
     // Crítico: vence em até 30 dias E escoa a tempo abaixo de 60%
     if (lote.diasParaVencer >= 0 && lote.diasParaVencer <= 30 && lote.escoaTempoPercent < 60) {
       critico++;
@@ -512,21 +537,27 @@ export function filtrarLotes(
 
     // 2. Filtro Rápido Principal
     if (params.filtroRapido === "critico") {
+      if (l.isSemEstoque || l.estoque <= 0) return false;
       if (!(l.diasParaVencer >= 0 && l.diasParaVencer <= 30 && l.escoaTempoPercent < 60)) {
         return false;
       }
     } else if (params.filtroRapido === "vence_7d") {
+      if (l.isSemEstoque || l.estoque <= 0) return false;
       if (!(l.diasParaVencer >= 0 && l.diasParaVencer <= 7)) {
         return false;
       }
     } else if (params.filtroRapido === "vai_sobrar") {
-      if (!(l.escoaTempoPercent < 60 && !l.isVencido)) {
+      if (l.isSemEstoque || l.estoque <= 0) return false;
+      if (!(l.escoaTempoPercent < 60 && !l.isVencido && l.sobraPrevistaUnidades > 0)) {
         return false;
       }
     } else if (params.filtroRapido === "parado" || params.filtroRapido === "sem_vendas_3m") {
+      if (l.isSemEstoque || l.estoque <= 0) return false;
       if (!(l.isSemVenda && l.diasParaVencer >= 0 && l.diasParaVencer <= 90)) {
         return false;
       }
+    } else if (params.filtroRapido === "sem_estoque") {
+      if (!l.isSemEstoque && l.estoque > 0) return false;
     }
 
     // 3. Faixa de Vencimento
@@ -641,13 +672,18 @@ export function gerarExplicacaoSobraLinha(lote: ValidadeLoteCalculado): string {
   const dias = lote.diasParaVencer;
   const ritmoStr = formatRitmoBR(lote.ritmoAtualDia);
 
-  // 1. Caso Vencido (< 0 dias)
+  // 1. Caso Sem Estoque (QEST_WINTHOR = 0 ou estoque = 0)
+  if (lote.isSemEstoque || estoque <= 0) {
+    return `Produto sem estoque no Winthor (0 un). Não há sobra prevista para este lote.`;
+  }
+
+  // 2. Caso Vencido (< 0 dias)
   if (lote.isVencido || dias < 0) {
     const diasAtras = Math.abs(dias);
     return `Lote vencido há ${diasAtras} dia${diasAtras === 1 ? "" : "s"}. Todo o estoque de ${estoque} un sobrou.`;
   }
 
-  // 2. Caso Venda Zero nos 3 meses fechados (sem venda)
+  // 3. Caso Venda Zero nos 3 meses fechados (sem venda)
   // Regra: "Lote com venda zero nos 3 meses mostra 'sem venda' e não divide por zero."
   if (lote.isSemVenda || lote.mediaMensalFechada === 0 || lote.ritmoAtualDia === 0) {
     if (dias === 0) {
@@ -657,7 +693,7 @@ export function gerarExplicacaoSobraLinha(lote: ValidadeLoteCalculado): string {
     return `Sem venda nos últimos meses (ritmo 0 un/dia). ${diasTxt}, todo o estoque de ${estoque} un deve sobrar.`;
   }
 
-  // 3. Caso Histórico Ausente (todos os 3 meses com null)
+  // 4. Caso Histórico Ausente (todos os 3 meses com null)
   const semDadosHistorico =
     lote.vendaM1Raw === null &&
     lote.vendaM2Raw === null &&
@@ -667,14 +703,14 @@ export function gerarExplicacaoSobraLinha(lote: ValidadeLoteCalculado): string {
     return `Sem dados de vendas nos últimos meses. ${diasTxt}, estoque de ${estoque} un pode sobrar.`;
   }
 
-  // 4. Caso Escoa 100% (sobra 0)
+  // 5. Caso Escoa 100% (sobra 0)
   // Regra: "Lote que escoa 100% não mostra 'sobra'."
   if (lote.escoaTempoPercent >= 100 || lote.sobraPrevistaUnidades <= 0) {
     const diasTxt = dias === 1 ? "Em 1 dia" : `Em ${dias} dias`;
     return `${diasTxt}, no ritmo de ${ritmoStr} un/dia, vende todo o estoque de ${estoque} un (escoa 100%).`;
   }
 
-  // 5. Caso Normal com Previsão de Sobra
+  // 6. Caso Normal com Previsão de Sobra
   // Exemplo do prompt: "Em 23 dias, no ritmo de 0,54 un/dia, vende ~12 un. Sobram ~215 un."
   const vendaPrevista = Math.round(lote.ritmoAtualDia * Math.max(0, dias));
   const sobraPrevista = Math.round(lote.sobraPrevistaUnidades);
@@ -695,12 +731,13 @@ export function gerarDiagnosticoSobraCompleto(
 ): ValidadeDiagnosticoSobra {
   const estoque = lote.estoque;
   const dias = lote.diasParaVencer;
-  const isEscoa100 = lote.escoaTempoPercent >= 100 || lote.sobraPrevistaUnidades <= 0;
-  const isSemVenda = lote.isSemVenda || lote.mediaMensalFechada === 0;
+  const isSemEstoque = lote.isSemEstoque || estoque <= 0;
+  const isEscoa100 = !isSemEstoque && (lote.escoaTempoPercent >= 100 || lote.sobraPrevistaUnidades <= 0);
+  const isSemVenda = !isSemEstoque && (lote.isSemVenda || lote.mediaMensalFechada === 0);
   const ritmoStr = formatRitmoBR(lote.ritmoAtualDia);
   const mediaStr = lote.mediaMensalFechada.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
-  const vendaPrevista = Math.round(lote.ritmoAtualDia * Math.max(0, dias));
-  const sobraPrevista = Math.round(lote.sobraPrevistaUnidades);
+  const vendaPrevista = isSemEstoque ? 0 : Math.round(lote.ritmoAtualDia * Math.max(0, dias));
+  const sobraPrevista = isSemEstoque ? 0 : Math.round(lote.sobraPrevistaUnidades);
 
   const mesesFechados = [
     {
@@ -747,7 +784,9 @@ export function gerarDiagnosticoSobraCompleto(
 
   // Cálculo escrito em frases simples, sem fórmulas
   let explicacaoSimples = "";
-  if (lote.isVencido) {
+  if (isSemEstoque) {
+    explicacaoSimples = `Este produto está sem estoque disponível no Winthor (0 unidades). Como não há unidades em estoque no centro de distribuição, não há sobra prevista para este lote na data de validade (${lote.dtval}).`;
+  } else if (lote.isVencido) {
     const diasAtras = Math.abs(dias);
     explicacaoSimples = `Este lote venceu há ${diasAtras} dia${diasAtras === 1 ? "" : "s"}. Como a data de validade já expirou, todo o estoque restante de ${estoque} unidades no centro de distribuição sobrou e requer descarte ou devolução imediata.`;
   } else if (isSemVenda) {
@@ -758,11 +797,15 @@ export function gerarDiagnosticoSobraCompleto(
     explicacaoSimples = `Com base no histórico recente de vendas (mês atual e últimos meses), este produto vende em média ${mediaStr} unidades por mês, o que dá um ritmo de ${ritmoStr} unidades por dia. Como faltam ${dias} dias para o lote vencer, a previsão é vender cerca de ${vendaPrevista} unidades. Como o estoque atual no CD é de ${estoque} unidades, sobram cerca de ${sobraPrevista} unidades sem vender até a data de validade (${lote.escoaTempoPercent}% escoado).`;
   }
 
-  const avisoIrregularidade = lote.vendaIrregular
+  const avisoIrregularidade = lote.vendaIrregular && !isSemEstoque
     ? "As vendas oscilaram bastante nos últimos 3 meses (venda irregular: um mês zerado ou 3x maior que outro). Por isso, o ritmo real de saída e a previsão de sobra podem variar."
     : null;
 
-  const titulo = isEscoa100 ? "Previsão de Saída do Lote" : "Por que vai sobrar?";
+  const titulo = isSemEstoque
+    ? "Situação do Estoque"
+    : isEscoa100
+    ? "Previsão de Saída do Lote"
+    : "Por que vai sobrar?";
 
   return {
     titulo,
@@ -775,8 +818,9 @@ export function gerarDiagnosticoSobraCompleto(
     diasParaVencer: dias,
     vendaPrevista,
     sobraPrevista,
-    escoaTempoPercent: lote.escoaTempoPercent,
+    escoaTempoPercent: isSemEstoque ? 0 : lote.escoaTempoPercent,
     isSemVenda,
+    isSemEstoque,
     isEscoa100,
     isVencido: lote.isVencido,
     vendaIrregular: lote.vendaIrregular,

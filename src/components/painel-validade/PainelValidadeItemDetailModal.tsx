@@ -132,14 +132,18 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
             {/* Selo Resumo */}
             <span
               className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border shadow-2xs ${
-                diagnostico.isEscoa100
+                diagnostico.isSemEstoque || diagnostico.estoque === 0
+                  ? "bg-neutral-200 text-neutral-800 border-neutral-300"
+                  : diagnostico.isEscoa100
                   ? "bg-emerald-100 text-emerald-900 border-emerald-300"
                   : diagnostico.isSemVenda
                   ? "bg-rose-100 text-rose-900 border-rose-300"
                   : "bg-amber-100 text-amber-900 border-amber-300"
               }`}
             >
-              {diagnostico.isEscoa100
+              {diagnostico.isSemEstoque || diagnostico.estoque === 0
+                ? "Sem Estoque no Winthor"
+                : diagnostico.isEscoa100
                 ? "100% Escoa a tempo"
                 : `~${diagnostico.sobraPrevista} un vão sobrar`}
             </span>
@@ -208,13 +212,16 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
                 <span className="text-neutral-600">Disponível para venda:</span>
                 <div className="text-right">
                   <span className="font-mono font-bold text-neutral-900">
-                    {diagnostico.estoque} <span className="text-neutral-500 font-normal">{lote.embalagem}</span>
+                    {diagnostico.isSemEstoque || diagnostico.estoque === 0 ? (
+                      <span className="text-neutral-500 font-bold">Sem estoque (0 {lote.embalagem})</span>
+                    ) : (
+                      <>{diagnostico.estoque} <span className="text-neutral-500 font-normal">{lote.embalagem}</span></>
+                    )}
                   </span>
                   {lote.qtdisp_wms !== undefined &&
-                    lote.qtest_winthor !== undefined &&
-                    lote.qtdisp_wms !== lote.qtest_winthor && (
+                    lote.qtest_winthor !== undefined && (
                       <span className="text-[10px] text-neutral-500 block">
-                        WMS: {lote.qtdisp_wms} un • Winthor: {lote.qtest_winthor} un
+                        Winthor: {lote.qtest_winthor} un • WMS: {lote.qtdisp_wms} un
                       </span>
                     )}
                 </div>
@@ -240,39 +247,52 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
               Sobra prevista e escoamento
             </div>
             <div className="grid grid-cols-2 gap-3 text-center">
-              <div className="p-2.5 rounded-lg bg-neutral-50 border border-neutral-200">
-                <span className="text-neutral-500 text-[11px] block">Escoa a tempo</span>
-                <span
-                  className={`text-xl font-black font-mono block mt-0.5 ${
-                    diagnostico.isEscoa100
-                      ? "text-emerald-700"
-                      : diagnostico.escoaTempoPercent >= 60
-                      ? "text-amber-700"
-                      : "text-red-700"
-                  }`}
-                >
-                  {diagnostico.escoaTempoPercent}%
-                </span>
-              </div>
-
-              {!diagnostico.isEscoa100 ? (
-                <div className="p-2.5 rounded-lg bg-red-50 border border-red-200">
-                  <span className="text-red-700 text-[11px] font-semibold block">
-                    Sobra prevista (estoque − venda prevista)
+              {diagnostico.isSemEstoque || diagnostico.estoque === 0 ? (
+                <div className="p-2.5 rounded-lg bg-neutral-50 border border-neutral-200 col-span-2">
+                  <span className="text-neutral-500 text-[11px] font-semibold block">
+                    Situação do lote
                   </span>
-                  <span className="text-xl font-black font-mono text-red-700 block mt-0.5">
-                    ~{diagnostico.sobraPrevista} un
+                  <span className="text-sm font-bold text-neutral-700 block mt-1">
+                    Sem estoque no Winthor (0 un) • Não há sobra prevista
                   </span>
                 </div>
               ) : (
-                <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200">
-                  <span className="text-emerald-700 text-[11px] font-semibold block">
-                    Situação do lote
-                  </span>
-                  <span className="text-sm font-bold text-emerald-800 block mt-1">
-                    Demanda suficiente para escoar 100%
-                  </span>
-                </div>
+                <>
+                  <div className="p-2.5 rounded-lg bg-neutral-50 border border-neutral-200">
+                    <span className="text-neutral-500 text-[11px] block">Escoa a tempo</span>
+                    <span
+                      className={`text-xl font-black font-mono block mt-0.5 ${
+                        diagnostico.isEscoa100
+                          ? "text-emerald-700"
+                          : diagnostico.escoaTempoPercent >= 60
+                          ? "text-amber-700"
+                          : "text-red-700"
+                      }`}
+                    >
+                      {diagnostico.escoaTempoPercent}%
+                    </span>
+                  </div>
+
+                  {!diagnostico.isEscoa100 ? (
+                    <div className="p-2.5 rounded-lg bg-red-50 border border-red-200">
+                      <span className="text-red-700 text-[11px] font-semibold block">
+                        Sobra prevista (estoque − venda prevista)
+                      </span>
+                      <span className="text-xl font-black font-mono text-red-700 block mt-0.5">
+                        ~{diagnostico.sobraPrevista} un
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200">
+                      <span className="text-emerald-700 text-[11px] font-semibold block">
+                        Situação do lote
+                      </span>
+                      <span className="text-sm font-bold text-emerald-800 block mt-1">
+                        Demanda suficiente para escoar 100%
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

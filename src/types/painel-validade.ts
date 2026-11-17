@@ -15,7 +15,8 @@ export type FaixaVencimento =
 export type FaixaEscoaTempo =
   | "vai_sobrar"   // < 60%
   | "no_limite"    // 60% a 99%
-  | "escoa_tempo"; // 100%
+  | "escoa_tempo"  // 100%
+  | "sem_estoque"; // Sem estoque no Winthor / CD
 
 export type FaixaGiroMes =
   | "parado"       // 0%
@@ -79,6 +80,7 @@ export interface ValidadeDiagnosticoSobra {
   sobraPrevista: number;
   escoaTempoPercent: number;
   isSemVenda: boolean;
+  isSemEstoque: boolean;
   isEscoa100: boolean;
   isVencido: boolean;
   vendaIrregular: boolean;
@@ -104,6 +106,7 @@ export interface ValidadeLoteCalculado {
 
   // Estoque & Preços
   estoque: number;
+  isSemEstoque: boolean;
   qtdisp_wms?: number;
   qtest_winthor?: number;
   precoVenda: number;
@@ -185,7 +188,7 @@ export interface ValidadePreviewImport {
 
 export interface ValidadeFilterParams {
   busca?: string;
-  filtroRapido?: "todos" | "critico" | "vence_7d" | "vai_sobrar" | "parado" | "sem_vendas_3m";
+  filtroRapido?: "todos" | "critico" | "vence_7d" | "vai_sobrar" | "parado" | "sem_vendas_3m" | "sem_estoque";
   faixaVencimento?: FaixaVencimento | "todas";
   faixaEscoaTempo?: FaixaEscoaTempo | "todas";
   faixaGiroMes?: FaixaGiroMes | "todas";

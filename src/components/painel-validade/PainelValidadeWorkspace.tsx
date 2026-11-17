@@ -226,19 +226,19 @@ export function PainelValidadeWorkspace({
     const allFiltered = filtrarLotes(lotes, baseWithoutQuick);
 
     const semVendasCount = allFiltered.filter(
-      (l) => l.isSemVenda && l.diasParaVencer >= 0 && l.diasParaVencer <= 90
+      (l) => !l.isSemEstoque && l.estoque > 0 && l.isSemVenda && l.diasParaVencer >= 0 && l.diasParaVencer <= 90
     ).length;
 
     return {
       todos: allFiltered.length,
       critico: allFiltered.filter(
-        (l) => l.diasParaVencer >= 0 && l.diasParaVencer <= 30 && l.escoaTempoPercent < 60
+        (l) => !l.isSemEstoque && l.estoque > 0 && l.diasParaVencer >= 0 && l.diasParaVencer <= 30 && l.escoaTempoPercent < 60
       ).length,
       vence7d: allFiltered.filter(
-        (l) => l.diasParaVencer >= 0 && l.diasParaVencer <= 7
+        (l) => !l.isSemEstoque && l.estoque > 0 && l.diasParaVencer >= 0 && l.diasParaVencer <= 7
       ).length,
       vaiSobrar: allFiltered.filter(
-        (l) => l.diasParaVencer >= 0 && l.escoaTempoPercent < 60
+        (l) => !l.isSemEstoque && l.estoque > 0 && l.diasParaVencer >= 0 && l.escoaTempoPercent < 60 && l.sobraPrevistaUnidades > 0
       ).length,
       semVendas3M: semVendasCount,
       parado: semVendasCount,

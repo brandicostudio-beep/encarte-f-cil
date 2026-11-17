@@ -18,6 +18,7 @@ import {
   calcularContadoresKpi,
   filtrarLotes,
   processarLote,
+  gerarExplicacaoSobraLinha,
   gerarDiagnosticoSobraCompleto,
 } from "@/lib/painel-validade-analytics";
 import type { ValidadeLoteCalculado, ValidadeSnapshot } from "@/types/painel-validade";
@@ -1028,5 +1029,54 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
     expect(diag.mesesFechados[3].rotulo).toBe("Mês Atual");
     expect(diag.mesesFechados[3].valor).toBe(317);
     expect(diag.mesesFechados[3].textoFormatado).toBe("317 un");
+  });
+
+  it("Produto com QEST_WINTHOR = 0 aparece como SEM ESTOQUE e é excluído de alertas de sobra", () => {
+    // Exemplo real da Batata Palha Bella Palha (Row 3 do TESTE_VALIDADE.csv)
+    // QTDISP_WMS = 7 (reservado), mas QTEST_WINTHOR = 0
+    const rawLote = {
+      codprod: "22292",
+      descricao: "BATATA PALHA BELLA PALHA",
+      embalagem: "1X80 GR",
+      dtval: "20/11/2026", // Vence em 3 dias
+      qtdisp_wms: 7,
+      qtest_winthor: 0,    // Sem estoque no Winthor
+      preco_venda: 1.93,
+      qtvendmes: 30,
+      qtvendmes1: 0,
+      qtvendmes2: 75,
+      qtvendmes3: 1735,
+    };
+
+    const lote = processarLote(rawLote, new Date("2026-11-17T00:00:00"));
+
+    // 1. Estoque considerado é 0 e isSemEstoque é true
+    expect(lote.estoque).toBe(0);
+    expect(lote.isSemEstoque).toBe(true);
+    expect(lote.sobraPrevistaUnidades).toBe(0);
+    expect(lote.faixaEscoaTempo).toBe("sem_estoque");
+
+    // 2. Balão explica sem estoque e sem sobra
+    const balao = gerarExplicacaoSobraLinha(lote);
+    expect(balao).toContain("sem estoque no Winthor");
+    expect(balao).toContain("0 un");
+
+    // 3. Diagnóstico detalhado para o modal
+    const diag = gerarDiagnosticoSobraCompleto(lote);
+    expect(diag.isSemEstoque).toBe(true);
+    expect(diag.sobraPrevista).toBe(0);
+    expect(diag.explicacaoSimples).toContain("sem estoque disponível no Winthor");
+
+    // 4. Excluído dos filtros rápidos de 'vai_sobrar' e 'critico'
+    const filtradosVaiSobrar = filtrarLotes([lote], { filtroRapido: "vai_sobrar" });
+    expect(filtradosVaiSobrar).toHaveLength(0);
+
+    const filtradosCritico = filtrarLotes([lote], { filtroRapido: "critico" });
+    expect(filtradosCritico).toHaveLength(0);
+
+    // 5. Renderização no Card exibe 'Sem estoque'
+    const html = renderToString(<PainelValidadeCard lote={lote} />);
+    expect(html).toContain("Sem Estoque");
+    expect(html).toContain("Sem estoque");
   });
 });
