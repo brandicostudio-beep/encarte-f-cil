@@ -162,8 +162,19 @@ export const StockTurnoverAdminContent: React.FC<{
               {summary.criticalExpiryCount === 1 ? "produto crítico" : "produtos críticos"}
             </span>
           </div>
+          <div className="mt-1 flex items-center gap-1 text-[9px] font-bold flex-wrap">
+            <span className="text-red-700 bg-red-100 px-1 py-0.2 rounded border border-red-200">
+              🔴 {summary.redExpiryCount} Vermelho (0-1d)
+            </span>
+            <span className="text-orange-800 bg-orange-100 px-1 py-0.2 rounded border border-orange-200">
+              🟠 {summary.orangeExpiryCount} Laranja (2-3d)
+            </span>
+            <span className="text-amber-900 bg-yellow-100 px-1 py-0.2 rounded border border-yellow-300">
+              🟡 {summary.yellowExpiryCount} Amarelo (4-5d)
+            </span>
+          </div>
           <p className="mt-1 text-[10.5px] text-red-800 font-semibold line-clamp-1">
-            Ação de queima imediata
+            Semáforo de Validade ≤ 5 dias
           </p>
         </div>
 
@@ -372,10 +383,14 @@ export const StockTurnoverAdminContent: React.FC<{
                   <tr
                     key={p.id}
                     className={`transition-colors hover:bg-neutral-50/90 ${
-                      a.criticality === "critico"
-                        ? "bg-red-50/30"
-                        : a.criticality === "alerta"
-                        ? "bg-amber-50/20"
+                      a.isExpired
+                        ? "bg-red-100/60 border-l-4 border-l-red-800"
+                        : a.isExpiringIn5DaysOrLess
+                        ? a.expiryUrgency.rowClass
+                        : a.hasZeroSales5Days
+                        ? "bg-amber-50/40 border-l-4 border-l-amber-500"
+                        : a.hasLowTurnover10Percent
+                        ? "bg-orange-50/30 border-l-4 border-l-orange-400"
                         : ""
                     }`}
                   >
@@ -443,14 +458,14 @@ export const StockTurnoverAdminContent: React.FC<{
                           {p.validity || "--/--/----"}
                         </div>
                         {a.isExpired ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded bg-red-100 text-red-900 border border-red-300">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.2 rounded bg-red-800 text-white border border-red-900 shadow-2xs">
                             <AlertTriangle className="h-3 w-3" />
                             VENCIDO ({Math.abs(a.daysToExpiry!)}d atrás)
                           </span>
                         ) : a.isExpiringIn5DaysOrLess ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.2 rounded bg-red-100 text-red-900 border border-red-300 animate-pulse">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded border ${a.expiryUrgency.pillClass}`}>
                             <Clock className="h-3 w-3" />
-                            Vence em {a.daysToExpiry} dia(s)
+                            {a.expiryUrgency.badgeText}
                           </span>
                         ) : a.daysToExpiry !== null && a.daysToExpiry <= 10 ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">
@@ -526,10 +541,31 @@ export const StockTurnoverAdminContent: React.FC<{
                         )}
 
                         {a.isExpiringIn5DaysOrLess && (
-                          <div className="rounded-md bg-red-100 border border-red-300 p-1.5 text-[10.5px] text-red-950 font-bold flex items-start gap-1.5 shadow-2xs">
-                            <Flame className="h-3.5 w-3.5 text-red-600 shrink-0 mt-0.5" />
+                          <div className={`rounded-md p-1.5 text-[10.5px] font-bold flex items-start gap-1.5 shadow-2xs ${
+                            a.expiryUrgency.color === "vermelho"
+                              ? "bg-red-100 border border-red-400 text-red-950"
+                              : a.expiryUrgency.color === "laranja"
+                              ? "bg-orange-100 border border-orange-400 text-orange-950"
+                              : "bg-yellow-100 border border-yellow-400 text-yellow-950"
+                          }`}>
+                            <Flame className={`h-3.5 w-3.5 shrink-0 mt-0.5 ${
+                              a.expiryUrgency.color === "vermelho"
+                                ? "text-red-600 animate-pulse"
+                                : a.expiryUrgency.color === "laranja"
+                                ? "text-orange-600"
+                                : "text-yellow-700"
+                            }`} />
                             <div>
-                              <span>{`Vence em ${a.daysToExpiry} dias (Ação imediata)`}</span>
+                              <span>
+                                {a.expiryUrgency.color === "vermelho"
+                                  ? `🚨 AVISO VERMELHO: Vence em ${a.daysToExpiry} dia(s) (Ação imediata)`
+                                  : a.expiryUrgency.color === "laranja"
+                                  ? `🔥 AVISO LARANJA: Vence em ${a.daysToExpiry} dia(s) (Queima urgente)`
+                                  : `⚠️ AVISO AMARELO: Vence em ${a.daysToExpiry} dia(s) (Atenção de giro)`}
+                              </span>
+                              <div className="text-[9.5px] font-normal opacity-90">
+                                {a.expiryUrgency.description}
+                              </div>
                             </div>
                           </div>
                         )}

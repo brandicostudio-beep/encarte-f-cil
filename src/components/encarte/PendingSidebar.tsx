@@ -13,7 +13,9 @@ import {
   Package,
   Layers,
   Tag,
+  Clock,
 } from "lucide-react";
+import { getDaysToExpiry } from "@/lib/stock-turnover-analytics";
 
 export type IssueFilter =
   | "all"
@@ -23,6 +25,7 @@ export type IssueFilter =
   | "missing_packaging"
   | "missing_unit"
   | "expired"
+  | "expiring_soon"
   | "excluded";
 
 interface PendingSidebarProps {
@@ -48,6 +51,10 @@ export const PendingSidebar: React.FC<PendingSidebarProps> = ({
   const missingPackaging = safeProducts.filter((p) => !p?.packaging || String(p.packaging).trim() === "");
   const missingUnit = safeProducts.filter((p) => !p?.unitConfirmed && !deriveSaleUnit(p?.packaging, p?.unit, p?.name).hasUnitWord);
   const expired = safeProducts.filter((p) => isDateExpired(p?.validity || ""));
+  const expiringSoon = safeProducts.filter((p) => {
+    const days = getDaysToExpiry(p?.validity);
+    return days !== null && days >= 0 && days <= 5;
+  });
   const excluded = safeProducts.filter((p) => !p?.included);
 
   const isReadyToExport =
@@ -270,6 +277,36 @@ export const PendingSidebar: React.FC<PendingSidebarProps> = ({
             }`}
           >
             {expired.length}
+          </span>
+        </button>
+
+        {/* 5.1 Vencimento em ≤ 5 dias (Semáforo Vermelho / Laranja / Amarelo) */}
+        <button
+          type="button"
+          onClick={() => onFilterChange("expiring_soon")}
+          className={`w-full min-h-[44px] px-3 py-2 rounded-lg flex items-center justify-between text-xs transition-colors border text-left focus-visible:ring-2 focus-visible:ring-amber-600 ${
+            activeFilter === "expiring_soon"
+              ? "bg-amber-600 text-white font-bold border-amber-600 shadow-xs"
+              : expiringSoon.length > 0
+              ? "bg-amber-50 text-amber-950 hover:bg-amber-100 border-amber-300 font-bold"
+              : "bg-neutral-50 text-neutral-400 border-neutral-200"
+          }`}
+          title="Produtos com 5 dias ou menos para vencer (Semáforo: Vermelho / Laranja / Amarelo)"
+        >
+          <span className="flex items-center gap-2">
+            <Clock className={`h-4 w-4 ${expiringSoon.length > 0 ? "text-amber-600" : "text-neutral-400"}`} />
+            <span>Vence em ≤ 5 dias</span>
+          </span>
+          <span
+            className={`font-mono font-bold px-1.5 py-0.5 rounded text-[11px] ${
+              expiringSoon.length > 0
+                ? activeFilter === "expiring_soon"
+                  ? "bg-white/20 text-white"
+                  : "bg-amber-200 text-amber-950"
+                : "bg-neutral-200 text-neutral-600"
+            }`}
+          >
+            {expiringSoon.length}
           </span>
         </button>
 

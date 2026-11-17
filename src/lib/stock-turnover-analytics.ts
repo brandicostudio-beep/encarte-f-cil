@@ -16,6 +16,20 @@ export interface TurnoverNotification {
   actionSuggestion?: string;
 }
 
+export type ExpiryUrgencyLevel = "vencido" | "vermelho" | "laranja" | "amarelo" | "normal";
+
+export interface ExpiryUrgencyInfo {
+  level: ExpiryUrgencyLevel;
+  color: "vermelho" | "laranja" | "amarelo" | "cinza";
+  daysToExpiry: number | null;
+  label: string;
+  badgeText: string;
+  pillClass: string;
+  rowClass: string;
+  borderClass: string;
+  description: string;
+}
+
 export interface ProductStockAnalytics {
   productId: string;
   code: string;
@@ -24,6 +38,7 @@ export interface ProductStockAnalytics {
   daysToExpiry: number | null;
   isExpired: boolean;
   isExpiringIn5DaysOrLess: boolean;
+  expiryUrgency: ExpiryUrgencyInfo;
 
   registeredAt: string;
   daysSinceRegistration: number;
@@ -56,6 +71,9 @@ export interface ProductStockAnalytics {
 export interface TurnoverExecutiveSummary {
   totalProducts: number;
   criticalExpiryCount: number; // <= 5 dias
+  redExpiryCount: number;      // 0 a 1 dia (Vermelho)
+  orangeExpiryCount: number;   // 2 a 3 dias (Laranja)
+  yellowExpiryCount: number;   // 4 a 5 dias (Amarelo)
   expiredCount: number;        // < 0 dias
   stagnantCount: number;       // 5+ dias sem vender nada
   lowTurnoverCount: number;    // 5+ dias vendendo <= 10%
@@ -115,6 +133,106 @@ export function getDaysToExpiry(validityStr?: string | null, referenceDate: Date
   const refMidnight = toMidnight(referenceDate);
   const diffMs = expiryDate.getTime() - refMidnight.getTime();
   return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Classifica a urgência de vencimento nas cores Vermelho / Laranja / Amarelo
+ * quando faltam 5 dias ou menos para vencer:
+ * - 0 a 1 dia: VERMELHO (Crítico - Hoje ou amanhã)
+ * - 2 a 3 dias: LARANJA (Urgente - Ação de queima)
+ * - 4 a 5 dias: AMARELO (Atenção - Alerta de giro)
+ */
+export function getExpiryUrgency(
+  validityStr?: string | null,
+  referenceDate: Date = new Date()
+): ExpiryUrgencyInfo {
+  const days = getDaysToExpiry(validityStr, referenceDate);
+
+  if (days === null) {
+    return {
+      level: "normal",
+      color: "cinza",
+      daysToExpiry: null,
+      label: "Sem data",
+      badgeText: "Sem data",
+      pillClass: "bg-neutral-100 text-neutral-600 border-neutral-300",
+      rowClass: "",
+      borderClass: "border-transparent",
+      description: "Data de validade não informada",
+    };
+  }
+
+  if (days < 0) {
+    const pastDays = Math.abs(days);
+    return {
+      level: "vencido",
+      color: "vermelho",
+      daysToExpiry: days,
+      label: "Vencido",
+      badgeText: `🚫 VENCIDO (${pastDays}d)`,
+      pillClass: "bg-red-800 text-white border-red-900 font-black shadow-2xs",
+      rowClass: "bg-red-100/60 border-l-4 border-l-red-800",
+      borderClass: "border-red-800",
+      description: `Produto vencido há ${pastDays} dia(s). Proibida a comercialização.`,
+    };
+  }
+
+  // 0 a 1 dia: VERMELHO (Crítico Máximo)
+  if (days <= 1) {
+    return {
+      level: "vermelho",
+      color: "vermelho",
+      daysToExpiry: days,
+      label: "Vermelho (Crítico)",
+      badgeText: days === 0 ? "🚨 Vence HOJE!" : "🚨 Vence AMANHÃ (1d)",
+      pillClass: "bg-red-600 text-white border-red-700 font-black animate-pulse shadow-2xs",
+      rowClass: "bg-red-50/80 border-l-4 border-l-red-600",
+      borderClass: "border-red-600",
+      description: `Urgência Máxima (Vermelho): resta(m) apenas ${days} dia(s) para vencer. Liquidação imediata!`,
+    };
+  }
+
+  // 2 a 3 dias: LARANJA (Urgente)
+  if (days <= 3) {
+    return {
+      level: "laranja",
+      color: "laranja",
+      daysToExpiry: days,
+      label: "Laranja (Urgente)",
+      badgeText: `🔥 Vence em ${days}d`,
+      pillClass: "bg-orange-500 text-white border-orange-600 font-bold shadow-2xs",
+      rowClass: "bg-orange-50/70 border-l-4 border-l-orange-500",
+      borderClass: "border-orange-500",
+      description: `Urgência Alta (Laranja): restam ${days} dias para vencer. Ação de queima recomendada.`,
+    };
+  }
+
+  // 4 a 5 dias: AMARELO (Atenção)
+  if (days <= 5) {
+    return {
+      level: "amarelo",
+      color: "amarelo",
+      daysToExpiry: days,
+      label: "Amarelo (Atenção)",
+      badgeText: `⚠️ Vence em ${days}d`,
+      pillClass: "bg-yellow-400 text-yellow-950 border-yellow-500 font-bold shadow-2xs",
+      rowClass: "bg-yellow-50/60 border-l-4 border-l-yellow-400",
+      borderClass: "border-yellow-400",
+      description: `Atenção (Amarelo): restam ${days} dias para vencer. Monitorar giro de estoque.`,
+    };
+  }
+
+  return {
+    level: "normal",
+    color: "cinza",
+    daysToExpiry: days,
+    label: "Normal",
+    badgeText: `${days} dias`,
+    pillClass: "bg-neutral-100 text-neutral-700 border-neutral-300",
+    rowClass: "",
+    borderClass: "border-transparent",
+    description: `Validade regular (${days} dias restantes).`,
+  };
 }
 
 /**
@@ -214,6 +332,7 @@ export function calculateStockAnalytics(
   const daysToExpiry = getDaysToExpiry(product.validity, referenceDate);
   const isExpired = daysToExpiry !== null && daysToExpiry < 0;
   const isExpiringIn5DaysOrLess = daysToExpiry !== null && daysToExpiry >= 0 && daysToExpiry <= 5;
+  const expiryUrgency = getExpiryUrgency(product.validity, referenceDate);
 
   // Velocidade de vendas (unidades / dia)
   const turnoverRatePerDay =
@@ -256,12 +375,26 @@ export function calculateStockAnalytics(
       actionSuggestion: "Retirar da área de venda e registrar perda ou devolução.",
     });
   } else if (isExpiringIn5DaysOrLess) {
+    let title = `Vencimento em ${daysToExpiry} dia(s)`;
+    let suggestion = "Aplicar desconto de 20% a 30% e destacar como 'Imperdível' no encarte.";
+
+    if (expiryUrgency.color === "vermelho") {
+      title = daysToExpiry === 0 ? "🚨 AVISO VERMELHO: Vence HOJE!" : "🚨 AVISO VERMELHO: Vence AMANHÃ (1d)";
+      suggestion = "Urgência Máxima! Aplicar queima imediata (-30%) ou retirar do salão.";
+    } else if (expiryUrgency.color === "laranja") {
+      title = `🔥 AVISO LARANJA: Vence em ${daysToExpiry} dias`;
+      suggestion = "Urgência Alta! Aplicar desconto de 20% a 30% com selo Imperdível no encarte.";
+    } else if (expiryUrgency.color === "amarelo") {
+      title = `⚠️ AVISO AMARELO: Vence em ${daysToExpiry} dias`;
+      suggestion = "Atenção de Validade! Acompanhar giro e planejar promoção de queima.";
+    }
+
     notifications.push({
       id: "critical-expiry-5d",
-      level: "critico",
-      title: `Vencimento em ${daysToExpiry} dia(s)`,
-      message: `Faltam apenas ${daysToExpiry} dia(s) para o produto vencer. Ação de queima de estoque urgente recomendada.`,
-      actionSuggestion: "Aplicar desconto de 20% a 30% e destacar como 'Imperdível' no encarte.",
+      level: expiryUrgency.color === "vermelho" ? "critico" : expiryUrgency.color === "laranja" ? "alerta" : "atencao",
+      title,
+      message: `Faltam apenas ${daysToExpiry} dia(s) para o produto vencer. Classificação do Semáforo: ${expiryUrgency.label.toUpperCase()}.`,
+      actionSuggestion: suggestion,
     });
   }
 
@@ -327,9 +460,9 @@ export function calculateStockAnalytics(
     };
   } else if (isExpiringIn5DaysOrLess) {
     summaryBadge = {
-      label: `⏰ Vence em ${daysToExpiry}d`,
-      variant: "destructive",
-      tooltip: `Apenas ${daysToExpiry} dia(s) para vencer. Ação imediata necessária.`,
+      label: expiryUrgency.badgeText,
+      variant: expiryUrgency.color === "vermelho" ? "destructive" : "warning",
+      tooltip: expiryUrgency.description,
     };
   } else if (hasZeroSales5Days) {
     summaryBadge = {
@@ -365,6 +498,7 @@ export function calculateStockAnalytics(
     daysToExpiry,
     isExpired,
     isExpiringIn5DaysOrLess,
+    expiryUrgency,
     registeredAt,
     daysSinceRegistration,
     initialStock,
@@ -391,6 +525,9 @@ export function calculateTurnoverExecutiveSummary(
   referenceDate: Date = new Date()
 ): TurnoverExecutiveSummary {
   let criticalExpiryCount = 0;
+  let redExpiryCount = 0;
+  let orangeExpiryCount = 0;
+  let yellowExpiryCount = 0;
   let expiredCount = 0;
   let stagnantCount = 0;
   let lowTurnoverCount = 0;
@@ -405,6 +542,13 @@ export function calculateTurnoverExecutiveSummary(
       expiredCount++;
     } else if (a.isExpiringIn5DaysOrLess) {
       criticalExpiryCount++;
+      if (a.expiryUrgency.color === "vermelho") {
+        redExpiryCount++;
+      } else if (a.expiryUrgency.color === "laranja") {
+        orangeExpiryCount++;
+      } else if (a.expiryUrgency.color === "amarelo") {
+        yellowExpiryCount++;
+      }
     }
 
     if (a.hasZeroSales5Days) {
@@ -429,6 +573,9 @@ export function calculateTurnoverExecutiveSummary(
   return {
     totalProducts: products.length,
     criticalExpiryCount,
+    redExpiryCount,
+    orangeExpiryCount,
+    yellowExpiryCount,
     expiredCount,
     stagnantCount,
     lowTurnoverCount,

@@ -44,6 +44,7 @@ import { StockTurnoverAdminModal } from "@/components/encarte/StockTurnoverAdmin
 import {
   calculateTurnoverExecutiveSummary,
   extractStockQuantity,
+  getDaysToExpiry,
 } from "@/lib/stock-turnover-analytics";
 import { ProductEditModal } from "@/components/encarte/ProductEditModal";
 import { StoreSettingsModal } from "@/components/encarte/StoreSettingsModal";
@@ -1296,6 +1297,11 @@ function EncarteApp() {
       result = result.filter((p) => !p?.unitConfirmed && !deriveSaleUnit(p?.packaging, p?.unit, p?.name).hasUnitWord);
     } else if (activeIssueFilter === "expired") {
       result = result.filter((p) => isDateExpired(p?.validity || ""));
+    } else if (activeIssueFilter === "expiring_soon") {
+      result = result.filter((p) => {
+        const days = getDaysToExpiry(p?.validity);
+        return days !== null && days >= 0 && days <= 5;
+      });
     } else if (activeIssueFilter === "excluded") {
       result = result.filter((p) => !p?.included);
     }

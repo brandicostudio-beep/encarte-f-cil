@@ -4,6 +4,7 @@ import {
   toMidnight,
   parseValidityDate,
   getDaysToExpiry,
+  getExpiryUrgency,
   getDaysSinceRegistration,
   extractStockQuantity,
   parsePriceToNumber,
@@ -87,8 +88,45 @@ describe("stock-turnover-analytics - Validade e Giro de Estoque Administrativo",
 
       const notif = analytics.notifications.find((n) => n.id === "critical-expiry-5d");
       expect(notif).toBeDefined();
-      expect(notif?.title).toContain("Vencimento em 5 dia(s)");
+      expect(notif?.title).toContain("5 dia");
       expect(notif?.message).toContain("Faltam apenas 5 dia(s) para o produto vencer");
+    });
+
+    it("SEMÁFORO DE VALIDADE (≤ 5 dias): classifica corretamente Vermelho (0-1d), Laranja (2-3d) e Amarelo (4-5d)", () => {
+      // 0 a 1 dia: VERMELHO
+      const urgency1 = getExpiryUrgency("18/11/2026", fixedRefDate); // 1 dia
+      expect(urgency1.color).toBe("vermelho");
+      expect(urgency1.level).toBe("vermelho");
+      expect(urgency1.badgeText).toContain("AMANHÃ");
+
+      const urgency0 = getExpiryUrgency("17/11/2026", fixedRefDate); // 0 dias (hoje)
+      expect(urgency0.color).toBe("vermelho");
+      expect(urgency0.badgeText).toContain("HOJE");
+
+      // 2 a 3 dias: LARANJA
+      const urgency2 = getExpiryUrgency("19/11/2026", fixedRefDate); // 2 dias
+      expect(urgency2.color).toBe("laranja");
+      expect(urgency2.level).toBe("laranja");
+      expect(urgency2.badgeText).toContain("2d");
+
+      const urgency3 = getExpiryUrgency("20/11/2026", fixedRefDate); // 3 dias
+      expect(urgency3.color).toBe("laranja");
+      expect(urgency3.badgeText).toContain("3d");
+
+      // 4 a 5 dias: AMARELO
+      const urgency4 = getExpiryUrgency("21/11/2026", fixedRefDate); // 4 dias
+      expect(urgency4.color).toBe("amarelo");
+      expect(urgency4.level).toBe("amarelo");
+      expect(urgency4.badgeText).toContain("4d");
+
+      const urgency5 = getExpiryUrgency("22/11/2026", fixedRefDate); // 5 dias
+      expect(urgency5.color).toBe("amarelo");
+      expect(urgency5.badgeText).toContain("5d");
+
+      // > 5 dias: Normal
+      const urgency6 = getExpiryUrgency("23/11/2026", fixedRefDate); // 6 dias
+      expect(urgency6.color).toBe("cinza");
+      expect(urgency6.level).toBe("normal");
     });
 
     it("GATILHO 2: Dispara notificação se NÃO vendeu nada durante 5 dias após o cadastro", () => {

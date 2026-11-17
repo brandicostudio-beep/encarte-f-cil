@@ -237,15 +237,17 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                 });
               }
 
-              // Métricas Internas de Giro e Validade Crítica (≤ 5 dias)
+              // Métricas Internas de Giro e Validade Crítica (≤ 5 dias: Vermelho / Laranja / Amarelo)
               const stockAnalytics = calculateStockAnalytics(p);
+              const urgency = stockAnalytics.expiryUrgency;
+
               if (stockAnalytics.isExpiringIn5DaysOrLess && !isExpired) {
                 issues.push({
                   type: "critical-expiry",
-                  label: `⏰ Vence em ${stockAnalytics.daysToExpiry}d`,
-                  className: "bg-red-100 text-red-900 border-red-300 font-bold cursor-pointer hover:bg-red-200",
+                  label: urgency.badgeText,
+                  className: `${urgency.pillClass} cursor-pointer hover:opacity-90`,
                   onClick: onOpenStockAdmin,
-                  title: `Vencimento crítico em ${stockAnalytics.daysToExpiry} dia(s). Clique para abrir Área Administrativa.`,
+                  title: `${urgency.description} Clique para abrir Área Administrativa.`,
                 });
               }
               if (stockAnalytics.hasZeroSales5Days) {
@@ -266,18 +268,20 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                 });
               }
 
+              const rowClass = isExpired
+                ? "bg-red-100/50 border-l-4 border-l-red-800"
+                : urgency.level !== "normal"
+                ? urgency.rowClass
+                : !p.included
+                ? "opacity-60 bg-neutral-100/40"
+                : !hasPrice
+                ? "bg-amber-50/30"
+                : "";
+
               return (
                 <tr
                   key={p.id}
-                  className={`transition-colors hover:bg-neutral-50/90 ${
-                    !p.included
-                      ? "opacity-60 bg-neutral-100/40"
-                      : !hasPrice
-                      ? "bg-amber-50/30"
-                      : isExpired
-                      ? "bg-red-50/20"
-                      : ""
-                  }`}
+                  className={`transition-colors hover:bg-neutral-50/90 ${rowClass}`}
                 >
                   {/* Checkbox Ativo (Área mínima de toque de 44px) */}
                   <td className="p-2 text-center align-middle">
@@ -477,17 +481,35 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                     </div>
                   </td>
 
-                  {/* Validade */}
+                  {/* Validade com Semáforo de Urgência (Vermelho / Laranja / Amarelo) */}
                   <td className="p-3 align-middle font-mono">
-                    <span
-                      className={`font-semibold ${
-                        isExpired
-                          ? "text-red-700 font-bold bg-red-50 px-1 py-0.5 rounded border border-red-200 inline-block"
-                          : "text-neutral-700"
-                      }`}
-                    >
-                      {p.validity || "--/--/----"}
-                    </span>
+                    <div className="flex flex-col gap-1">
+                      <span
+                        className={`font-semibold ${
+                          isExpired
+                            ? "text-red-700 font-bold bg-red-50 px-1 py-0.5 rounded border border-red-200 inline-block"
+                            : urgency.level !== "normal"
+                            ? "text-neutral-900 font-bold"
+                            : "text-neutral-700"
+                        }`}
+                      >
+                        {p.validity || "--/--/----"}
+                      </span>
+
+                      {/* Pill Colorida do Semáforo de Validade */}
+                      {urgency.level !== "normal" && (
+                        <span
+                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-black border transition-transform hover:scale-105 cursor-pointer ${urgency.pillClass}`}
+                          title={`${urgency.description} Clique para abrir Área Administrativa.`}
+                          onClick={onOpenStockAdmin ? (e) => { e.stopPropagation(); onOpenStockAdmin(); } : undefined}
+                          role={onOpenStockAdmin ? "button" : undefined}
+                          tabIndex={onOpenStockAdmin ? 0 : undefined}
+                          onKeyDown={onOpenStockAdmin ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenStockAdmin(); } } : undefined}
+                        >
+                          {urgency.badgeText}
+                        </span>
+                      )}
+                    </div>
                   </td>
 
                   {/* Entrada de Preço com Rótulo e Navegação Enter */}
