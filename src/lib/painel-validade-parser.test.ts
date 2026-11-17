@@ -24,6 +24,12 @@ describe("Painel de Validade - Parser de Planilha Winthor/WMS", () => {
     expect(mapHeaderToField("DTVAL")).toBe("dtval");
     expect(mapHeaderToField("QTDISP_WMS")).toBe("qtdisp_wms");
     expect(mapHeaderToField("PRECO_VENDA")).toBe("preco_venda");
+    expect(mapHeaderToField("PREÇO_VENDA")).toBe("preco_venda");
+    expect(mapHeaderToField("PREO_VENDA")).toBe("preco_venda");
+    expect(mapHeaderToField("PRE\uFFFDO_VENDA")).toBe("preco_venda");
+    expect(mapHeaderToField("PREÇO_TOTAL")).toBe("preco_total");
+    expect(mapHeaderToField("PREO_TOTAL")).toBe("preco_total");
+    expect(mapHeaderToField("PRE\uFFFDO_TOTAL")).toBe("preco_total");
     expect(mapHeaderToField("QTVENDMES")).toBe("qtvendmes");
     expect(mapHeaderToField("QTVENDMES1")).toBe("qtvendmes1");
     expect(mapHeaderToField("QTVENDMES2")).toBe("qtvendmes2");
@@ -111,5 +117,33 @@ describe("Painel de Validade - Parser de Planilha Winthor/WMS", () => {
     expect(item1.qtvendmes3).toBe(10);
     expect(item1.codcomprador).toBe("01");
     expect(item1.nomeComprador).toBe("JOAO COMPRADOR");
+  });
+
+  it("processa com perfeição o formato real de exportação diária do Winthor", () => {
+    const csvReal = [
+      "CODPROD;DESCRICAO;EMBALAGEM;DTVAL;DIASAVENCER;PRAZOVAL;%TOLERANCIA;QTRESERV;QTDISP_WMS;QTEST_WINTHOR;QTVENDMES;QTVENDMES1;QTVENDMES2;QTVENDMES3;PREÇO_VENDA;PREÇO_TOTAL;STATUS;:DATAINICIAL;:DATAFINAL;CODCOMPRADOR;NOME;",
+      "11782;MOLHO P/SALADA LIZA LIMAO;1X234 ML;04/11/2026;-13;240;80;0;36;36;6;6;22;12;2,9;104,4;NORMAL;01/11/2026;05/12/2027;21338;MARIANA DIPRE;",
+      "26499;FAROFA PRONTA YOKI TRAD.L450 P400;1X450 GR;28/05/2027;192;240;80;0;7651;7651;0;50;0;0;6,56;50190,56;NORMAL;01/11/2026;05/12/2027;21338;MARIANA DIPRE;",
+    ].join("\r\n");
+
+    const preview = parseWinthorCsv(csvReal, "TESTE_VALIDADE.csv");
+
+    expect(preview.colunasFaltantes.length).toBe(0);
+    expect(preview.lotesValidos.length).toBe(2);
+    expect(preview.linhasComErro.length).toBe(0);
+
+    const lote1 = preview.lotesValidos[0];
+    expect(lote1.codprod).toBe("11782");
+    expect(lote1.qtdisp_wms).toBe(36);
+    expect(lote1.preco_venda).toBe(2.9);
+    expect(lote1.preco_total).toBe(104.4);
+    expect(lote1.qtvendmes).toBe(6);
+    expect(lote1.nomeComprador).toBe("MARIANA DIPRE");
+
+    const lote2 = preview.lotesValidos[1];
+    expect(lote2.codprod).toBe("26499");
+    expect(lote2.qtdisp_wms).toBe(7651);
+    expect(lote2.preco_venda).toBe(6.56);
+    expect(lote2.preco_total).toBe(50190.56);
   });
 });

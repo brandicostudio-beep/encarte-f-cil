@@ -55,8 +55,21 @@ export function mapHeaderToField(headerKey: string): keyof ValidadeLoteRaw | nul
   if (k === "qtvendmes1" || k === "vendmes1" || k === "venda_m1") return "qtvendmes1";
   if (k === "qtvendmes2" || k === "vendmes2" || k === "venda_m2") return "qtvendmes2";
   if (k === "qtvendmes3" || k === "vendmes3" || k === "venda_m3") return "qtvendmes3";
-  if (k === "preco_venda" || k === "precovenda" || k === "pvenda" || k === "preco") return "preco_venda";
-  if (k === "preco_total" || k === "precototal" || k === "ptotal") return "preco_total";
+  if (
+    k === "preco_venda" ||
+    k === "precovenda" ||
+    k === "pvenda" ||
+    k === "preco" ||
+    k === "preo_venda" ||
+    k === "preovenda"
+  ) return "preco_venda";
+  if (
+    k === "preco_total" ||
+    k === "precototal" ||
+    k === "ptotal" ||
+    k === "preo_total" ||
+    k === "preototal"
+  ) return "preco_total";
   if (k === "status") return "status";
   if (k === "datainicial" || k === "dtinicial") return "datainicial";
   if (k === "datafinal" || k === "dtfinal") return "datafinal";
