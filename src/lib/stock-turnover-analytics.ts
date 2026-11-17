@@ -16,18 +16,40 @@ export interface TurnoverNotification {
   actionSuggestion?: string;
 }
 
-export type ExpiryUrgencyLevel = "vencido" | "vermelho" | "laranja" | "amarelo" | "normal";
+export type ExpiryUrgencyLevel =
+  | "vencido"
+  | "vermelho"
+  | "vermelho_sobra"
+  | "laranja"
+  | "amarelo"
+  | "amarelo_razoavel"
+  | "verde_seguro"
+  | "normal";
 
 export interface ExpiryUrgencyInfo {
   level: ExpiryUrgencyLevel;
-  color: "vermelho" | "laranja" | "amarelo" | "cinza";
+  color: "vermelho" | "laranja" | "amarelo" | "verde" | "cinza";
   daysToExpiry: number | null;
+  dailySalesRate: number;
+  daysToDeplete: number | null;
+  projectedSalesUntilExpiry: number;
+  projectedSurplusAtExpiry: number;
+  projectedSurplusPercent: number;
+  isLikelyToSellOut: boolean;
   label: string;
   badgeText: string;
   pillClass: string;
   rowClass: string;
   borderClass: string;
   description: string;
+  actionSuggestion: string;
+}
+
+export interface StockVelocityParams {
+  currentStock?: number;
+  initialStock?: number;
+  quantitySold?: number;
+  daysSinceRegistration?: number;
 }
 
 export interface ProductStockAnalytics {
@@ -137,14 +159,26 @@ export function getDaysToExpiry(validityStr?: string | null, referenceDate: Date
 
 /**
  * Classifica a urgência de vencimento nas cores Vermelho / Laranja / Amarelo
- * quando faltam 5 dias ou menos para vencer:
- * - 0 a 1 dia: VERMELHO (Crítico - Hoje ou amanhã)
- * - 2 a 3 dias: LARANJA (Urgente - Ação de queima)
- * - 4 a 5 dias: AMARELO (Atenção - Alerta de giro)
+ * de forma PROPORCIONAL À QUANTIDADE DO ESTOQUE E VELOCIDADE DE VENDAS:
+ *
+ * - Caso 1 (Estoque Alto que não vai vender):
+ *   Se tem 700 un em estoque, vendeu apenas 50 e vence daqui a 1 semana (7d),
+ *   calcula o descompasso e gera ALERTA VERMELHO: "Não vai conseguir vender a tempo".
+ *
+ * - Caso 2 (Estoque Proporcional com saída provável):
+ *   Se tem 50 un em estoque, já vendeu 20 e vence daqui a 5 dias,
+ *   o ritmo cobre o saldo e gera ALERTA AMARELO: "Giro Razoável / Venda Provável".
+ *
+ * - Caso 3 (Prazo Crítico 0 a 1 dia):
+ *   Gera ALERTA VERMELHO de urgência máxima (vence hoje ou amanhã).
+ *
+ * - Caso 4 (Estoque Zerado):
+ *   Gera status VERDE seguro (saldo liquidado sem perda).
  */
 export function getExpiryUrgency(
   validityStr?: string | null,
-  referenceDate: Date = new Date()
+  referenceDate: Date = new Date(),
+  stockParams?: StockVelocityParams
 ): ExpiryUrgencyInfo {
   const days = getDaysToExpiry(validityStr, referenceDate);
 
@@ -153,72 +187,283 @@ export function getExpiryUrgency(
       level: "normal",
       color: "cinza",
       daysToExpiry: null,
+      dailySalesRate: 0,
+      daysToDeplete: null,
+      projectedSalesUntilExpiry: 0,
+      projectedSurplusAtExpiry: 0,
+      projectedSurplusPercent: 0,
+      isLikelyToSellOut: true,
       label: "Sem data",
       badgeText: "Sem data",
       pillClass: "bg-neutral-100 text-neutral-600 border-neutral-300",
       rowClass: "",
       borderClass: "border-transparent",
       description: "Data de validade não informada",
+      actionSuggestion: "Informar data de validade para cálculo de risco.",
     };
   }
 
+  const currentStock = stockParams?.currentStock ?? 0;
+  const initialStock = stockParams?.initialStock ?? currentStock;
+  const quantitySold = stockParams?.quantitySold ?? Math.max(0, initialStock - currentStock);
+  const daysSinceReg = stockParams?.daysSinceRegistration ?? 0;
+
+  // Velocidade de venda diária
+  const dailySalesRate =
+    daysSinceReg > 0
+      ? Math.round((quantitySold / daysSinceReg) * 10) / 10
+      : quantitySold;
+
+  // Dias necessários para zerar o estoque restante
+  const daysToDeplete =
+    currentStock <= 0
+      ? 0
+      : dailySalesRate > 0
+      ? Math.ceil(currentStock / dailySalesRate)
+      : null;
+
+  // Projeção de vendas até a data de vencimento
+  const projectedSalesUntilExpiry =
+    days > 0 ? Math.round(dailySalesRate * days) : 0;
+
+  // Sobra de estoque prevista na data do vencimento
+  const projectedSurplusAtExpiry = Math.max(0, currentStock - projectedSalesUntilExpiry);
+  const projectedSurplusPercent =
+    currentStock > 0 ? Math.round((projectedSurplusAtExpiry / currentStock) * 100) : 0;
+
+  // Se o ritmo atual é suficiente para liquidar praticamente todo o estoque (sobra <= 20% ou daysToDeplete <= days * 1.25)
+  const isLikelyToSellOut =
+    currentStock <= 0 ||
+    (daysToDeplete !== null && daysToDeplete <= Math.max(1, days * 1.25)) ||
+    projectedSurplusPercent <= 20;
+
+  // ========================================================
+  // 1. CASO VENCIDO (< 0 dias)
+  // ========================================================
   if (days < 0) {
     const pastDays = Math.abs(days);
     return {
       level: "vencido",
       color: "vermelho",
       daysToExpiry: days,
+      dailySalesRate,
+      daysToDeplete,
+      projectedSalesUntilExpiry,
+      projectedSurplusAtExpiry: currentStock,
+      projectedSurplusPercent: 100,
+      isLikelyToSellOut: false,
       label: "Vencido",
       badgeText: `🚫 VENCIDO (${pastDays}d)`,
       pillClass: "bg-red-800 text-white border-red-900 font-black shadow-2xs",
       rowClass: "bg-red-100/60 border-l-4 border-l-red-800",
       borderClass: "border-red-800",
       description: `Produto vencido há ${pastDays} dia(s). Proibida a comercialização.`,
+      actionSuggestion: "Retirar da área de venda imediatamente e registrar perda.",
     };
   }
 
-  // 0 a 1 dia: VERMELHO (Crítico Máximo)
+  // ========================================================
+  // 2. CASO ESTOQUE ZERADO (Sem risco de perda)
+  // ========================================================
+  if (currentStock === 0 && (quantitySold > 0 || initialStock > 0)) {
+    return {
+      level: "verde_seguro",
+      color: "verde",
+      daysToExpiry: days,
+      dailySalesRate,
+      daysToDeplete: 0,
+      projectedSalesUntilExpiry: 0,
+      projectedSurplusAtExpiry: 0,
+      projectedSurplusPercent: 0,
+      isLikelyToSellOut: true,
+      label: "Estoque Zerado",
+      badgeText: "✓ Saldo Liquidado",
+      pillClass: "bg-emerald-100 text-emerald-800 border-emerald-300 font-bold",
+      rowClass: "",
+      borderClass: "border-transparent",
+      description: `Todo o estoque inicial (${initialStock} un) já foi vendido. Sem risco de perda por validade.`,
+      actionSuggestion: "Reabastecer caso haja demanda.",
+    };
+  }
+
+  // ========================================================
+  // 3. CASO VENCE HOJE (Prazo Crítico Máximo com estoque restante)
+  // ========================================================
+  if (days === 0 && currentStock > 0) {
+    return {
+      level: "vermelho",
+      color: "vermelho",
+      daysToExpiry: 0,
+      dailySalesRate,
+      daysToDeplete,
+      projectedSalesUntilExpiry,
+      projectedSurplusAtExpiry: currentStock,
+      projectedSurplusPercent: 100,
+      isLikelyToSellOut: false,
+      label: "Vermelho (Vence Hoje)",
+      badgeText: "🚨 Vence HOJE!",
+      pillClass: "bg-red-600 text-white border-red-700 font-black animate-pulse shadow-2xs",
+      rowClass: "bg-red-50/90 border-l-4 border-l-red-600",
+      borderClass: "border-red-600",
+      description: `Urgência Máxima: produto vence HOJE e ainda restam ${currentStock} un em estoque. Liquidação imediata!`,
+      actionSuggestion: "Liquidação imediata no encarte ou retirar do salão.",
+    };
+  }
+
+  // ========================================================
+  // 4. REGRA PROPORCIONAL DE ESTOQUE ALTO QUE NÃO VAI VENDER
+  // Exemplo do usuário: 700 unidades em estoque, saiu 50, vence em 1 semana (7 dias).
+  // "EXISTE UM ALERTA QUE NÃO VAI CONSEGUIR VENDER."
+  // ========================================================
+  const hasSubstantialStock = currentStock >= 10;
+  const isImpendingWindow = days <= 10; // Próximos 10 dias (inclui 1 semana / 7 dias)
+  const hasVelocityHistory = daysSinceReg > 0 || quantitySold > 0;
+
+  if (
+    isImpendingWindow &&
+    hasSubstantialStock &&
+    hasVelocityHistory &&
+    (daysToDeplete === null || daysToDeplete > days * 1.3 || projectedSurplusPercent >= 30)
+  ) {
+    return {
+      level: "vermelho_sobra",
+      color: "vermelho",
+      daysToExpiry: days,
+      dailySalesRate,
+      daysToDeplete,
+      projectedSalesUntilExpiry,
+      projectedSurplusAtExpiry,
+      projectedSurplusPercent,
+      isLikelyToSellOut: false,
+      label: "Vermelho (Não vai conseguir vender)",
+      badgeText: `🚨 Não vai vender a tempo (~${projectedSurplusAtExpiry} un sobra - Vence em ${days}d)`,
+      pillClass: "bg-red-600 text-white border-red-700 font-black animate-pulse shadow-2xs",
+      rowClass: "bg-red-50/90 border-l-4 border-l-red-600",
+      borderClass: "border-red-600",
+      description: `Risco Crítico de Sobra: Estoque de ${currentStock} un para apenas ${days} dias. No ritmo atual (${dailySalesRate} un/dia), venderá apenas ~${projectedSalesUntilExpiry} un e sobrarão ~${projectedSurplusAtExpiry} un no vencimento.`,
+      actionSuggestion: "Aplicar queima agressiva imediata (-30% ou mais) e destacar como IMPERDÍVEL no encarte.",
+    };
+  }
+
+  // ========================================================
+  // 5. REGRA PROPORCIONAL: 0 VENDAS COM ESTOQUE PARADO
+  // ========================================================
+  if (days <= 10 && daysSinceReg >= 5 && quantitySold === 0 && currentStock > 0) {
+    return {
+      level: "vermelho_sobra",
+      color: "vermelho",
+      daysToExpiry: days,
+      dailySalesRate: 0,
+      daysToDeplete: null,
+      projectedSalesUntilExpiry: 0,
+      projectedSurplusAtExpiry: currentStock,
+      projectedSurplusPercent: 100,
+      isLikelyToSellOut: false,
+      label: "Vermelho (Sem Vendas)",
+      badgeText: `🚨 0 vendas em ${daysSinceReg}d (Vence em ${days}d)`,
+      pillClass: "bg-red-600 text-white border-red-700 font-black shadow-2xs",
+      rowClass: "bg-red-50/90 border-l-4 border-l-red-600",
+      borderClass: "border-red-600",
+      description: `Esse produto não vendeu nada nos últimos ${daysSinceReg} dias. Todas as ${currentStock} un em estoque vencerão em ${days} dias se não houver ação imediata.`,
+      actionSuggestion: "Reduzir o preço agressivamente e verificar visibilidade na loja.",
+    };
+  }
+
+  // ========================================================
+  // 6. REGRA PROPORCIONAL: ESTOQUE CONTROLADO E PROVAVELMENTE VENDA
+  // Exemplo do usuário: tem 50 em estoque, já vendeu 20, vence daqui a 5 dias.
+  // "TA RAZOÁVEL E PROVAVELMENTE VENDA."
+  // ========================================================
+  if (days >= 1 && days <= 5 && isLikelyToSellOut && currentStock > 0 && hasVelocityHistory) {
+    return {
+      level: "amarelo_razoavel",
+      color: "amarelo",
+      daysToExpiry: days,
+      dailySalesRate,
+      daysToDeplete,
+      projectedSalesUntilExpiry,
+      projectedSurplusAtExpiry,
+      projectedSurplusPercent,
+      isLikelyToSellOut: true,
+      label: "Amarelo (Razoável / Venda Provável)",
+      badgeText: `⚠️ Razoável (Vence em ${days}d - Venda provável)`,
+      pillClass: "bg-yellow-400 text-yellow-950 border-yellow-500 font-bold shadow-2xs",
+      rowClass: "bg-yellow-50/50 border-l-4 border-l-yellow-400",
+      borderClass: "border-yellow-400",
+      description: `Giro Razoável: o estoque de ${currentStock} un está proporcional aos ${days} dias restantes. No ritmo atual (~${dailySalesRate} un/dia), o saldo será praticamente todo vendido antes de vencer.`,
+      actionSuggestion: "Manter oferta no encarte sem necessidade de desconto de desespero.",
+    };
+  }
+
+  // ========================================================
+  // 7. URGÊNCIA MÁXIMA POR PRAZO CURTO (0 a 1 dia)
+  // ========================================================
   if (days <= 1) {
     return {
       level: "vermelho",
       color: "vermelho",
       daysToExpiry: days,
+      dailySalesRate,
+      daysToDeplete,
+      projectedSalesUntilExpiry,
+      projectedSurplusAtExpiry: currentStock,
+      projectedSurplusPercent: 100,
+      isLikelyToSellOut: false,
       label: "Vermelho (Crítico)",
       badgeText: days === 0 ? "🚨 Vence HOJE!" : "🚨 Vence AMANHÃ (1d)",
       pillClass: "bg-red-600 text-white border-red-700 font-black animate-pulse shadow-2xs",
       rowClass: "bg-red-50/80 border-l-4 border-l-red-600",
       borderClass: "border-red-600",
-      description: `Urgência Máxima (Vermelho): resta(m) apenas ${days} dia(s) para vencer. Liquidação imediata!`,
+      description: `Urgência Máxima: resta(m) apenas ${days} dia(s) para vencer. Liquidação imediata!`,
+      actionSuggestion: "Liquidação imediata no encarte ou retirar do salão.",
     };
   }
 
-  // 2 a 3 dias: LARANJA (Urgente)
+  // ========================================================
+  // 7. LARANJA: Faltam 2 a 3 dias e o giro precisa acelerar
+  // ========================================================
   if (days <= 3) {
     return {
       level: "laranja",
       color: "laranja",
       daysToExpiry: days,
+      dailySalesRate,
+      daysToDeplete,
+      projectedSalesUntilExpiry,
+      projectedSurplusAtExpiry,
+      projectedSurplusPercent,
+      isLikelyToSellOut,
       label: "Laranja (Urgente)",
-      badgeText: `🔥 Vence em ${days}d`,
+      badgeText: `🔥 Vence em ${days}d (Acelerar)`,
       pillClass: "bg-orange-500 text-white border-orange-600 font-bold shadow-2xs",
       rowClass: "bg-orange-50/70 border-l-4 border-l-orange-500",
       borderClass: "border-orange-500",
-      description: `Urgência Alta (Laranja): restam ${days} dias para vencer. Ação de queima recomendada.`,
+      description: `Urgência Alta: restam ${days} dias para vencer ${currentStock} un. Acelerar saída para não sobrar estoque.`,
+      actionSuggestion: "Aplicar desconto de 20% a 30% com selo IMPERDÍVEL.",
     };
   }
 
-  // 4 a 5 dias: AMARELO (Atenção)
+  // ========================================================
+  // 8. AMARELO: Faltam 4 a 5 dias
+  // ========================================================
   if (days <= 5) {
     return {
       level: "amarelo",
       color: "amarelo",
       daysToExpiry: days,
+      dailySalesRate,
+      daysToDeplete,
+      projectedSalesUntilExpiry,
+      projectedSurplusAtExpiry,
+      projectedSurplusPercent,
+      isLikelyToSellOut,
       label: "Amarelo (Atenção)",
       badgeText: `⚠️ Vence em ${days}d`,
       pillClass: "bg-yellow-400 text-yellow-950 border-yellow-500 font-bold shadow-2xs",
       rowClass: "bg-yellow-50/60 border-l-4 border-l-yellow-400",
       borderClass: "border-yellow-400",
       description: `Atenção (Amarelo): restam ${days} dias para vencer. Monitorar giro de estoque.`,
+      actionSuggestion: "Programar ação no encarte semanal.",
     };
   }
 
@@ -226,12 +471,19 @@ export function getExpiryUrgency(
     level: "normal",
     color: "cinza",
     daysToExpiry: days,
+    dailySalesRate,
+    daysToDeplete,
+    projectedSalesUntilExpiry,
+    projectedSurplusAtExpiry,
+    projectedSurplusPercent,
+    isLikelyToSellOut: true,
     label: "Normal",
     badgeText: `${days} dias`,
     pillClass: "bg-neutral-100 text-neutral-700 border-neutral-300",
     rowClass: "",
     borderClass: "border-transparent",
     description: `Validade regular (${days} dias restantes).`,
+    actionSuggestion: "Acompanhamento normal.",
   };
 }
 
@@ -332,7 +584,12 @@ export function calculateStockAnalytics(
   const daysToExpiry = getDaysToExpiry(product.validity, referenceDate);
   const isExpired = daysToExpiry !== null && daysToExpiry < 0;
   const isExpiringIn5DaysOrLess = daysToExpiry !== null && daysToExpiry >= 0 && daysToExpiry <= 5;
-  const expiryUrgency = getExpiryUrgency(product.validity, referenceDate);
+  const expiryUrgency = getExpiryUrgency(product.validity, referenceDate, {
+    currentStock,
+    initialStock,
+    quantitySold,
+    daysSinceRegistration,
+  });
 
   // Velocidade de vendas (unidades / dia)
   const turnoverRatePerDay =
@@ -365,7 +622,7 @@ export function calculateStockAnalytics(
   // Notificações acumuladas
   const notifications: TurnoverNotification[] = [];
 
-  // Alerta de Validade Crítica (<= 5 dias)
+  // Alerta de Validade Crítica (<= 5 dias ou risco alto de sobra)
   if (isExpired) {
     notifications.push({
       id: "expired",
@@ -373,6 +630,22 @@ export function calculateStockAnalytics(
       title: "Produto Vencido",
       message: `Este produto está vencido há ${Math.abs(daysToExpiry!)} dia(s). Não pode ser comercializado.`,
       actionSuggestion: "Retirar da área de venda e registrar perda ou devolução.",
+    });
+  } else if (expiryUrgency.level === "vermelho_sobra") {
+    notifications.push({
+      id: "critical-expiry-5d",
+      level: "critico",
+      title: `🚨 Não Vai Conseguir Vender a Tempo (${daysToExpiry}d)`,
+      message: `Faltam apenas ${daysToExpiry} dia(s) para o produto vencer com estoque alto (${currentStock} un). No ritmo atual (${expiryUrgency.dailySalesRate} un/dia), venderá apenas ~${expiryUrgency.projectedSalesUntilExpiry} un e sobrarão ~${expiryUrgency.projectedSurplusAtExpiry} un no vencimento.`,
+      actionSuggestion: "Aplicar queima imediata (-30% ou mais) e destacar como IMPERDÍVEL no encarte.",
+    });
+  } else if (expiryUrgency.level === "amarelo_razoavel") {
+    notifications.push({
+      id: "critical-expiry-5d",
+      level: "atencao",
+      title: `🟡 Giro Razoável - Venda Provável (${daysToExpiry}d)`,
+      message: `Faltam apenas ${daysToExpiry} dia(s) para o produto vencer com estoque proporcional (${currentStock} un). No ritmo atual (${expiryUrgency.dailySalesRate} un/dia), a previsão é liquidar o saldo antes do vencimento.`,
+      actionSuggestion: "Manter no encarte regular, estoque com boa probabilidade de venda.",
     });
   } else if (isExpiringIn5DaysOrLess) {
     let title = `Vencimento em ${daysToExpiry} dia(s)`;
@@ -440,7 +713,13 @@ export function calculateStockAnalytics(
 
   // Determinar criticidade global
   let criticality: "critico" | "alerta" | "atencao" | "ok" = "ok";
-  if (isExpired || isExpiringIn5DaysOrLess || hasZeroSales5Days) {
+  if (
+    isExpired ||
+    isExpiringIn5DaysOrLess ||
+    hasZeroSales5Days ||
+    expiryUrgency.level === "vermelho_sobra" ||
+    expiryUrgency.level === "vermelho_urgente"
+  ) {
     criticality = "critico";
   } else if (hasLowTurnover10Percent || (daysToExpiry !== null && daysToExpiry <= 10)) {
     criticality = "alerta";
@@ -457,6 +736,18 @@ export function calculateStockAnalytics(
       label: `Vencido (${Math.abs(daysToExpiry!)}d)`,
       variant: "destructive",
       tooltip: "Produto com data de validade expirada",
+    };
+  } else if (expiryUrgency.level === "vermelho_sobra") {
+    summaryBadge = {
+      label: expiryUrgency.badgeText,
+      variant: "destructive",
+      tooltip: expiryUrgency.description,
+    };
+  } else if (expiryUrgency.level === "amarelo_razoavel") {
+    summaryBadge = {
+      label: expiryUrgency.badgeText,
+      variant: "warning",
+      tooltip: expiryUrgency.description,
     };
   } else if (isExpiringIn5DaysOrLess) {
     summaryBadge = {
@@ -540,7 +831,7 @@ export function calculateTurnoverExecutiveSummary(
     const a = calculateStockAnalytics(p, referenceDate);
     if (a.isExpired) {
       expiredCount++;
-    } else if (a.isExpiringIn5DaysOrLess) {
+    } else if (a.isExpiringIn5DaysOrLess || a.expiryUrgency.level === "vermelho_sobra") {
       criticalExpiryCount++;
       if (a.expiryUrgency.color === "vermelho") {
         redExpiryCount++;

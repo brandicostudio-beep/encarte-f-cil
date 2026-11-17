@@ -129,6 +129,69 @@ describe("stock-turnover-analytics - Validade e Giro de Estoque Administrativo",
       expect(urgency6.level).toBe("normal");
     });
 
+    it("REGRA PROPORCIONAL (Cenário 1): 700 un em estoque, vendeu 50, vence em 1 semana (7d) -> ALERTA VERMELHO (Não vai conseguir vender)", () => {
+      // Cadastrado há 5 dias (12/11/2026), inicial 750, atual 700 (50 vendas em 5d = 10 un/dia)
+      // Vence em 7 dias (24/11/2026) -> precisa de 70 dias para zerar, sobram ~630 un no vencimento
+      const product: EncarteProduct = {
+        ...baseProduct,
+        registeredAt: "2026-11-12T10:00:00.000Z",
+        initialStockQuantity: 750,
+        currentStockQuantity: 700,
+        stock: "700 UND",
+        validity: "24/11/2026", // 7 dias a partir de 17/11/2026
+      };
+
+      const analytics = calculateStockAnalytics(product, fixedRefDate);
+      expect(analytics.daysToExpiry).toBe(7);
+      expect(analytics.expiryUrgency.color).toBe("vermelho");
+      expect(analytics.expiryUrgency.level).toBe("vermelho_sobra");
+      expect(analytics.expiryUrgency.badgeText).toContain("Não vai vender a tempo");
+      expect(analytics.expiryUrgency.badgeText).toContain("630 un sobra");
+      expect(analytics.expiryUrgency.projectedSurplusAtExpiry).toBe(630);
+      expect(analytics.criticality).toBe("critico");
+      expect(analytics.summaryBadge?.variant).toBe("destructive");
+      expect(analytics.summaryBadge?.label).toContain("Não vai vender a tempo");
+    });
+
+    it("REGRA PROPORCIONAL (Cenário 2): 50 un estoque inicial, vendeu 20, resta 30, vence em 5 dias -> ALERTA AMARELO (Razoável / Venda Provável)", () => {
+      // Cadastrado há 4 dias (13/11/2026), inicial 50, atual 30 (20 vendas em 4d = 5 un/dia)
+      // Vence em 5 dias (22/11/2026) -> vende ~25 un em 5 dias, sobram apenas ~5 un (giro provável)
+      const product: EncarteProduct = {
+        ...baseProduct,
+        registeredAt: "2026-11-13T10:00:00.000Z",
+        initialStockQuantity: 50,
+        currentStockQuantity: 30,
+        stock: "30 UND",
+        validity: "22/11/2026", // 5 dias
+      };
+
+      const analytics = calculateStockAnalytics(product, fixedRefDate);
+      expect(analytics.daysToExpiry).toBe(5);
+      expect(analytics.expiryUrgency.color).toBe("amarelo");
+      expect(analytics.expiryUrgency.level).toBe("amarelo_razoavel");
+      expect(analytics.expiryUrgency.badgeText).toContain("Razoável");
+      expect(analytics.expiryUrgency.badgeText).toContain("Venda provável");
+      expect(analytics.expiryUrgency.isLikelyToSellOut).toBe(true);
+      expect(analytics.summaryBadge?.variant).toBe("warning");
+      expect(analytics.summaryBadge?.label).toContain("Razoável");
+    });
+
+    it("REGRA PROPORCIONAL (Cenário 3): Produto com estoque zerado não tem risco de perda por validade -> VERDE SEGURO", () => {
+      const product: EncarteProduct = {
+        ...baseProduct,
+        registeredAt: "2026-11-12T10:00:00.000Z",
+        initialStockQuantity: 50,
+        currentStockQuantity: 0,
+        stock: "0 UND",
+        validity: "19/11/2026", // 2 dias
+      };
+
+      const analytics = calculateStockAnalytics(product, fixedRefDate);
+      expect(analytics.expiryUrgency.color).toBe("verde");
+      expect(analytics.expiryUrgency.level).toBe("verde_seguro");
+      expect(analytics.expiryUrgency.badgeText).toContain("Saldo Liquidado");
+    });
+
     it("GATILHO 2: Dispara notificação se NÃO vendeu nada durante 5 dias após o cadastro", () => {
       // Cadastrado há 5 dias (12/11/2026), estoque inicial 50, estoque atual 50 (0 vendas)
       const product: EncarteProduct = {

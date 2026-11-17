@@ -85,7 +85,7 @@ export const StockTurnoverAdminContent: React.FC<{
         return analytics.criticality === "critico";
       }
       if (filterTab === "vencendo5d") {
-        return analytics.isExpiringIn5DaysOrLess;
+        return analytics.isExpiringIn5DaysOrLess || analytics.expiryUrgency.level === "vermelho_sobra";
       }
       if (filterTab === "sem_giro") {
         return analytics.hasZeroSales5Days;
@@ -385,7 +385,7 @@ export const StockTurnoverAdminContent: React.FC<{
                     className={`transition-colors hover:bg-neutral-50/90 ${
                       a.isExpired
                         ? "bg-red-100/60 border-l-4 border-l-red-800"
-                        : a.isExpiringIn5DaysOrLess
+                        : a.expiryUrgency.level !== "normal" && a.expiryUrgency.level !== "verde_seguro"
                         ? a.expiryUrgency.rowClass
                         : a.hasZeroSales5Days
                         ? "bg-amber-50/40 border-l-4 border-l-amber-500"
@@ -462,7 +462,7 @@ export const StockTurnoverAdminContent: React.FC<{
                             <AlertTriangle className="h-3 w-3" />
                             VENCIDO ({Math.abs(a.daysToExpiry!)}d atrás)
                           </span>
-                        ) : a.isExpiringIn5DaysOrLess ? (
+                        ) : (a.isExpiringIn5DaysOrLess || a.expiryUrgency.level === "vermelho_sobra" || a.expiryUrgency.level === "amarelo_razoavel") ? (
                           <span className={`inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded border ${a.expiryUrgency.pillClass}`}>
                             <Clock className="h-3 w-3" />
                             {a.expiryUrgency.badgeText}
@@ -540,7 +540,7 @@ export const StockTurnoverAdminContent: React.FC<{
                           </div>
                         )}
 
-                        {a.isExpiringIn5DaysOrLess && (
+                        {(a.isExpiringIn5DaysOrLess || a.expiryUrgency.level === "vermelho_sobra" || a.expiryUrgency.level === "amarelo_razoavel") && (
                           <div className={`rounded-md p-1.5 text-[10.5px] font-bold flex items-start gap-1.5 shadow-2xs ${
                             a.expiryUrgency.color === "vermelho"
                               ? "bg-red-100 border border-red-400 text-red-950"
@@ -557,7 +557,11 @@ export const StockTurnoverAdminContent: React.FC<{
                             }`} />
                             <div>
                               <span>
-                                {a.expiryUrgency.color === "vermelho"
+                                {a.expiryUrgency.level === "vermelho_sobra"
+                                  ? `🚨 NÃO VAI VENDER A TEMPO: Sobra de ~${a.expiryUrgency.projectedSurplusAtExpiry} un (${a.daysToExpiry}d)`
+                                  : a.expiryUrgency.level === "amarelo_razoavel"
+                                  ? `⚠️ GIRO RAZOÁVEL: Venda Provável (${a.daysToExpiry}d)`
+                                  : a.expiryUrgency.color === "vermelho"
                                   ? `🚨 AVISO VERMELHO: Vence em ${a.daysToExpiry} dia(s) (Ação imediata)`
                                   : a.expiryUrgency.color === "laranja"
                                   ? `🔥 AVISO LARANJA: Vence em ${a.daysToExpiry} dia(s) (Queima urgente)`
@@ -570,7 +574,7 @@ export const StockTurnoverAdminContent: React.FC<{
                           </div>
                         )}
 
-                        {!a.hasZeroSales5Days && !a.hasLowTurnover10Percent && !a.isExpiringIn5DaysOrLess && (
+                        {!a.hasZeroSales5Days && !a.hasLowTurnover10Percent && !a.isExpiringIn5DaysOrLess && a.expiryUrgency.level !== "vermelho_sobra" && (
                           <span className="inline-flex items-center gap-1 text-[10px] text-neutral-500 font-medium">
                             <CheckCircle2 className="h-3 w-3 text-emerald-600" />
                             Ritmo regular de estoque

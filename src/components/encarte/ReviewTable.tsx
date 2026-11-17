@@ -241,7 +241,7 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
               const stockAnalytics = calculateStockAnalytics(p);
               const urgency = stockAnalytics.expiryUrgency;
 
-              if (stockAnalytics.isExpiringIn5DaysOrLess && !isExpired) {
+              if ((stockAnalytics.isExpiringIn5DaysOrLess || urgency.level === "vermelho_sobra") && !isExpired) {
                 issues.push({
                   type: "critical-expiry",
                   label: urgency.badgeText,
@@ -270,7 +270,7 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
 
               const rowClass = isExpired
                 ? "bg-red-100/50 border-l-4 border-l-red-800"
-                : urgency.level !== "normal"
+                : urgency.level !== "normal" && urgency.level !== "verde_seguro"
                 ? urgency.rowClass
                 : !p.included
                 ? "opacity-60 bg-neutral-100/40"
