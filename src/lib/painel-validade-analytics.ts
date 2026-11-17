@@ -65,7 +65,8 @@ export function calcDaysToExpiry(validityStr?: string | null, referenceDate: Dat
 /**
  * Classifica os dias em faixas de vencimento
  */
-export function classifyFaixaVencimento(dias: number): FaixaVencimento {
+export function classifyFaixaVencimento(dias: number | null | undefined): FaixaVencimento {
+  if (dias === null || dias === undefined || isNaN(dias)) return "sem_validade";
   if (dias < 0) return "vencido";
   if (dias <= 7) return "ate_7d";
   if (dias <= 30) return "8_a_30d";
@@ -335,6 +336,7 @@ export function calcularKpiCounts(lotes: ValidadeLoteCalculado[]): ValidadeKpiCo
   let de31a60d = 0;
   let de61a90d = 0;
   let acima90d = 0;
+  let semValidade = 0;
 
   for (const lote of lotes) {
     switch (lote.faixaVencimento) {
@@ -356,6 +358,21 @@ export function calcularKpiCounts(lotes: ValidadeLoteCalculado[]): ValidadeKpiCo
       case "acima_90d":
         acima90d++;
         break;
+      case "sem_validade":
+        semValidade++;
+        break;
+      default:
+        if (typeof lote.diasParaVencer === "number" && !isNaN(lote.diasParaVencer)) {
+          if (lote.diasParaVencer < 0) vencidos++;
+          else if (lote.diasParaVencer <= 7) ate7d++;
+          else if (lote.diasParaVencer <= 30) de8a30d++;
+          else if (lote.diasParaVencer <= 60) de31a60d++;
+          else if (lote.diasParaVencer <= 90) de61a90d++;
+          else acima90d++;
+        } else {
+          semValidade++;
+        }
+        break;
     }
   }
 
@@ -366,6 +383,7 @@ export function calcularKpiCounts(lotes: ValidadeLoteCalculado[]): ValidadeKpiCo
     de31a60d,
     de61a90d,
     acima90d,
+    semValidade,
     total: lotes.length,
   };
 }
@@ -450,7 +468,7 @@ export function filtrarLotes(
       if (!(l.escoaTempoPercent < 60 && !l.isVencido)) {
         return false;
       }
-    } else if (params.filtroRapido === "parado") {
+    } else if (params.filtroRapido === "parado" || params.filtroRapido === "sem_vendas_3m") {
       if (!(l.isSemVenda && l.diasParaVencer >= 0 && l.diasParaVencer <= 90)) {
         return false;
       }

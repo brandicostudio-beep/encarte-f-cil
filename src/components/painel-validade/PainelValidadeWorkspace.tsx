@@ -26,8 +26,6 @@ import {
   calcularContadoresKpi,
 } from "@/lib/painel-validade-analytics";
 import { PainelValidadeHeader } from "./PainelValidadeHeader";
-import { PainelValidadeAlertsBar } from "./PainelValidadeAlertsBar";
-import { PainelValidadeKpiCards } from "./PainelValidadeKpiCards";
 import { PainelValidadeFilters } from "./PainelValidadeFilters";
 import { PainelValidadeCard } from "./PainelValidadeCard";
 import { PainelValidadeItemDetailModal } from "./PainelValidadeItemDetailModal";
@@ -227,18 +225,23 @@ export function PainelValidadeWorkspace({
     const baseWithoutQuick = { ...filters, filtroRapido: "todos" as const };
     const allFiltered = filtrarLotes(lotes, baseWithoutQuick);
 
+    const semVendasCount = allFiltered.filter(
+      (l) => l.isSemVenda && l.diasParaVencer >= 0 && l.diasParaVencer <= 90
+    ).length;
+
     return {
       todos: allFiltered.length,
       critico: allFiltered.filter(
         (l) => l.diasParaVencer >= 0 && l.diasParaVencer <= 30 && l.escoaTempoPercent < 60
       ).length,
-      vence_7d: allFiltered.filter(
+      vence7d: allFiltered.filter(
         (l) => l.diasParaVencer >= 0 && l.diasParaVencer <= 7
       ).length,
-      vai_sobrar: allFiltered.filter(
+      vaiSobrar: allFiltered.filter(
         (l) => l.diasParaVencer >= 0 && l.escoaTempoPercent < 60
       ).length,
-      parado: allFiltered.filter((l) => l.isSemVenda).length,
+      semVendas3M: semVendasCount,
+      parado: semVendasCount,
     };
   }, [lotes, filters]);
 
@@ -319,24 +322,14 @@ export function PainelValidadeWorkspace({
           </div>
         ) : (
           <>
-            {/* Top Alert Notification Cards */}
-            <PainelValidadeAlertsBar
-              counts={alertCounts}
-              onAlertClick={handleAlertCardClick}
-            />
-
-            {/* 5 Big Urgency KPI Cards (48px fonts) */}
-            <PainelValidadeKpiCards
-              counts={kpiCounts}
-              selectedFaixa={filters.faixaVencimento}
-              onFaixaClick={handleKpiCardClick}
-            />
-
-            {/* Large 56px Filter Buttons & Controls */}
+            {/* Faixa única e simplificada de filtros, busca e faixas de validade */}
             <PainelValidadeFilters
               filters={filters}
               onFiltersChange={handleUpdateFilters}
               counts={mainFilterCounts}
+              validityCounts={kpiCounts}
+              totalLotes={lotes.length}
+              totalFiltrados={lotesFiltrados.length}
               compradores={compradoresDisponiveis}
             />
 
@@ -365,10 +358,10 @@ export function PainelValidadeWorkspace({
                     <AlertTriangle className="w-8 h-8" />
                   </div>
                   <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200">
-                    Nenhum produto encontrado com os filtros atuais
+                    Nenhum lote com esses filtros
                   </h3>
                   <p className="text-sm text-slate-500 max-w-md mx-auto">
-                    Tente relaxar os filtros ou clique em &quot;Limpar filtros&quot; para exibir todos os lotes do snapshot.
+                    Tente relaxar os filtros ou clique no botão abaixo para restaurar todos os lotes do snapshot.
                   </p>
                   <button
                     type="button"
@@ -376,7 +369,7 @@ export function PainelValidadeWorkspace({
                     className="min-h-[50px] px-6 text-base font-bold rounded-xl bg-blue-600 text-white hover:bg-blue-700 active:scale-95 transition-all inline-flex items-center gap-2"
                   >
                     <RefreshCw className="w-4 h-4" />
-                    Limpar Todos os Filtros
+                    Limpar tudo
                   </button>
                 </div>
               ) : (

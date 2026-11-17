@@ -14,6 +14,10 @@ import {
   SNAPSHOTS_STORAGE_KEY,
   ACTIVE_SNAPSHOT_ID_KEY,
 } from "@/lib/painel-validade-storage";
+import {
+  calcularContadoresKpi,
+  filtrarLotes,
+} from "@/lib/painel-validade-analytics";
 import type { ValidadeLoteCalculado, ValidadeSnapshot } from "@/types/painel-validade";
 
 describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", () => {
@@ -127,13 +131,25 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
     expect(clean).toContain("text-5xl");
   });
 
-  it("PainelValidadeFilters: botões principais possuem altura mínima de 56px", () => {
+  it("PainelValidadeFilters: faixa unificada com busca, 5 atalhos principais de 56px e faixas de validade", () => {
     const counts = {
       todos: 100,
       critico: 15,
-      vence_7d: 8,
-      vai_sobrar: 25,
+      vence7d: 8,
+      vaiSobrar: 25,
+      semVendas3M: 12,
       parado: 12,
+    };
+
+    const validityCounts = {
+      vencidos: 1,
+      ate7d: 6,
+      de8a30d: 25,
+      de31a60d: 46,
+      de61a90d: 61,
+      acima90d: 800,
+      semValidade: 0,
+      total: 939,
     };
 
     const html = renderToString(
@@ -152,18 +168,33 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         }}
         onFiltersChange={() => {}}
         counts={counts}
+        validityCounts={validityCounts}
+        totalLotes={100}
+        totalFiltrados={100}
         compradores={["JOAO SILVA", "MARIA OLIVEIRA"]}
       />
     );
     const clean = html.replace(/<!--.*?-->/g, "");
 
+    // Campo de busca sempre visível
+    expect(clean).toContain("Buscar por código, produto ou comprador...");
+
+    // 5 Atalhos principais unificados
     expect(clean).toContain("Todos");
     expect(clean).toContain("Crítico");
-    expect(clean).toContain("Vence 7d");
-    expect(clean).toContain("Vai Sobrar");
-    expect(clean).toContain("Parado");
+    expect(clean).toContain("Vence em 7 dias");
+    expect(clean).toContain("Vai sobrar");
+    expect(clean).toContain("Sem vendas (3M)");
 
-    // Verifica a classe min-h-[56px]
+    // Botão Mais Filtros
+    expect(clean).toContain("Mais Filtros");
+
+    // Barra de validade integrada com contagem e todas as faixas
+    expect(clean).toContain("Faixas de Validade");
+    expect(clean).toContain("Acima de 90 dias");
+    expect(clean).toContain("800");
+
+    // Altura mínima de 56px para os botões de atalho
     expect(clean).toContain("min-h-[56px]");
   });
 
@@ -469,5 +500,423 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
     expect(clean).not.toContain("Exportar PDF");
     expect(clean).not.toContain("Exportar PNG");
     expect(clean).not.toContain("Exportar Encarte");
+  });
+
+  it("Faixas de validade: soma de todas as faixas é exatamente igual ao total de lotes", () => {
+    const testLotes: ValidadeLoteCalculado[] = [
+      {
+        id: "1",
+        codprod: "1",
+        descricao: "P1",
+        embalagem: "UN",
+        dtval: "01/01/2026",
+        dtvalDate: new Date("2026-01-01"),
+        diasParaVencer: -5,
+        isVencido: true,
+        estoque: 10,
+        precoVenda: 1,
+        valorEmRisco: 10,
+        vendaMesAtual: 0,
+        vendaM1: 0,
+        vendaM2: 0,
+        vendaM3: 0,
+        vendaM2Raw: 0,
+        vendaM3Raw: 0,
+        mediaMensalFechada: 0,
+        isSemVenda: true,
+        ritmoAtualDia: 0,
+        ritmoNecessarioDia: 0,
+        escoaTempoPercent: 0,
+        sobraPrevistaUnidades: 10,
+        coberturaMeses: 999,
+        giroMesPercent: 0,
+        ritmoMesStatus: "normal",
+        vendaIrregular: false,
+        faixaVencimento: "vencido",
+        faixaEscoaTempo: "vai_sobrar",
+        faixaGiroMes: "baixo",
+        faixaCobertura: "sem_venda",
+        noEncarte: false,
+      },
+      {
+        id: "2",
+        codprod: "2",
+        descricao: "P2",
+        embalagem: "UN",
+        dtval: "20/11/2026",
+        dtvalDate: new Date("2026-11-20"),
+        diasParaVencer: 3,
+        isVencido: false,
+        estoque: 10,
+        precoVenda: 1,
+        valorEmRisco: 10,
+        vendaMesAtual: 1,
+        vendaM1: 1,
+        vendaM2: 1,
+        vendaM3: 1,
+        vendaM2Raw: 1,
+        vendaM3Raw: 1,
+        mediaMensalFechada: 1,
+        isSemVenda: false,
+        ritmoAtualDia: 0.03,
+        ritmoNecessarioDia: 3.3,
+        escoaTempoPercent: 1,
+        sobraPrevistaUnidades: 9.9,
+        coberturaMeses: 10,
+        giroMesPercent: 10,
+        ritmoMesStatus: "normal",
+        vendaIrregular: false,
+        faixaVencimento: "ate_7d",
+        faixaEscoaTempo: "vai_sobrar",
+        faixaGiroMes: "baixo",
+        faixaCobertura: "acima_6_meses",
+        noEncarte: false,
+      },
+      {
+        id: "3",
+        codprod: "3",
+        descricao: "P3",
+        embalagem: "UN",
+        dtval: "05/12/2026",
+        dtvalDate: new Date("2026-12-05"),
+        diasParaVencer: 18,
+        isVencido: false,
+        estoque: 10,
+        precoVenda: 1,
+        valorEmRisco: 10,
+        vendaMesAtual: 1,
+        vendaM1: 1,
+        vendaM2: 1,
+        vendaM3: 1,
+        vendaM2Raw: 1,
+        vendaM3Raw: 1,
+        mediaMensalFechada: 1,
+        isSemVenda: false,
+        ritmoAtualDia: 0.03,
+        ritmoNecessarioDia: 0.5,
+        escoaTempoPercent: 6,
+        sobraPrevistaUnidades: 9.4,
+        coberturaMeses: 10,
+        giroMesPercent: 10,
+        ritmoMesStatus: "normal",
+        vendaIrregular: false,
+        faixaVencimento: "8_a_30d",
+        faixaEscoaTempo: "vai_sobrar",
+        faixaGiroMes: "baixo",
+        faixaCobertura: "acima_6_meses",
+        noEncarte: false,
+      },
+      {
+        id: "4",
+        codprod: "4",
+        descricao: "P4",
+        embalagem: "UN",
+        dtval: "05/01/2027",
+        dtvalDate: new Date("2027-01-05"),
+        diasParaVencer: 49,
+        isVencido: false,
+        estoque: 10,
+        precoVenda: 1,
+        valorEmRisco: 10,
+        vendaMesAtual: 1,
+        vendaM1: 1,
+        vendaM2: 1,
+        vendaM3: 1,
+        vendaM2Raw: 1,
+        vendaM3Raw: 1,
+        mediaMensalFechada: 1,
+        isSemVenda: false,
+        ritmoAtualDia: 0.03,
+        ritmoNecessarioDia: 0.2,
+        escoaTempoPercent: 15,
+        sobraPrevistaUnidades: 8.5,
+        coberturaMeses: 10,
+        giroMesPercent: 10,
+        ritmoMesStatus: "normal",
+        vendaIrregular: false,
+        faixaVencimento: "31_a_60d",
+        faixaEscoaTempo: "vai_sobrar",
+        faixaGiroMes: "baixo",
+        faixaCobertura: "acima_6_meses",
+        noEncarte: false,
+      },
+      {
+        id: "5",
+        codprod: "5",
+        descricao: "P5",
+        embalagem: "UN",
+        dtval: "05/02/2027",
+        dtvalDate: new Date("2027-02-05"),
+        diasParaVencer: 80,
+        isVencido: false,
+        estoque: 10,
+        precoVenda: 1,
+        valorEmRisco: 10,
+        vendaMesAtual: 1,
+        vendaM1: 1,
+        vendaM2: 1,
+        vendaM3: 1,
+        vendaM2Raw: 1,
+        vendaM3Raw: 1,
+        mediaMensalFechada: 1,
+        isSemVenda: false,
+        ritmoAtualDia: 0.03,
+        ritmoNecessarioDia: 0.12,
+        escoaTempoPercent: 25,
+        sobraPrevistaUnidades: 7.6,
+        coberturaMeses: 10,
+        giroMesPercent: 10,
+        ritmoMesStatus: "normal",
+        vendaIrregular: false,
+        faixaVencimento: "61_a_90d",
+        faixaEscoaTempo: "vai_sobrar",
+        faixaGiroMes: "baixo",
+        faixaCobertura: "acima_6_meses",
+        noEncarte: false,
+      },
+      {
+        id: "6",
+        codprod: "6",
+        descricao: "P6",
+        embalagem: "UN",
+        dtval: "05/06/2027",
+        dtvalDate: new Date("2027-06-05"),
+        diasParaVencer: 200,
+        isVencido: false,
+        estoque: 10,
+        precoVenda: 1,
+        valorEmRisco: 10,
+        vendaMesAtual: 1,
+        vendaM1: 1,
+        vendaM2: 1,
+        vendaM3: 1,
+        vendaM2Raw: 1,
+        vendaM3Raw: 1,
+        mediaMensalFechada: 1,
+        isSemVenda: false,
+        ritmoAtualDia: 0.03,
+        ritmoNecessarioDia: 0.05,
+        escoaTempoPercent: 60,
+        sobraPrevistaUnidades: 4,
+        coberturaMeses: 10,
+        giroMesPercent: 10,
+        ritmoMesStatus: "normal",
+        vendaIrregular: false,
+        faixaVencimento: "acima_90d",
+        faixaEscoaTempo: "no_limite",
+        faixaGiroMes: "baixo",
+        faixaCobertura: "acima_6_meses",
+        noEncarte: false,
+      },
+      {
+        id: "7",
+        codprod: "7",
+        descricao: "P7",
+        embalagem: "UN",
+        dtval: "",
+        dtvalDate: null,
+        diasParaVencer: 9999,
+        isVencido: false,
+        estoque: 10,
+        precoVenda: 1,
+        valorEmRisco: 10,
+        vendaMesAtual: 1,
+        vendaM1: 1,
+        vendaM2: 1,
+        vendaM3: 1,
+        vendaM2Raw: 1,
+        vendaM3Raw: 1,
+        mediaMensalFechada: 1,
+        isSemVenda: false,
+        ritmoAtualDia: 0.03,
+        ritmoNecessarioDia: 0,
+        escoaTempoPercent: 100,
+        sobraPrevistaUnidades: 0,
+        coberturaMeses: 10,
+        giroMesPercent: 10,
+        ritmoMesStatus: "normal",
+        vendaIrregular: false,
+        faixaVencimento: "sem_validade",
+        faixaEscoaTempo: "escoa_tempo",
+        faixaGiroMes: "baixo",
+        faixaCobertura: "acima_6_meses",
+        noEncarte: false,
+      },
+    ];
+
+    const kpi = calcularContadoresKpi(testLotes);
+    const somaFaixas =
+      kpi.vencidos +
+      kpi.ate7d +
+      kpi.de8a30d +
+      kpi.de31a60d +
+      kpi.de61a90d +
+      kpi.acima90d +
+      kpi.semValidade;
+
+    expect(somaFaixas).toBe(testLotes.length);
+    expect(kpi.total).toBe(testLotes.length);
+  });
+
+  it("Consistência de métricas: 'Parado' e 'Sem vendas (3M)' filtram os mesmos lotes e exibem a mesma contagem", () => {
+    const lotesSemVenda: ValidadeLoteCalculado[] = [
+      {
+        id: "1",
+        codprod: "101",
+        descricao: "PROD PARADO 1",
+        embalagem: "UN",
+        dtval: "10/12/2026",
+        dtvalDate: new Date(),
+        diasParaVencer: 25,
+        isVencido: false,
+        estoque: 50,
+        precoVenda: 5,
+        valorEmRisco: 250,
+        vendaMesAtual: 0,
+        vendaM1: 0,
+        vendaM2: 0,
+        vendaM3: 0,
+        vendaM2Raw: 0,
+        vendaM3Raw: 0,
+        mediaMensalFechada: 0,
+        isSemVenda: true,
+        ritmoAtualDia: 0,
+        ritmoNecessarioDia: 2,
+        escoaTempoPercent: 0,
+        sobraPrevistaUnidades: 50,
+        coberturaMeses: 999,
+        giroMesPercent: 0,
+        ritmoMesStatus: "parado",
+        vendaIrregular: false,
+        faixaVencimento: "8_a_30d",
+        faixaEscoaTempo: "vai_sobrar",
+        faixaGiroMes: "baixo",
+        faixaCobertura: "sem_venda",
+        noEncarte: false,
+      },
+      {
+        id: "2",
+        codprod: "102",
+        descricao: "PROD ATIVO 2",
+        embalagem: "UN",
+        dtval: "10/12/2026",
+        dtvalDate: new Date(),
+        diasParaVencer: 25,
+        isVencido: false,
+        estoque: 50,
+        precoVenda: 5,
+        valorEmRisco: 250,
+        vendaMesAtual: 10,
+        vendaM1: 20,
+        vendaM2: 25,
+        vendaM3: 30,
+        vendaM2Raw: 25,
+        vendaM3Raw: 30,
+        mediaMensalFechada: 25,
+        isSemVenda: false,
+        ritmoAtualDia: 0.83,
+        ritmoNecessarioDia: 2,
+        escoaTempoPercent: 41.5,
+        sobraPrevistaUnidades: 29.25,
+        coberturaMeses: 2,
+        giroMesPercent: 50,
+        ritmoMesStatus: "normal",
+        vendaIrregular: false,
+        faixaVencimento: "8_a_30d",
+        faixaEscoaTempo: "vai_sobrar",
+        faixaGiroMes: "medio",
+        faixaCobertura: "2_a_6_meses",
+        noEncarte: false,
+      },
+    ];
+
+    const filtradosParado = filtrarLotes(lotesSemVenda, {
+      busca: "",
+      filtroRapido: "parado",
+      faixaVencimento: "todas",
+      faixaEscoaTempo: "todas",
+      faixaGiroMes: "todas",
+      faixaCobertura: "todas",
+      ritmoMes: "todas",
+      noEncarte: "todos",
+      comprador: "todos",
+      ordenacao: "critico_primeiro",
+    });
+
+    const filtradosSemVendas3M = filtrarLotes(lotesSemVenda, {
+      busca: "",
+      filtroRapido: "sem_vendas_3m",
+      faixaVencimento: "todas",
+      faixaEscoaTempo: "todas",
+      faixaGiroMes: "todas",
+      faixaCobertura: "todas",
+      ritmoMes: "todas",
+      noEncarte: "todos",
+      comprador: "todos",
+      ordenacao: "critico_primeiro",
+    });
+
+    expect(filtradosParado.length).toBe(1);
+    expect(filtradosSemVendas3M.length).toBe(1);
+    expect(filtradosParado[0].id).toBe(filtradosSemVendas3M[0].id);
+  });
+
+  it("Chips de filtros ativos e Limpar tudo: exibe chips para filtros aplicados e permite remoção individual", () => {
+    let capturedFilters: any = null;
+
+    const html = renderToString(
+      <PainelValidadeFilters
+        filters={{
+          busca: "Biscoito",
+          filtroRapido: "critico",
+          faixaVencimento: "ate_7d",
+          faixaEscoaTempo: "todas",
+          faixaGiroMes: "todas",
+          faixaCobertura: "todas",
+          ritmoMes: "todas",
+          noEncarte: "todos",
+          comprador: "JOAO SILVA",
+          ordenacao: "critico_primeiro",
+        }}
+        onFiltersChange={(f) => {
+          capturedFilters = f;
+        }}
+        counts={{
+          todos: 50,
+          critico: 10,
+          vence7d: 5,
+          vaiSobrar: 8,
+          semVendas3M: 2,
+        }}
+        validityCounts={{
+          vencidos: 0,
+          ate7d: 5,
+          de8a30d: 15,
+          de31a60d: 10,
+          de61a90d: 10,
+          acima90d: 10,
+          semValidade: 0,
+          total: 50,
+        }}
+        totalLotes={50}
+        totalFiltrados={3}
+      />
+    );
+    const clean = html.replace(/<!--.*?-->/g, "");
+
+    // Exibe chips de busca, atalho, validade e comprador
+    expect(clean).toContain("Busca:");
+    expect(clean).toContain("Biscoito");
+    expect(clean).toContain("Atalho: Crítico");
+    expect(clean).toContain("Validade: Até 7 dias");
+    expect(clean).toContain("Comprador: JOAO SILVA");
+
+    // Exibe Mostrando 3 de 50 lotes
+    expect(clean).toContain("Mostrando");
+    expect(clean).toContain("3");
+    expect(clean).toContain("50");
+
+    // Botão Limpar tudo presente
+    expect(clean).toContain("Limpar tudo");
   });
 });

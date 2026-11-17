@@ -8,7 +8,9 @@ export type FaixaVencimento =
   | "8_a_30d"      // 8 a 30 dias
   | "31_a_60d"     // 31 a 60 dias
   | "61_a_90d"     // 61 a 90 dias
-  | "acima_90d";   // > 90 dias
+  | "acima_90d"    // > 90 dias
+  | "sem_validade" // sem data válida informada
+  | "todas";
 
 export type FaixaEscoaTempo =
   | "vai_sobrar"   // < 60%
@@ -167,7 +169,7 @@ export interface ValidadePreviewImport {
 
 export interface ValidadeFilterParams {
   busca?: string;
-  filtroRapido?: "todos" | "critico" | "vence_7d" | "vai_sobrar" | "parado";
+  filtroRapido?: "todos" | "critico" | "vence_7d" | "vai_sobrar" | "parado" | "sem_vendas_3m";
   faixaVencimento?: FaixaVencimento | "todas";
   faixaEscoaTempo?: FaixaEscoaTempo | "todas";
   faixaGiroMes?: FaixaGiroMes | "todas";
@@ -194,5 +196,6 @@ export interface ValidadeKpiCounts {
   de31a60d: number;
   de61a90d: number;
   acima90d: number;
+  semValidade: number;
   total: number;
 }

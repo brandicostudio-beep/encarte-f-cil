@@ -20,6 +20,7 @@ export const Route = createFileRoute("/painel-validade")({
         search?.filtroRapido === "vence_7d" ||
         search?.filtroRapido === "vai_sobrar" ||
         search?.filtroRapido === "parado" ||
+        search?.filtroRapido === "sem_vendas_3m" ||
         search?.filtroRapido === "todos"
           ? (search.filtroRapido as ValidadeFilterParams["filtroRapido"])
           : undefined,
