@@ -243,6 +243,224 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
     expect(clean).toContain("28 un");
   });
 
+  it("PainelValidadeCard: balão (tooltip) exibe motivo em uma linha e é acessível", () => {
+    const mockLote11096: ValidadeLoteCalculado = {
+      id: "11096_10_12_2026_0",
+      codprod: "11096",
+      descricao: "PRODUTO REFERENCIA EXATIDAO",
+      embalagem: "UN",
+      dtval: "10/12/2026",
+      dtvalDate: new Date("2026-12-10"),
+      diasParaVencer: 23,
+      isVencido: false,
+      estoque: 227,
+      precoVenda: 15.0,
+      valorEmRisco: 3225.0,
+      vendaMesAtual: 3,
+      vendaM1: 16,
+      vendaM2: 17,
+      vendaM3: 16,
+      mediaMensalFechada: 16.3,
+      isSemVenda: false,
+      ritmoAtualDia: 0.54,
+      ritmoNecessarioDia: 9.87,
+      escoaTempoPercent: 5.5,
+      sobraPrevistaUnidades: 215,
+      coberturaMeses: 13.9,
+      giroMesPercent: 7.2,
+      ritmoMesStatus: "normal",
+      vendaIrregular: false,
+      faixaVencimento: "8_a_30d",
+      faixaEscoaTempo: "vai_sobrar",
+      faixaGiroMes: "baixo",
+      faixaCobertura: "acima_6_meses",
+      noEncarte: false,
+      codcomprador: "01",
+      nomeComprador: "MARIANA",
+    };
+
+    const html = renderToString(
+      <PainelValidadeCard lote={mockLote11096} onOpenDetail={() => {}} />
+    );
+    const clean = html.replace(/<!--.*?-->/g, "");
+
+    // Verifica que o card possui atributos de acessibilidade e o motivo em uma linha
+    expect(clean).toContain("data-motivo-sobra=\"Em 23 dias, no ritmo de 0,54 un/dia, vende ~12 un. Sobram ~215 un.\"");
+    expect(clean).toContain("role=\"button\"");
+    expect(clean).toContain("tabindex=\"0\"");
+    expect(clean).toContain("aria-label=");
+    expect(clean).toContain("Em 23 dias, no ritmo de 0,54 un/dia, vende ~12 un. Sobram ~215 un.");
+  });
+
+  it("PainelValidadeItemDetailContent: exibe seção 'Por que vai sobrar' completa e detalhada", () => {
+    const mockLote11096: ValidadeLoteCalculado = {
+      id: "11096_10_12_2026_0",
+      codprod: "11096",
+      descricao: "PRODUTO REFERENCIA EXATIDAO",
+      embalagem: "UN",
+      dtval: "10/12/2026",
+      dtvalDate: new Date("2026-12-10"),
+      diasParaVencer: 23,
+      isVencido: false,
+      estoque: 227,
+      precoVenda: 15.0,
+      valorEmRisco: 3225.0,
+      vendaMesAtual: 3,
+      vendaM1: 16,
+      vendaM2: 17,
+      vendaM3: 16,
+      mediaMensalFechada: 16.3,
+      isSemVenda: false,
+      ritmoAtualDia: 0.54,
+      ritmoNecessarioDia: 9.87,
+      escoaTempoPercent: 5.5,
+      sobraPrevistaUnidades: 215,
+      coberturaMeses: 13.9,
+      giroMesPercent: 7.2,
+      ritmoMesStatus: "normal",
+      vendaIrregular: false,
+      faixaVencimento: "8_a_30d",
+      faixaEscoaTempo: "vai_sobrar",
+      faixaGiroMes: "baixo",
+      faixaCobertura: "acima_6_meses",
+      noEncarte: false,
+      codcomprador: "01",
+      nomeComprador: "MARIANA",
+    };
+
+    const html = renderToString(
+      <PainelValidadeItemDetailContent lote={mockLote11096} />
+    );
+    const clean = html.replace(/<!--.*?-->/g, "");
+
+    // 1. Título da Seção
+    expect(clean).toContain("Por que vai sobrar?");
+
+    // 2. Vendas mês a mês
+    expect(clean).toContain("M-3 (3 meses atrás)");
+    expect(clean).toContain("M-2 (2 meses atrás)");
+    expect(clean).toContain("M-1 (mês passado)");
+    expect(clean).toContain("16 un");
+    expect(clean).toContain("17 un");
+
+    // 3. Média e Ritmo por dia
+    expect(clean).toContain("Média mensal fechada");
+    expect(clean).toContain("16.3 un/mês");
+    expect(clean).toContain("0,54 un/dia");
+    expect(clean).toContain("média dos 3 meses ÷ 30 dias do mês");
+
+    // 4. Estoque atual e dias até o vencimento
+    expect(clean).toContain("227 un");
+    expect(clean).toContain("23 dias");
+    expect(clean).toContain("10/12/2026");
+
+    // 5. Venda prevista até vencer e sobra prevista
+    expect(clean).toContain("~12 un");
+    expect(clean).toContain("~215 un");
+
+    // 6. Frases simples sem fórmulas
+    expect(clean).toContain("Explicação em Frases Simples");
+    expect(clean).toContain("vende em média");
+    expect(clean).toContain("ritmo de 0,54 unidades por dia");
+    expect(clean).toContain("sobram cerca de 215 unidades");
+  });
+
+  it("PainelValidadeItemDetailContent: lote que escoa 100% não exibe a palavra 'sobra'", () => {
+    const mockEscoa100: ValidadeLoteCalculado = {
+      id: "8800_07_12_2026_0",
+      codprod: "8800",
+      descricao: "PRODUTO ESCOA TOTAL",
+      embalagem: "UN",
+      dtval: "07/12/2026",
+      dtvalDate: new Date(),
+      diasParaVencer: 20,
+      isVencido: false,
+      estoque: 40,
+      precoVenda: 5.0,
+      valorEmRisco: 0,
+      vendaMesAtual: 30,
+      vendaM1: 150,
+      vendaM2: 150,
+      vendaM3: 150,
+      mediaMensalFechada: 150,
+      isSemVenda: false,
+      ritmoAtualDia: 5,
+      ritmoNecessarioDia: 2,
+      escoaTempoPercent: 100,
+      sobraPrevistaUnidades: 0,
+      coberturaMeses: 0.3,
+      giroMesPercent: 100,
+      ritmoMesStatus: "normal",
+      vendaIrregular: false,
+      faixaVencimento: "8_a_30d",
+      faixaEscoaTempo: "escoa_tempo",
+      faixaGiroMes: "alto",
+      faixaCobertura: "ate_2_meses",
+      noEncarte: false,
+      codcomprador: "01",
+      nomeComprador: "MARIANA",
+    };
+
+    const html = renderToString(
+      <PainelValidadeItemDetailContent lote={mockEscoa100} />
+    );
+    const clean = html.replace(/<!--.*?-->/g, "");
+
+    // Título muda para Previsão de Saída
+    expect(clean).toContain("Previsão de Saída do Lote");
+    expect(clean).toContain("100% Escoa a tempo");
+    expect(clean).toContain("Demanda suficiente para escoar 100%");
+    // Não deve exibir "Sobra prevista no vencimento"
+    expect(clean).not.toContain("Sobra prevista no vencimento");
+  });
+
+  it("PainelValidadeItemDetailContent: quando faltar histórico mostra 'sem dados' sem assumir zero", () => {
+    const mockSemDados: ValidadeLoteCalculado = {
+      id: "7700_17_12_2026_0",
+      codprod: "7700",
+      descricao: "PRODUTO NOVO SEM DADOS",
+      embalagem: "UN",
+      dtval: "17/12/2026",
+      dtvalDate: new Date(),
+      diasParaVencer: 30,
+      isVencido: false,
+      estoque: 30,
+      precoVenda: 10.0,
+      valorEmRisco: 200.0,
+      vendaMesAtual: 5,
+      vendaM1: 15,
+      vendaM2: 0,
+      vendaM3: 0,
+      vendaM2Raw: null,
+      vendaM3Raw: null,
+      mediaMensalFechada: 5,
+      isSemVenda: false,
+      ritmoAtualDia: 0.17,
+      ritmoNecessarioDia: 1,
+      escoaTempoPercent: 17,
+      sobraPrevistaUnidades: 25,
+      coberturaMeses: 6,
+      giroMesPercent: 16.7,
+      ritmoMesStatus: "normal",
+      vendaIrregular: false,
+      faixaVencimento: "8_a_30d",
+      faixaEscoaTempo: "vai_sobrar",
+      faixaGiroMes: "medio",
+      faixaCobertura: "2_a_6_meses",
+      noEncarte: false,
+      codcomprador: "01",
+      nomeComprador: "MARIANA",
+    };
+
+    const html = renderToString(
+      <PainelValidadeItemDetailContent lote={mockSemDados} />
+    );
+    const clean = html.replace(/<!--.*?-->/g, "");
+
+    // M-2 e M-3 exibem "sem dados"
+    expect(clean).toContain("sem dados");
+  });
+
   it("Garante separação estrita do cliente: nenhum botão de exportação pública ou flyer existe no painel", () => {
     const html = renderToString(<PainelValidadeWorkspace />);
     const clean = html.replace(/<!--.*?-->/g, "");

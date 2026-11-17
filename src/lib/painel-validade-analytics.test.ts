@@ -11,6 +11,9 @@ import {
   calcularKpiCounts,
   calcularAlertCounts,
   filtrarLotes,
+  formatRitmoBR,
+  gerarExplicacaoSobraLinha,
+  gerarDiagnosticoSobraCompleto,
 } from "./painel-validade-analytics";
 import type { ValidadeLoteRaw } from "@/types/painel-validade";
 
@@ -288,5 +291,213 @@ describe("Painel de Validade - Motor de Análise e Métricas", () => {
     const criticos = filtrarLotes(calculados, { filtroRapido: "critico" });
     expect(criticos.length).toBe(1);
     expect(criticos[0].codprod).toBe("102");
+  });
+
+  describe("Diagnóstico de Sobra (Por que vai sobrar)", () => {
+    // Data de referência de 17/11/2026
+    const refDate = new Date("2026-11-17T12:00:00");
+
+    it("reproduz o exemplo de referência (código 11096, estoque 227, vencimento 10/12/2026, ritmo 0,54 un/dia) gerando sobra de ~215 un", () => {
+      // 10/12/2026 - 17/11/2026 = 23 dias
+      // Ritmo de 0,54 un/dia -> média mensal de ~16,2 un/mês
+      // Venda prevista: 0,54 * 23 = ~12 un
+      // Sobra prevista: 227 - 12,42 = 214,58 -> ~215 un
+      const raw: ValidadeLoteRaw = {
+        codprod: "11096",
+        descricao: "PRODUTO REFERENCIA EXATIDAO",
+        embalagem: "UN",
+        dtval: "10/12/2026",
+        qtdisp_wms: 227,
+        preco_venda: 15.0,
+        qtvendmes: 3,
+        qtvendmes1: 16,
+        qtvendmes2: 17,
+        qtvendmes3: 16, // Média (16+17+16)/3 = 16.3 un/mês -> 16.3/30 = 0.54 un/dia
+      };
+
+      const lote = processarLote(raw, refDate);
+
+      expect(lote.diasParaVencer).toBe(23);
+      expect(lote.estoque).toBe(227);
+      expect(lote.ritmoAtualDia).toBe(0.54);
+      expect(Math.round(lote.sobraPrevistaUnidades)).toBe(215);
+
+      // Balão (tooltip) de uma linha
+      const balao = gerarExplicacaoSobraLinha(lote);
+      expect(balao).toBe("Em 23 dias, no ritmo de 0,54 un/dia, vende ~12 un. Sobram ~215 un.");
+
+      // Diagnóstico detalhado para o modal
+      const diag = gerarDiagnosticoSobraCompleto(lote);
+      expect(diag.titulo).toBe("Por que vai sobrar?");
+      expect(diag.estoque).toBe(227);
+      expect(diag.diasParaVencer).toBe(23);
+      expect(diag.ritmoAtualDia).toBe(0.54);
+      expect(diag.vendaPrevista).toBe(12);
+      expect(diag.sobraPrevista).toBe(215);
+      expect(diag.explicacaoSimples).toContain("vende em média");
+      expect(diag.explicacaoSimples).toContain("ritmo de 0,54 unidades por dia");
+      expect(diag.explicacaoSimples).toContain("sobram cerca de 215 unidades");
+    });
+
+    it("lote com venda zero nos 3 meses mostra 'sem venda' e não divide por zero", () => {
+      const raw: ValidadeLoteRaw = {
+        codprod: "9900",
+        descricao: "PRODUTO SEM VENDA HISTORICA",
+        embalagem: "CX",
+        dtval: "27/11/2026", // 10 dias
+        qtdisp_wms: 50,
+        preco_venda: 20.0,
+        qtvendmes: 0,
+        qtvendmes1: 0,
+        qtvendmes2: 0,
+        qtvendmes3: 0,
+      };
+
+      const lote = processarLote(raw, refDate);
+      expect(lote.isSemVenda).toBe(true);
+      expect(lote.mediaMensalFechada).toBe(0);
+      expect(lote.ritmoAtualDia).toBe(0);
+      expect(lote.sobraPrevistaUnidades).toBe(50);
+      expect(lote.coberturaMeses).toBeNull(); // Não divide por zero
+
+      // Balão
+      const balao = gerarExplicacaoSobraLinha(lote);
+      expect(balao.toLowerCase()).toContain("sem venda");
+      expect(balao).toContain("ritmo 0 un/dia");
+      expect(balao).toContain("todo o estoque de 50 un deve sobrar");
+      expect(balao).not.toContain("NaN");
+      expect(balao).not.toContain("Infinity");
+
+      // Diagnóstico detalhado
+      const diag = gerarDiagnosticoSobraCompleto(lote);
+      expect(diag.isSemVenda).toBe(true);
+      expect(diag.explicacaoSimples.toLowerCase()).toContain("sem venda");
+      expect(diag.explicacaoSimples).toContain("todo o estoque atual de 50 unidades deverá sobrar");
+      expect(diag.explicacaoSimples).not.toContain("NaN");
+    });
+
+    it("lote que escoa 100% não mostra 'sobra'", () => {
+      const raw: ValidadeLoteRaw = {
+        codprod: "8800",
+        descricao: "PRODUTO ALTO GIRO ESCOAMENTO TOTAL",
+        embalagem: "UN",
+        dtval: "07/12/2026", // 20 dias
+        qtdisp_wms: 40,
+        preco_venda: 5.0,
+        qtvendmes: 30,
+        qtvendmes1: 150, // 150/mês -> 5 un/dia -> em 20 dias vende 100 (supera 40)
+        qtvendmes2: 150,
+        qtvendmes3: 150,
+      };
+
+      const lote = processarLote(raw, refDate);
+      expect(lote.escoaTempoPercent).toBe(100);
+      expect(lote.sobraPrevistaUnidades).toBe(0);
+
+      // Balão NÃO pode conter a palavra "sobra" ou "Sobram"
+      const balao = gerarExplicacaoSobraLinha(lote);
+      expect(balao).toContain("vende todo o estoque de 40 un (escoa 100%)");
+      expect(balao.toLowerCase()).not.toContain("sobra");
+
+      // Diagnóstico detalhado NÃO pode conter "sobra" como problema
+      const diag = gerarDiagnosticoSobraCompleto(lote);
+      expect(diag.isEscoa100).toBe(true);
+      expect(diag.titulo).toBe("Previsão de Saída do Lote");
+      expect(diag.explicacaoSimples).toContain("100% escoado");
+    });
+
+    it("se faltar histórico de vendas de algum mês, mostra 'sem dados' sem assumir zero no texto", () => {
+      const raw: ValidadeLoteRaw = {
+        codprod: "7700",
+        descricao: "PRODUTO NOVO COM HISTORICO PARCIAL",
+        embalagem: "UN",
+        dtval: "17/12/2026", // 30 dias
+        qtdisp_wms: 30,
+        preco_venda: 10.0,
+        qtvendmes: 5,
+        qtvendmes1: 15,
+        qtvendmes2: null, // sem dados no M-2
+        qtvendmes3: null, // sem dados no M-3
+      };
+
+      const lote = processarLote(raw, refDate);
+      const diag = gerarDiagnosticoSobraCompleto(lote);
+
+      // M-1 tem dados
+      expect(diag.mesesFechados[2].rotulo).toBe("M-1");
+      expect(diag.mesesFechados[2].semDados).toBe(false);
+      expect(diag.mesesFechados[2].textoFormatado).toBe("15 un");
+
+      // M-2 e M-3 mostram "sem dados"
+      expect(diag.mesesFechados[1].rotulo).toBe("M-2");
+      expect(diag.mesesFechados[1].semDados).toBe(true);
+      expect(diag.mesesFechados[1].textoFormatado).toBe("sem dados");
+
+      expect(diag.mesesFechados[0].rotulo).toBe("M-3");
+      expect(diag.mesesFechados[0].semDados).toBe(true);
+      expect(diag.mesesFechados[0].textoFormatado).toBe("sem dados");
+    });
+
+    it("avisa quando a venda for irregular nos 3 meses", () => {
+      const raw: ValidadeLoteRaw = {
+        codprod: "6600",
+        descricao: "PRODUTO COM VENDA OSCILANTE",
+        embalagem: "UN",
+        dtval: "27/11/2026", // 10 dias
+        qtdisp_wms: 80,
+        preco_venda: 12.0,
+        qtvendmes: 2,
+        qtvendmes1: 50,
+        qtvendmes2: 0, // Um mês zerado -> irregular
+        qtvendmes3: 10,
+      };
+
+      const lote = processarLote(raw, refDate);
+      expect(lote.vendaIrregular).toBe(true);
+
+      const diag = gerarDiagnosticoSobraCompleto(lote);
+      expect(diag.vendaIrregular).toBe(true);
+      expect(diag.avisoIrregularidade).toContain("previsão de sobra podem variar");
+    });
+
+    it("o balão e o detalhe batem com o card (mesmo estoque, ritmo e sobra)", () => {
+      const raw: ValidadeLoteRaw = {
+        codprod: "5500",
+        descricao: "PRODUTO TESTE CONSISTENCIA",
+        embalagem: "UN",
+        dtval: "02/12/2026", // 15 dias
+        qtdisp_wms: 100,
+        preco_venda: 8.0,
+        qtvendmes: 4,
+        qtvendmes1: 30,
+        qtvendmes2: 30,
+        qtvendmes3: 30, // 30/mês -> 1 un/dia -> 15 dias -> vende 15 un -> sobra 85 un
+      };
+
+      const lote = processarLote(raw, refDate);
+      const balao = gerarExplicacaoSobraLinha(lote);
+      const diag = gerarDiagnosticoSobraCompleto(lote);
+
+      // Card tem:
+      // estoque: 100
+      // ritmoAtualDia: 1
+      // sobraPrevistaUnidades: 85
+      // diasParaVencer: 15
+      expect(lote.estoque).toBe(100);
+      expect(lote.ritmoAtualDia).toBe(1);
+      expect(lote.sobraPrevistaUnidades).toBe(85);
+
+      // Balão tem os mesmos números:
+      expect(balao).toContain("Em 15 dias");
+      expect(balao).toContain("ritmo de 1 un/dia");
+      expect(balao).toContain("vende ~15 un");
+      expect(balao).toContain("Sobram ~85 un");
+
+      // Detalhe tem os mesmos números:
+      expect(diag.estoque).toBe(lote.estoque);
+      expect(diag.ritmoAtualDia).toBe(lote.ritmoAtualDia);
+      expect(diag.sobraPrevista).toBe(Math.round(lote.sobraPrevistaUnidades));
+      expect(diag.vendaPrevista).toBe(15);
+    });
   });
 });

@@ -44,10 +44,10 @@ export interface ValidadeLoteRaw {
   qtreserv?: number;
   qtdisp_wms: number;        // Estoque considerado
   qtest_winthor?: number;
-  qtvendmes: number;         // Mês atual parcial
-  qtvendmes1: number;        // M-1 fechado
-  qtvendmes2: number;        // M-2 fechado
-  qtvendmes3: number;        // M-3 fechado
+  qtvendmes?: number | null; // Mês atual parcial
+  qtvendmes1?: number | null; // M-1 fechado
+  qtvendmes2?: number | null; // M-2 fechado
+  qtvendmes3?: number | null; // M-3 fechado
   preco_venda: number;
   preco_total?: number;
   status?: string;
@@ -56,6 +56,31 @@ export interface ValidadeLoteRaw {
   codcomprador?: string;
   nomeComprador?: string;
   loteNumero?: string;
+}
+
+export interface ValidadeDiagnosticoSobra {
+  titulo: string;
+  resumoLinha: string;
+  explicacaoSimples: string;
+  mesesFechados: Array<{
+    rotulo: string;
+    subtitulo: string;
+    valor: number | null;
+    textoFormatado: string;
+    semDados: boolean;
+  }>;
+  mediaMensalFechada: number;
+  ritmoAtualDia: number;
+  estoque: number;
+  diasParaVencer: number;
+  vendaPrevista: number;
+  sobraPrevista: number;
+  escoaTempoPercent: number;
+  isSemVenda: boolean;
+  isEscoa100: boolean;
+  isVencido: boolean;
+  vendaIrregular: boolean;
+  avisoIrregularidade: string | null;
 }
 
 export interface ValidadeLoteCalculado {
@@ -75,10 +100,14 @@ export interface ValidadeLoteCalculado {
   valorEmRisco: number; // precoVenda * sobraPrevista
 
   // Vendas & Médias
-  vendaMesAtual: number;      // QTVENDMES (mês parcial)
-  vendaM1: number;            // QTVENDMES1
-  vendaM2: number;            // QTVENDMES2
-  vendaM3: number;            // QTVENDMES3
+  vendaMesAtual: number;      // QTVENDMES (mês parcial, fallback 0)
+  vendaM1: number;            // QTVENDMES1 (fallback 0)
+  vendaM2: number;            // QTVENDMES2 (fallback 0)
+  vendaM3: number;            // QTVENDMES3 (fallback 0)
+  vendaMesAtualRaw?: number | null; // Valor bruto (null se sem dados)
+  vendaM1Raw?: number | null;
+  vendaM2Raw?: number | null;
+  vendaM3Raw?: number | null;
   mediaMensalFechada: number; // Média (M1 + M2 + M3) / 3
   isSemVenda: boolean;        // Se M1 = M2 = M3 = 0
 

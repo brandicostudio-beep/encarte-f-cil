@@ -102,6 +102,17 @@ export function parseBrazilianNumber(val: unknown): number {
 }
 
 /**
+ * Converte string brasileira em número, retornando null se o valor for vazio ou não informado
+ */
+export function parseBrazilianNumberOrNull(val: unknown): number | null {
+  if (val === null || val === undefined) return null;
+  const str = String(val).trim();
+  if (str === "" || str === "-" || str.toLowerCase() === "null") return null;
+  const num = parseBrazilianNumber(str);
+  return isNaN(num) ? null : num;
+}
+
+/**
  * Normaliza data para dd/mm/aaaa
  */
 export function normalizeDateString(val: unknown): string {
@@ -293,13 +304,16 @@ export function parseWinthorCsv(
       const val = row[index];
       if (val !== undefined) {
         if (
-          field === "qtdisp_wms" ||
-          field === "qtreserv" ||
-          field === "qtest_winthor" ||
           field === "qtvendmes" ||
           field === "qtvendmes1" ||
           field === "qtvendmes2" ||
-          field === "qtvendmes3" ||
+          field === "qtvendmes3"
+        ) {
+          (item as Record<string, unknown>)[field] = parseBrazilianNumberOrNull(val);
+        } else if (
+          field === "qtdisp_wms" ||
+          field === "qtreserv" ||
+          field === "qtest_winthor" ||
           field === "preco_venda" ||
           field === "preco_total" ||
           field === "diasavencer" ||
@@ -349,10 +363,10 @@ export function parseWinthorCsv(
       qtreserv: item.qtreserv || 0,
       qtdisp_wms: item.qtdisp_wms || 0,
       qtest_winthor: item.qtest_winthor,
-      qtvendmes: item.qtvendmes || 0,
-      qtvendmes1: item.qtvendmes1 || 0,
-      qtvendmes2: item.qtvendmes2 || 0,
-      qtvendmes3: item.qtvendmes3 || 0,
+      qtvendmes: item.qtvendmes !== undefined ? (item.qtvendmes as number | null) : null,
+      qtvendmes1: item.qtvendmes1 !== undefined ? (item.qtvendmes1 as number | null) : null,
+      qtvendmes2: item.qtvendmes2 !== undefined ? (item.qtvendmes2 as number | null) : null,
+      qtvendmes3: item.qtvendmes3 !== undefined ? (item.qtvendmes3 as number | null) : null,
       preco_venda: item.preco_venda || 0,
       preco_total: item.preco_total,
       status: item.status,

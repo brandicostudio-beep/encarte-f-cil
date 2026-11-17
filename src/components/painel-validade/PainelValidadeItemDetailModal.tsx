@@ -21,7 +21,12 @@ import {
   Layers,
   ArrowRight,
   HelpCircle,
+  CheckCircle2,
 } from "lucide-react";
+import {
+  gerarDiagnosticoSobraCompleto,
+  formatRitmoBR,
+} from "@/lib/painel-validade-analytics";
 
 export interface PainelValidadeItemDetailContentProps {
   lote: ValidadeLoteCalculado;
@@ -30,6 +35,8 @@ export interface PainelValidadeItemDetailContentProps {
 export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailContentProps> = ({
   lote,
 }) => {
+  const diagnostico = gerarDiagnosticoSobraCompleto(lote);
+
   // Encontra o maior valor entre os 4 meses para dimensionar as barras do gráfico
   const maxVenda = Math.max(
     1,
@@ -81,6 +88,207 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
       </div>
 
       <div className="space-y-6">
+        {/* SEÇÃO PRINCIPAL: POR QUE VAI SOBRAR (OU PREVISÃO DE SAÍDA) */}
+        <section
+          data-testid="secao-por-que-vai-sobrar"
+          className={`p-5 rounded-2xl border-2 space-y-4 shadow-xs ${
+            diagnostico.isEscoa100
+              ? "bg-emerald-50/70 border-emerald-300 text-emerald-950"
+              : diagnostico.isSemVenda
+              ? "bg-rose-50/70 border-rose-300 text-rose-950"
+              : "bg-amber-50/70 border-amber-300 text-amber-950"
+          }`}
+        >
+          {/* Cabeçalho da Seção */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <div
+                className={`h-9 w-9 rounded-xl flex items-center justify-center font-bold text-white shadow-xs ${
+                  diagnostico.isEscoa100
+                    ? "bg-emerald-600"
+                    : diagnostico.isSemVenda
+                    ? "bg-rose-600"
+                    : "bg-amber-600"
+                }`}
+              >
+                {diagnostico.isEscoa100 ? (
+                  <CheckCircle2 className="h-5 w-5" />
+                ) : (
+                  <HelpCircle className="h-5 w-5" />
+                )}
+              </div>
+              <div>
+                <h4 className="text-lg font-black tracking-tight text-neutral-900">
+                  {diagnostico.titulo}
+                </h4>
+                <p className="text-xs text-neutral-600 font-medium">
+                  Diagnóstico passo a passo do lote
+                </p>
+              </div>
+            </div>
+
+            {/* Selo Resumo */}
+            <span
+              className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border shadow-2xs ${
+                diagnostico.isEscoa100
+                  ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                  : diagnostico.isSemVenda
+                  ? "bg-rose-100 text-rose-900 border-rose-300"
+                  : "bg-amber-100 text-amber-900 border-amber-300"
+              }`}
+            >
+              {diagnostico.isEscoa100
+                ? "100% Escoa a tempo"
+                : `~${diagnostico.sobraPrevista} un vão sobrar`}
+            </span>
+          </div>
+
+          {/* 1. Vendas dos últimos 3 meses fechados, mês a mês */}
+          <div className="bg-white/95 p-3.5 rounded-xl border border-neutral-200/80 space-y-2">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
+              Vendas dos últimos 3 meses fechados (mês a mês)
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              {diagnostico.mesesFechados.map((m) => (
+                <div
+                  key={m.rotulo}
+                  className="p-2.5 rounded-lg bg-neutral-50 border border-neutral-200"
+                >
+                  <span className="text-[10px] text-neutral-500 font-semibold block">
+                    {m.rotulo} ({m.subtitulo})
+                  </span>
+                  <span
+                    className={`font-mono font-bold text-sm block mt-0.5 ${
+                      m.semDados ? "text-neutral-400 italic font-normal" : "text-neutral-900"
+                    }`}
+                  >
+                    {m.textoFormatado}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 2. Média mensal, ritmo por dia, estoque e dias até o vencimento */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {/* Média e Ritmo */}
+            <div className="bg-white/95 p-3.5 rounded-xl border border-neutral-200/80 text-xs space-y-1.5">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
+                Média mensal e ritmo por dia
+              </div>
+              <div className="flex justify-between items-center pt-1">
+                <span className="text-neutral-600">Média mensal fechada:</span>
+                <span className="font-mono font-bold text-neutral-900">
+                  {diagnostico.isSemVenda
+                    ? "0 un/mês (sem venda)"
+                    : `${diagnostico.mediaMensalFechada} un/mês`}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-600">Ritmo de saída por dia:</span>
+                <span className="font-mono font-black text-neutral-900 text-sm">
+                  {diagnostico.isSemVenda
+                    ? "0 un/dia (sem venda)"
+                    : `${formatRitmoBR(diagnostico.ritmoAtualDia)} un/dia`}
+                </span>
+              </div>
+              <p className="text-[10px] text-neutral-400 pt-0.5">
+                (média dos 3 meses ÷ 30 dias do mês)
+              </p>
+            </div>
+
+            {/* Estoque e Dias até Vencer */}
+            <div className="bg-white/95 p-3.5 rounded-xl border border-neutral-200/80 text-xs space-y-1.5">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
+                Estoque atual e prazo
+              </div>
+              <div className="flex justify-between items-center pt-1">
+                <span className="text-neutral-600">Estoque atual disponível:</span>
+                <span className="font-mono font-bold text-neutral-900">
+                  {diagnostico.estoque} un
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-600">Dias até o vencimento:</span>
+                <span className="font-mono font-black text-neutral-900">
+                  {diagnostico.diasParaVencer} dias ({lote.dtval})
+                </span>
+              </div>
+              <div className="flex justify-between items-center pt-1 border-t border-neutral-100">
+                <span className="text-neutral-600">Venda prevista até vencer:</span>
+                <span className="font-mono font-bold text-blue-700">
+                  ~{diagnostico.vendaPrevista} un
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Projeção de Sobra e Percentual que Escoa a Tempo */}
+          <div className="bg-white/95 p-3.5 rounded-xl border border-neutral-200/80 text-xs space-y-2">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
+              Sobra prevista e escoamento
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-center">
+              <div className="p-2.5 rounded-lg bg-neutral-50 border border-neutral-200">
+                <span className="text-neutral-500 text-[11px] block">Escoa a tempo</span>
+                <span
+                  className={`text-xl font-black font-mono block mt-0.5 ${
+                    diagnostico.isEscoa100
+                      ? "text-emerald-700"
+                      : diagnostico.escoaTempoPercent >= 60
+                      ? "text-amber-700"
+                      : "text-red-700"
+                  }`}
+                >
+                  {diagnostico.escoaTempoPercent}%
+                </span>
+              </div>
+
+              {!diagnostico.isEscoa100 ? (
+                <div className="p-2.5 rounded-lg bg-red-50 border border-red-200">
+                  <span className="text-red-700 text-[11px] font-semibold block">
+                    Sobra prevista (estoque − venda prevista)
+                  </span>
+                  <span className="text-xl font-black font-mono text-red-700 block mt-0.5">
+                    ~{diagnostico.sobraPrevista} un
+                  </span>
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <span className="text-emerald-700 text-[11px] font-semibold block">
+                    Situação do lote
+                  </span>
+                  <span className="text-sm font-bold text-emerald-800 block mt-1">
+                    Demanda suficiente para escoar 100%
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 4. O cálculo escrito em frases simples, sem fórmulas */}
+          <div className="bg-white/95 p-4 rounded-xl border border-neutral-200/80 text-xs space-y-1.5">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-800 flex items-center gap-1.5">
+              <HelpCircle className="h-4 w-4 text-blue-600" />
+              <span>Explicação em Frases Simples:</span>
+            </div>
+            <p className="text-neutral-800 leading-relaxed font-medium text-sm">
+              {diagnostico.explicacaoSimples}
+            </p>
+          </div>
+
+          {/* 5. Alerta de Venda Irregular (se houver) */}
+          {diagnostico.avisoIrregularidade && (
+            <div className="p-3.5 rounded-xl bg-amber-100/90 border border-amber-300 text-amber-950 text-xs flex items-start gap-2.5">
+              <AlertTriangle className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
+              <div>
+                <strong className="block font-bold">Aviso de Venda Irregular:</strong>
+                <span className="leading-relaxed">{diagnostico.avisoIrregularidade}</span>
+              </div>
+            </div>
+          )}
+        </section>
+
         {/* Gráfico Visual de 4 Meses de Vendas */}
         <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-200">
           <div className="flex items-center justify-between mb-3">
@@ -102,7 +310,9 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
             <div>
               <div className="flex justify-between text-neutral-600 mb-1">
                 <span>M-3 (3 meses atrás)</span>
-                <span className="font-mono font-bold">{lote.vendaM3} un</span>
+                <span className="font-mono font-bold">
+                  {lote.vendaM3Raw === null ? "sem dados" : `${lote.vendaM3} un`}
+                </span>
               </div>
               <div className="h-3 w-full bg-neutral-200 rounded-full overflow-hidden">
                 <div
@@ -116,7 +326,9 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
             <div>
               <div className="flex justify-between text-neutral-600 mb-1">
                 <span>M-2 (2 meses atrás)</span>
-                <span className="font-mono font-bold">{lote.vendaM2} un</span>
+                <span className="font-mono font-bold">
+                  {lote.vendaM2Raw === null ? "sem dados" : `${lote.vendaM2} un`}
+                </span>
               </div>
               <div className="h-3 w-full bg-neutral-200 rounded-full overflow-hidden">
                 <div
@@ -130,7 +342,9 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
             <div>
               <div className="flex justify-between text-neutral-600 mb-1">
                 <span>M-1 (mês passado)</span>
-                <span className="font-mono font-bold">{lote.vendaM1} un</span>
+                <span className="font-mono font-bold">
+                  {lote.vendaM1Raw === null ? "sem dados" : `${lote.vendaM1} un`}
+                </span>
               </div>
               <div className="h-3 w-full bg-neutral-200 rounded-full overflow-hidden">
                 <div
@@ -161,7 +375,9 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
                       : "Normal"}
                   </span>
                 </span>
-                <span className="font-mono font-bold text-neutral-900">{lote.vendaMesAtual} un</span>
+                <span className="font-mono font-bold text-neutral-900">
+                  {lote.vendaMesAtualRaw === null ? "sem dados" : `${lote.vendaMesAtual} un`}
+                </span>
               </div>
               <div className="h-3 w-full bg-neutral-200 rounded-full overflow-hidden">
                 <div

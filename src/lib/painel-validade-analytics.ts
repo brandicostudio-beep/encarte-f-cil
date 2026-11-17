@@ -17,6 +17,7 @@ import type {
   ValidadeFilterParams,
   ValidadeAlertCounts,
   ValidadeKpiCounts,
+  ValidadeDiagnosticoSobra,
   FaixaVencimento,
   FaixaEscoaTempo,
   FaixaGiroMes,
@@ -166,11 +167,16 @@ export function processarLote(
   const estoque = Math.max(0, raw.qtdisp_wms || 0);
   const precoVenda = Math.max(0, raw.preco_venda || 0);
 
-  // Vendas
-  const vendaMesAtual = Math.max(0, raw.qtvendmes || 0);
-  const vendaM1 = Math.max(0, raw.qtvendmes1 || 0);
-  const vendaM2 = Math.max(0, raw.qtvendmes2 || 0);
-  const vendaM3 = Math.max(0, raw.qtvendmes3 || 0);
+  // Vendas com preservação de ausência de dados (null) vs zero numérico (0)
+  const vendaMesAtualRaw = raw.qtvendmes !== undefined ? raw.qtvendmes : null;
+  const vendaM1Raw = raw.qtvendmes1 !== undefined ? raw.qtvendmes1 : null;
+  const vendaM2Raw = raw.qtvendmes2 !== undefined ? raw.qtvendmes2 : null;
+  const vendaM3Raw = raw.qtvendmes3 !== undefined ? raw.qtvendmes3 : null;
+
+  const vendaMesAtual = Math.max(0, vendaMesAtualRaw || 0);
+  const vendaM1 = Math.max(0, vendaM1Raw || 0);
+  const vendaM2 = Math.max(0, vendaM2Raw || 0);
+  const vendaM3 = Math.max(0, vendaM3Raw || 0);
 
   // Média mensal dos 3 meses fechados (mês com zero conta como zero)
   const somaFechada = vendaM1 + vendaM2 + vendaM3;
@@ -270,6 +276,10 @@ export function processarLote(
     vendaM1,
     vendaM2,
     vendaM3,
+    vendaMesAtualRaw,
+    vendaM1Raw,
+    vendaM2Raw,
+    vendaM3Raw,
     mediaMensalFechada,
     isSemVenda,
     ritmoAtualDia,
@@ -533,4 +543,160 @@ export function filtrarLotes(
 
     return 0;
   });
+}
+
+/**
+ * Formata o ritmo de vendas diário com vírgula decimal no padrão brasileiro (ex: 0,54 ou 2)
+ */
+export function formatRitmoBR(ritmo: number): string {
+  if (ritmo === 0 || isNaN(ritmo)) return "0";
+  const str = ritmo.toFixed(2).replace(".", ",");
+  return str.replace(/,00$/, "").replace(/,(\d)0$/, ",$1");
+}
+
+/**
+ * Gera a explicação de sobra em uma única linha para o balão (tooltip)
+ *
+ * Regras:
+ * - Exemplo com sobra: "Em 23 dias, no ritmo de 0,54 un/dia, vende ~12 un. Sobram ~215 un."
+ * - Venda zero nos 3 meses: "Sem venda nos últimos 3 meses (ritmo 0 un/dia). Em X dias, todo o estoque de Y un deve sobrar." (mostra 'sem venda' e não divide por zero)
+ * - Escoa 100%: "Em X dias, no ritmo de Y un/dia, vende todo o estoque de Z un (escoa 100%)." (NÃO mostra 'sobra')
+ * - Vencido: "Lote vencido há X dias. Todo o estoque de Y un sobrou."
+ */
+export function gerarExplicacaoSobraLinha(lote: ValidadeLoteCalculado): string {
+  const estoque = lote.estoque;
+  const dias = lote.diasParaVencer;
+  const ritmoStr = formatRitmoBR(lote.ritmoAtualDia);
+
+  // 1. Caso Vencido (< 0 dias)
+  if (lote.isVencido || dias < 0) {
+    const diasAtras = Math.abs(dias);
+    return `Lote vencido há ${diasAtras} dia${diasAtras === 1 ? "" : "s"}. Todo o estoque de ${estoque} un sobrou.`;
+  }
+
+  // 2. Caso Venda Zero nos 3 meses fechados (sem venda)
+  // Regra: "Lote com venda zero nos 3 meses mostra 'sem venda' e não divide por zero."
+  if (lote.isSemVenda || lote.mediaMensalFechada === 0 || lote.ritmoAtualDia === 0) {
+    if (dias === 0) {
+      return `Sem venda nos últimos 3 meses (ritmo 0 un/dia). Vence hoje e todo o estoque de ${estoque} un deve sobrar.`;
+    }
+    const diasTxt = dias === 1 ? "Em 1 dia" : `Em ${dias} dias`;
+    return `Sem venda nos últimos 3 meses (ritmo 0 un/dia). ${diasTxt}, todo o estoque de ${estoque} un deve sobrar.`;
+  }
+
+  // 3. Caso Histórico Ausente (todos os 3 meses com null)
+  const semDadosHistorico =
+    lote.vendaM1Raw === null &&
+    lote.vendaM2Raw === null &&
+    lote.vendaM3Raw === null;
+  if (semDadosHistorico) {
+    const diasTxt = dias === 1 ? "Em 1 dia" : `Em ${dias} dias`;
+    return `Sem dados de vendas nos últimos meses. ${diasTxt}, estoque de ${estoque} un pode sobrar.`;
+  }
+
+  // 4. Caso Escoa 100% (sobra 0)
+  // Regra: "Lote que escoa 100% não mostra 'sobra'."
+  if (lote.escoaTempoPercent >= 100 || lote.sobraPrevistaUnidades <= 0) {
+    const diasTxt = dias === 1 ? "Em 1 dia" : `Em ${dias} dias`;
+    return `${diasTxt}, no ritmo de ${ritmoStr} un/dia, vende todo o estoque de ${estoque} un (escoa 100%).`;
+  }
+
+  // 5. Caso Normal com Previsão de Sobra
+  // Exemplo do prompt: "Em 23 dias, no ritmo de 0,54 un/dia, vende ~12 un. Sobram ~215 un."
+  const vendaPrevista = Math.round(lote.ritmoAtualDia * Math.max(0, dias));
+  const sobraPrevista = Math.round(lote.sobraPrevistaUnidades);
+
+  if (dias === 0) {
+    return `Vence hoje. No ritmo de ${ritmoStr} un/dia, vende ~${vendaPrevista} un. Sobram ~${sobraPrevista} un.`;
+  }
+
+  const diasTxt = dias === 1 ? "Em 1 dia" : `Em ${dias} dias`;
+  return `${diasTxt}, no ritmo de ${ritmoStr} un/dia, vende ~${vendaPrevista} un. Sobram ~${sobraPrevista} un.`;
+}
+
+/**
+ * Gera os dados completos da seção "Por que vai sobrar" para o modal de detalhe
+ */
+export function gerarDiagnosticoSobraCompleto(
+  lote: ValidadeLoteCalculado
+): ValidadeDiagnosticoSobra {
+  const estoque = lote.estoque;
+  const dias = lote.diasParaVencer;
+  const isEscoa100 = lote.escoaTempoPercent >= 100 || lote.sobraPrevistaUnidades <= 0;
+  const isSemVenda = lote.isSemVenda || lote.mediaMensalFechada === 0;
+  const ritmoStr = formatRitmoBR(lote.ritmoAtualDia);
+  const mediaStr = lote.mediaMensalFechada.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+  const vendaPrevista = Math.round(lote.ritmoAtualDia * Math.max(0, dias));
+  const sobraPrevista = Math.round(lote.sobraPrevistaUnidades);
+
+  const mesesFechados = [
+    {
+      rotulo: "M-3",
+      subtitulo: "3 meses atrás",
+      valor: lote.vendaM3Raw !== undefined ? lote.vendaM3Raw : lote.vendaM3,
+      textoFormatado:
+        lote.vendaM3Raw === null
+          ? "sem dados"
+          : `${lote.vendaM3} un`,
+      semDados: lote.vendaM3Raw === null,
+    },
+    {
+      rotulo: "M-2",
+      subtitulo: "2 meses atrás",
+      valor: lote.vendaM2Raw !== undefined ? lote.vendaM2Raw : lote.vendaM2,
+      textoFormatado:
+        lote.vendaM2Raw === null
+          ? "sem dados"
+          : `${lote.vendaM2} un`,
+      semDados: lote.vendaM2Raw === null,
+    },
+    {
+      rotulo: "M-1",
+      subtitulo: "mês passado",
+      valor: lote.vendaM1Raw !== undefined ? lote.vendaM1Raw : lote.vendaM1,
+      textoFormatado:
+        lote.vendaM1Raw === null
+          ? "sem dados"
+          : `${lote.vendaM1} un`,
+      semDados: lote.vendaM1Raw === null,
+    },
+  ];
+
+  // Cálculo escrito em frases simples, sem fórmulas
+  let explicacaoSimples = "";
+  if (lote.isVencido) {
+    const diasAtras = Math.abs(dias);
+    explicacaoSimples = `Este lote venceu há ${diasAtras} dia${diasAtras === 1 ? "" : "s"}. Como a data de validade já expirou, todo o estoque restante de ${estoque} unidades no centro de distribuição sobrou e requer descarte ou devolução imediata.`;
+  } else if (isSemVenda) {
+    explicacaoSimples = `Este produto não registrou nenhuma venda nos últimos 3 meses (sem venda). Com o ritmo diário zerado, todo o estoque atual de ${estoque} unidades deverá sobrar ao final dos ${dias} dias até o vencimento se nenhuma ação comercial for realizada.`;
+  } else if (isEscoa100) {
+    explicacaoSimples = `Com base no histórico dos últimos 3 meses, este produto vende em média ${mediaStr} unidades por mês (${ritmoStr} unidades por dia). Nos ${dias} dias até a validade, a demanda prevista de cerca de ${vendaPrevista} unidades supera o estoque atual de ${estoque} unidades, portanto todo o lote deve ser vendido a tempo (100% escoado).`;
+  } else {
+    explicacaoSimples = `Com base no histórico dos últimos 3 meses, este produto vende em média ${mediaStr} unidades por mês, o que dá um ritmo de ${ritmoStr} unidades por dia. Como faltam ${dias} dias para o lote vencer, a previsão é vender cerca de ${vendaPrevista} unidades. Como o estoque atual no CD é de ${estoque} unidades, sobram cerca de ${sobraPrevista} unidades sem vender até a data de validade (${lote.escoaTempoPercent}% escoado).`;
+  }
+
+  const avisoIrregularidade = lote.vendaIrregular
+    ? "As vendas oscilaram bastante nos últimos 3 meses (venda irregular: um mês zerado ou 3x maior que outro). Por isso, o ritmo real de saída e a previsão de sobra podem variar."
+    : null;
+
+  const titulo = isEscoa100 ? "Previsão de Saída do Lote" : "Por que vai sobrar?";
+
+  return {
+    titulo,
+    resumoLinha: gerarExplicacaoSobraLinha(lote),
+    explicacaoSimples,
+    mesesFechados,
+    mediaMensalFechada: lote.mediaMensalFechada,
+    ritmoAtualDia: lote.ritmoAtualDia,
+    estoque,
+    diasParaVencer: dias,
+    vendaPrevista,
+    sobraPrevista,
+    escoaTempoPercent: lote.escoaTempoPercent,
+    isSemVenda,
+    isEscoa100,
+    isVencido: lote.isVencido,
+    vendaIrregular: lote.vendaIrregular,
+    avisoIrregularidade,
+  };
 }
