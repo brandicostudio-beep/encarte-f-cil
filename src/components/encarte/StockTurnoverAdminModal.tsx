@@ -13,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   calculateStockAnalytics,
   calculateTurnoverExecutiveSummary,
-  applyQuickDiscount,
   exportStockTurnoverCsv,
   type ProductStockAnalytics,
 } from "@/lib/stock-turnover-analytics";
@@ -21,13 +20,10 @@ import {
   AlertTriangle,
   Clock,
   TrendingDown,
-  DollarSign,
   Download,
   Search,
   Package,
   CheckCircle2,
-  Sparkles,
-  Edit3,
   ShieldAlert,
   Flame,
   ArrowRight,
@@ -113,18 +109,6 @@ export const StockTurnoverAdminContent: React.FC<{
     URL.revokeObjectURL(url);
   };
 
-  // Ação rápida: aplicar desconto de 20%
-  const handleDiscount20 = (product: EncarteProduct) => {
-    const updated = applyQuickDiscount(product, 20, "imperdivel");
-    onUpdateProduct(updated);
-  };
-
-  // Ação rápida: aplicar desconto de 30%
-  const handleDiscount30 = (product: EncarteProduct) => {
-    const updated = applyQuickDiscount(product, 30, "imperdivel");
-    onUpdateProduct(updated);
-  };
-
   // Alternar inclusão no encarte
   const handleToggleIncluded = (product: EncarteProduct) => {
     onUpdateProduct({ ...product, included: !product.included });
@@ -133,7 +117,7 @@ export const StockTurnoverAdminContent: React.FC<{
   return (
     <div className="flex flex-col h-full max-h-[85vh] space-y-4">
       {/* 1. TOPO: CARDS DE KPI EXECUTIVOS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {/* KPI 1: Vencimento <= 5 dias */}
         <div
           role="button"
@@ -243,26 +227,6 @@ export const StockTurnoverAdminContent: React.FC<{
             Apenas 10% ou menos vendido
           </p>
         </div>
-
-        {/* KPI 4: Capital Financeiro em Risco */}
-        <div className="rounded-xl border p-3 bg-white border-neutral-200">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-neutral-600 uppercase tracking-tight">
-              Capital em Risco
-            </span>
-            <div className="h-7 w-7 rounded-lg bg-purple-100 flex items-center justify-center text-purple-700">
-              <DollarSign className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-1">
-            <span className="text-lg font-black text-purple-900">
-              R$ {summary.totalCapitalAtRisk.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-          </div>
-          <p className="mt-1 text-[10.5px] text-purple-700 font-medium line-clamp-1">
-            Estoque crítico a preço de venda
-          </p>
-        </div>
       </div>
 
       {/* 2. BARRA DE FERRAMENTAS & FILTROS */}
@@ -355,15 +319,13 @@ export const StockTurnoverAdminContent: React.FC<{
               <th scope="col" className="p-3">Produto</th>
               <th scope="col" className="p-3 w-36">Validade</th>
               <th scope="col" className="p-3 w-48">Giro & Desempenho</th>
-              <th scope="col" className="p-3 w-56">Diagnóstico Interno</th>
-              <th scope="col" className="p-3 w-32">Preço & Risco</th>
-              <th scope="col" className="p-3 w-44 text-center">Ações de Queima</th>
+              <th scope="col" className="p-3">Diagnóstico Interno</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-200">
             {filteredItems.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-neutral-500">
+                <td colSpan={5} className="p-8 text-center text-neutral-500">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <CheckCircle2 className="h-8 w-8 text-emerald-600" />
                     <p className="font-bold text-neutral-800 text-sm">
@@ -418,7 +380,13 @@ export const StockTurnoverAdminContent: React.FC<{
                     {/* Produto (Código, Foto, Nome) */}
                     <td className="p-3 align-middle">
                       <div className="flex items-center gap-2.5">
-                        <div className="h-10 w-10 rounded-lg border bg-white flex items-center justify-center overflow-hidden shrink-0">
+                        <div
+                          className={`h-10 w-10 rounded-lg border bg-white flex items-center justify-center overflow-hidden shrink-0 ${
+                            onEditProduct ? "cursor-pointer hover:border-red-400 transition-colors" : ""
+                          }`}
+                          onClick={onEditProduct ? () => onEditProduct(p) : undefined}
+                          title={onEditProduct ? "Clique para editar produto" : undefined}
+                        >
                           {p.image ? (
                             <img
                               src={p.image}
@@ -441,7 +409,13 @@ export const StockTurnoverAdminContent: React.FC<{
                               </Badge>
                             )}
                           </div>
-                          <div className="font-bold text-neutral-900 text-xs truncate max-w-xs" title={p.name}>
+                          <div
+                            className={`font-bold text-neutral-900 text-xs truncate max-w-xs ${
+                              onEditProduct ? "cursor-pointer hover:text-red-700 transition-colors" : ""
+                            }`}
+                            title={onEditProduct ? `Clique para editar ${p.name}` : p.name}
+                            onClick={onEditProduct ? () => onEditProduct(p) : undefined}
+                          >
                             {p.name}
                           </div>
                           <div className="text-[10px] text-neutral-500 font-medium">
@@ -579,59 +553,6 @@ export const StockTurnoverAdminContent: React.FC<{
                             <CheckCircle2 className="h-3 w-3 text-emerald-600" />
                             Ritmo regular de estoque
                           </span>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Preço Unitário & Risco (R$) */}
-                    <td className="p-3 align-middle font-mono">
-                      <div className="space-y-0.5">
-                        <div className="text-xs font-bold text-neutral-900">
-                          R$ {a.unitPrice > 0 ? a.unitPrice.toFixed(2).replace(".", ",") : "0,00"}
-                        </div>
-                        <div className="text-[10px] text-neutral-500">
-                          Risco: <strong className="text-purple-900">R$ {a.capitalAtRisk.toFixed(2).replace(".", ",")}</strong>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Ações Comerciais Rápidas de Queima */}
-                    <td className="p-2 text-center align-middle">
-                      <div className="flex flex-col gap-1.5 items-stretch">
-                        <div className="flex items-center gap-1 justify-center">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDiscount20(p)}
-                            className="h-7 text-[10px] font-bold px-2 text-red-700 bg-red-50 border-red-300 hover:bg-red-100"
-                            title="Aplica 20% de desconto imediato no preço de venda e coloca o selo IMPERDÍVEL"
-                          >
-                            <Flame className="h-3 w-3 mr-0.5" />
-                            -20%
-                          </Button>
-
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDiscount30(p)}
-                            className="h-7 text-[10px] font-black px-2 text-purple-700 bg-purple-50 border-purple-300 hover:bg-purple-100"
-                            title="Aplica 30% de desconto de liquidação e coloca o selo IMPERDÍVEL"
-                          >
-                            <Sparkles className="h-3 w-3 mr-0.5" />
-                            -30%
-                          </Button>
-                        </div>
-
-                        {onEditProduct && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => onEditProduct(p)}
-                            className="h-6 text-[10px] font-medium text-neutral-600 hover:text-neutral-900"
-                          >
-                            <Edit3 className="h-3 w-3 mr-1" />
-                            Editar dados
-                          </Button>
                         )}
                       </div>
                     </td>

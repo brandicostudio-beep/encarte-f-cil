@@ -97,16 +97,21 @@ describe("StockTurnoverAdminModal - Área Administrativa de Giro e Validade", ()
       )
     );
 
-    // Cards de KPIs
+    // Cards de KPIs mantidos
     expect(html).toContain("Vence em ≤ 5 dias");
     expect(html).toContain("0 Vendas (5d+)");
     expect(html).toContain("Giro Baixo (≤10%)");
-    expect(html).toContain("Capital em Risco");
 
-    // Botões de Ações e Filtros
+    // Confirma remoção de Capital em Risco, Preço & Risco e Ações de Queima solicitada pelo usuário
+    expect(html).not.toContain("Capital em Risco");
+    expect(html).not.toContain("PREÇO &amp; RISCO");
+    expect(html).not.toContain("Preço &amp; Risco");
+    expect(html).not.toContain("Ações de Queima");
+    expect(html).not.toContain("-20%");
+    expect(html).not.toContain("-30%");
+
+    // Botões de Ações e Filtros mantidos
     expect(html).toContain("Exportar Excel/CSV");
-    expect(html).toContain("-20%");
-    expect(html).toContain("-30%");
   });
 
   it("Exibe o diagnóstico específico de produto parado há 5 dias", () => {
