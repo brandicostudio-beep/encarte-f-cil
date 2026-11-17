@@ -145,12 +145,12 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
             </span>
           </div>
 
-          {/* 1. Vendas dos últimos 3 meses fechados, mês a mês */}
+          {/* 1. Vendas do histórico: Mês atual (QTVENDMES) e últimos 3 meses */}
           <div className="bg-white/95 p-3.5 rounded-xl border border-neutral-200/80 space-y-2">
             <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
-              Vendas dos últimos 3 meses fechados (mês a mês)
+              Histórico de Vendas (Mês Atual + Últimos 3 Meses)
             </div>
-            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
               {diagnostico.mesesFechados.map((m) => (
                 <div
                   key={m.rotulo}
@@ -179,7 +179,7 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
                 Média mensal e ritmo por dia
               </div>
               <div className="flex justify-between items-center pt-1">
-                <span className="text-neutral-600">Média mensal fechada:</span>
+                <span className="text-neutral-600">Média mensal:</span>
                 <span className="font-mono font-bold text-neutral-900">
                   {diagnostico.isSemVenda
                     ? "0 un/mês (sem venda)"
@@ -195,20 +195,29 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
                 </span>
               </div>
               <p className="text-[10px] text-neutral-400 pt-0.5">
-                (média dos 3 meses ÷ 30 dias do mês)
+                (média dos períodos com dados ÷ 30 dias do mês)
               </p>
             </div>
 
             {/* Estoque e Dias até Vencer */}
             <div className="bg-white/95 p-3.5 rounded-xl border border-neutral-200/80 text-xs space-y-1.5">
               <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
-                Estoque atual (QTDISP_WMS) e prazo
+                Estoque atual e prazo
               </div>
               <div className="flex justify-between items-center pt-1">
                 <span className="text-neutral-600">Disponível para venda:</span>
-                <span className="font-mono font-bold text-neutral-900">
-                  {diagnostico.estoque} <span className="text-neutral-500 font-normal">{lote.embalagem}</span>
-                </span>
+                <div className="text-right">
+                  <span className="font-mono font-bold text-neutral-900">
+                    {diagnostico.estoque} <span className="text-neutral-500 font-normal">{lote.embalagem}</span>
+                  </span>
+                  {lote.qtdisp_wms !== undefined &&
+                    lote.qtest_winthor !== undefined &&
+                    lote.qtdisp_wms !== lote.qtest_winthor && (
+                      <span className="text-[10px] text-neutral-500 block">
+                        WMS: {lote.qtdisp_wms} un • Winthor: {lote.qtest_winthor} un
+                      </span>
+                    )}
+                </div>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-neutral-600">Dias até o vencimento:</span>
@@ -443,7 +452,7 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/60">
             <div className="text-xs font-bold text-blue-900 uppercase tracking-wide">
-              Ritmo Atual (3m)
+              Ritmo Atual de Venda
             </div>
             <div className="text-2xl font-black font-mono text-blue-950 mt-1">
               {lote.ritmoAtualDia.toFixed(1).replace(".", ",")} <span className="text-xs font-normal">un/dia</span>

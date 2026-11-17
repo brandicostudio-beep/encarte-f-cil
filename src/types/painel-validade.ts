@@ -104,6 +104,8 @@ export interface ValidadeLoteCalculado {
 
   // Estoque & Preços
   estoque: number;
+  qtdisp_wms?: number;
+  qtest_winthor?: number;
   precoVenda: number;
   precoTotalPlanilha?: number;
   valorEmRisco: number; // precoVenda * sobraPrevista

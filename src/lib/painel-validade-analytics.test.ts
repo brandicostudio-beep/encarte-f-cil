@@ -43,8 +43,8 @@ describe("Painel de Validade - Motor de Análise e Métricas", () => {
       dtval: "07/12/2026", // Exatamente 20 dias a partir de 17/11/2026
       qtdisp_wms: 36,
       preco_venda: 10.0,
-      qtvendmes: 2,
-      qtvendmes1: 12, // Média (12+12+12)/3 = 12
+      qtvendmes: 12, // Mês atual QTVENDMES incluído na conta
+      qtvendmes1: 12, // Média (12+12+12+12)/4 = 12
       qtvendmes2: 12,
       qtvendmes3: 12,
     };
@@ -309,10 +309,10 @@ describe("Painel de Validade - Motor de Análise e Métricas", () => {
         dtval: "10/12/2026",
         qtdisp_wms: 227,
         preco_venda: 15.0,
-        qtvendmes: 3,
+        qtvendmes: 16, // Mês atual QTVENDMES incluído na conta
         qtvendmes1: 16,
         qtvendmes2: 17,
-        qtvendmes3: 16, // Média (16+17+16)/3 = 16.3 un/mês -> 16.3/30 = 0.54 un/dia
+        qtvendmes3: 16, // Média (16+16+17+16)/4 = 16.3 un/mês -> 16.3/30 = 0.54 un/dia
       };
 
       const lote = processarLote(raw, refDate);
@@ -468,7 +468,7 @@ describe("Painel de Validade - Motor de Análise e Métricas", () => {
         dtval: "02/12/2026", // 15 dias
         qtdisp_wms: 100,
         preco_venda: 8.0,
-        qtvendmes: 4,
+        qtvendmes: 30, // Mês atual QTVENDMES incluído na conta
         qtvendmes1: 30,
         qtvendmes2: 30,
         qtvendmes3: 30, // 30/mês -> 1 un/dia -> 15 dias -> vende 15 un -> sobra 85 un

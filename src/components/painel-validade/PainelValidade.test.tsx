@@ -377,10 +377,10 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
     expect(clean).toContain("17 un");
 
     // 3. Média e Ritmo por dia
-    expect(clean).toContain("Média mensal fechada");
+    expect(clean).toContain("Média mensal");
     expect(clean).toContain("16.3 un/mês");
     expect(clean).toContain("0,54 un/dia");
-    expect(clean).toContain("média dos 3 meses ÷ 30 dias do mês");
+    expect(clean).toContain("÷ 30 dias do mês");
 
     // 4. Estoque atual e dias até o vencimento
     expect(clean).toContain("227 un");
@@ -931,7 +931,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
       qtdisp_wms: 35,      // Estoque oficial considerado
       qtest_winthor: 50,   // Estoque contábil diferente (deve ser IGNORADO)
       preco_venda: 4.90,
-      qtvendmes: 5,        // Mês atual em curso
+      qtvendmes: 20,       // Mês atual em curso (incluído na conta de vendas)
       qtvendmes1: 24,      // M-1
       qtvendmes2: 18,      // M-2
       qtvendmes3: 18,      // M-3
@@ -944,8 +944,10 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
 
     // 1. Confirma que o estoque considerado é estritamente qtdisp_wms (35), e não qtest_winthor (50)
     expect(lote.estoque).toBe(35);
+    expect(lote.qtdisp_wms).toBe(35);
+    expect(lote.qtest_winthor).toBe(50);
 
-    // 2. Média mensal: (24 + 18 + 18) / 3 = 20 un/mês
+    // 2. Média mensal: (20 + 24 + 18 + 18) / 4 = 20 un/mês
     expect(lote.mediaMensalFechada).toBe(20);
 
     // 3. Ritmo atual: 20 / 30 = 0.67 un/dia
@@ -974,5 +976,57 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
     expect(diag.estoque).toBe(35);
     expect(diag.multiplicadorEsforco).toBeGreaterThanOrEqual(2.5);
     expect(diag.recomendacaoComercial).toContain("queima");
+  });
+
+  it("Suporta QEST_WINTHOR como estoque quando QTDISP_WMS for ausente ou zerado", () => {
+    const rawLote = {
+      codprod: "22292",
+      descricao: "BATATA PALHA BELLA PALHA",
+      embalagem: "1X80 GR",
+      dtval: "20/11/2026",
+      qtdisp_wms: 0,
+      qtest_winthor: 42, // Somente Winthor tem estoque
+      preco_venda: 1.93,
+      qtvendmes: 30,
+      qtvendmes1: 0,
+      qtvendmes2: 75,
+      qtvendmes3: 1735,
+    };
+
+    const lote = processarLote(rawLote, new Date("2026-11-17T00:00:00"));
+    expect(lote.estoque).toBe(42);
+    expect(lote.qtdisp_wms).toBe(0);
+    expect(lote.qtest_winthor).toBe(42);
+
+    // QTVENDMES impede que seja classificado como sem venda
+    expect(lote.isSemVenda).toBe(false);
+    expect(lote.mediaMensalFechada).toBeGreaterThan(0);
+  });
+
+  it("Modal 'Por que vai sobrar' inclui todos os 4 períodos de vendas (M-3, M-2, M-1, Mês Atual)", () => {
+    const rawLote = {
+      codprod: "23035",
+      descricao: "SALGADINHO CHEETOS MIX",
+      embalagem: "1X36 GR",
+      dtval: "23/11/2026",
+      qtdisp_wms: 15,
+      qtest_winthor: 1,
+      preco_venda: 3.41,
+      qtvendmes: 317,
+      qtvendmes1: 1190,
+      qtvendmes2: 724,
+      qtvendmes3: 0,
+    };
+
+    const lote = processarLote(rawLote, new Date("2026-11-17T00:00:00"));
+    const diag = gerarDiagnosticoSobraCompleto(lote);
+
+    expect(diag.mesesFechados).toHaveLength(4);
+    expect(diag.mesesFechados[0].rotulo).toBe("M-3");
+    expect(diag.mesesFechados[1].rotulo).toBe("M-2");
+    expect(diag.mesesFechados[2].rotulo).toBe("M-1");
+    expect(diag.mesesFechados[3].rotulo).toBe("Mês Atual");
+    expect(diag.mesesFechados[3].valor).toBe(317);
+    expect(diag.mesesFechados[3].textoFormatado).toBe("317 un");
   });
 });

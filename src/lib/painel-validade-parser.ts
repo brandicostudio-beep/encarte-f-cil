@@ -50,8 +50,16 @@ export function mapHeaderToField(headerKey: string): keyof ValidadeLoteRaw | nul
   if (k === "tolerancia" || k === "percenttolerancia" || k === "pcttolerancia") return "percentTolerancia";
   if (k === "qtreserv" || k === "qt_reserv") return "qtreserv";
   if (k === "qtdisp_wms" || k === "qtdispwms" || k === "qt_disp_wms" || k === "estoque") return "qtdisp_wms";
-  if (k === "qtest_winthor" || k === "qtestwinthor") return "qtest_winthor";
-  if (k === "qtvendmes" || k === "vendmes" || k === "venda_mes") return "qtvendmes";
+  if (
+    k === "qtest_winthor" ||
+    k === "qtestwinthor" ||
+    k === "qtest" ||
+    k === "qest_winthor" ||
+    k === "qestwinthor" ||
+    k === "qest" ||
+    k === "estoque_winthor"
+  ) return "qtest_winthor";
+  if (k === "qtvendmes" || k === "vendmes" || k === "venda_mes" || k === "qtivendmes") return "qtvendmes";
   if (k === "qtvendmes1" || k === "vendmes1" || k === "venda_m1") return "qtvendmes1";
   if (k === "qtvendmes2" || k === "vendmes2" || k === "venda_m2") return "qtvendmes2";
   if (k === "qtvendmes3" || k === "vendmes3" || k === "venda_m3") return "qtvendmes3";
@@ -252,10 +260,16 @@ export function parseWinthorCsv(
     }
   });
 
-  // Verifica colunas obrigatórias
-  const colunasFaltantes = OBRIGATORIAS.filter(
-    (obrig) => !colunasDetectadas.includes(obrig)
-  );
+  // Verifica colunas obrigatórias (aceita qtdisp_wms ou qtest_winthor como coluna de estoque)
+  const colunasFaltantes = OBRIGATORIAS.filter((obrig) => {
+    if (obrig === "qtdisp_wms") {
+      return (
+        !colunasDetectadas.includes("qtdisp_wms") &&
+        !colunasDetectadas.includes("qtest_winthor")
+      );
+    }
+    return !colunasDetectadas.includes(obrig);
+  });
 
   if (colunasFaltantes.length > 0) {
     return {

@@ -165,7 +165,13 @@ export function processarLote(
   const diasParaVencer = calcDaysToExpiry(dtval, referenceDate);
   const isVencido = diasParaVencer < 0;
 
-  const estoque = Math.max(0, raw.qtdisp_wms || 0);
+  // Estoque atual considerado: QTDISP_WMS e também QEST_WINTHOR
+  const estoqueWms = raw.qtdisp_wms !== undefined && raw.qtdisp_wms !== null ? raw.qtdisp_wms : 0;
+  const estoqueWinthor = raw.qtest_winthor !== undefined && raw.qtest_winthor !== null ? raw.qtest_winthor : 0;
+  const estoque = Math.max(
+    0,
+    estoqueWms > 0 ? estoqueWms : (estoqueWinthor > 0 ? estoqueWinthor : (estoqueWms || estoqueWinthor || 0))
+  );
   const precoVenda = Math.max(0, raw.preco_venda || 0);
 
   // Vendas com preservação de ausência de dados (null) vs zero numérico (0)
@@ -179,10 +185,14 @@ export function processarLote(
   const vendaM2 = Math.max(0, vendaM2Raw || 0);
   const vendaM3 = Math.max(0, vendaM3Raw || 0);
 
-  // Média mensal dos 3 meses fechados (mês com zero conta como zero)
-  const somaFechada = vendaM1 + vendaM2 + vendaM3;
-  const mediaMensalFechada = Math.round((somaFechada / 3) * 10) / 10;
-  const isSemVenda = somaFechada === 0;
+  // Vendas dos 4 períodos: QTVENDMES (mês atual) entra na conta + QTVENDMES1, QTVENDMES2, QTVENDMES3
+  const somaTotalVendas = vendaMesAtual + vendaM1 + vendaM2 + vendaM3;
+  const periodosComDados = [vendaMesAtualRaw, vendaM1Raw, vendaM2Raw, vendaM3Raw].filter(
+    (v) => v !== null
+  );
+  const qtdPeriodos = Math.max(1, periodosComDados.length > 0 ? periodosComDados.length : 4);
+  const mediaMensalFechada = Math.round((somaTotalVendas / qtdPeriodos) * 10) / 10;
+  const isSemVenda = somaTotalVendas === 0;
 
   // Ritmo atual de vendas (unidades / dia)
   const ritmoAtualDia = Math.round((mediaMensalFechada / 30) * 100) / 100;
@@ -308,6 +318,8 @@ export function processarLote(
     diasParaVencer,
     isVencido,
     estoque,
+    qtdisp_wms: estoqueWms,
+    qtest_winthor: estoqueWinthor,
     precoVenda,
     precoTotalPlanilha: raw.preco_total,
     valorEmRisco,
@@ -639,10 +651,10 @@ export function gerarExplicacaoSobraLinha(lote: ValidadeLoteCalculado): string {
   // Regra: "Lote com venda zero nos 3 meses mostra 'sem venda' e não divide por zero."
   if (lote.isSemVenda || lote.mediaMensalFechada === 0 || lote.ritmoAtualDia === 0) {
     if (dias === 0) {
-      return `Sem venda nos últimos 3 meses (ritmo 0 un/dia). Vence hoje e todo o estoque de ${estoque} un deve sobrar.`;
+      return `Sem venda nos últimos meses (ritmo 0 un/dia). Vence hoje e todo o estoque de ${estoque} un deve sobrar.`;
     }
     const diasTxt = dias === 1 ? "Em 1 dia" : `Em ${dias} dias`;
-    return `Sem venda nos últimos 3 meses (ritmo 0 un/dia). ${diasTxt}, todo o estoque de ${estoque} un deve sobrar.`;
+    return `Sem venda nos últimos meses (ritmo 0 un/dia). ${diasTxt}, todo o estoque de ${estoque} un deve sobrar.`;
   }
 
   // 3. Caso Histórico Ausente (todos os 3 meses com null)
@@ -721,6 +733,16 @@ export function gerarDiagnosticoSobraCompleto(
           : `${lote.vendaM1} un`,
       semDados: lote.vendaM1Raw === null,
     },
+    {
+      rotulo: "Mês Atual",
+      subtitulo: "mês em curso",
+      valor: lote.vendaMesAtualRaw !== undefined ? lote.vendaMesAtualRaw : lote.vendaMesAtual,
+      textoFormatado:
+        lote.vendaMesAtualRaw === null
+          ? "sem dados"
+          : `${lote.vendaMesAtual} un`,
+      semDados: lote.vendaMesAtualRaw === null,
+    },
   ];
 
   // Cálculo escrito em frases simples, sem fórmulas
@@ -729,11 +751,11 @@ export function gerarDiagnosticoSobraCompleto(
     const diasAtras = Math.abs(dias);
     explicacaoSimples = `Este lote venceu há ${diasAtras} dia${diasAtras === 1 ? "" : "s"}. Como a data de validade já expirou, todo o estoque restante de ${estoque} unidades no centro de distribuição sobrou e requer descarte ou devolução imediata.`;
   } else if (isSemVenda) {
-    explicacaoSimples = `Este produto não registrou nenhuma venda nos últimos 3 meses (sem venda). Com o ritmo diário zerado, todo o estoque atual de ${estoque} unidades deverá sobrar ao final dos ${dias} dias até o vencimento se nenhuma ação comercial for realizada.`;
+    explicacaoSimples = `Este produto não registrou nenhuma venda no histórico recente (sem venda). Com o ritmo diário zerado, todo o estoque atual de ${estoque} unidades deverá sobrar ao final dos ${dias} dias até o vencimento se nenhuma ação comercial for realizada.`;
   } else if (isEscoa100) {
-    explicacaoSimples = `Com base no histórico dos últimos 3 meses, este produto vende em média ${mediaStr} unidades por mês (${ritmoStr} unidades por dia). Nos ${dias} dias até a validade, a demanda prevista de cerca de ${vendaPrevista} unidades supera o estoque atual de ${estoque} unidades, portanto todo o lote deve ser vendido a tempo (100% escoado).`;
+    explicacaoSimples = `Com base no histórico recente de vendas (mês atual e últimos meses), este produto vende em média ${mediaStr} unidades por mês (${ritmoStr} unidades por dia). Nos ${dias} dias até a validade, a demanda prevista de cerca de ${vendaPrevista} unidades supera o estoque atual de ${estoque} unidades, portanto todo o lote deve ser vendido a tempo (100% escoado).`;
   } else {
-    explicacaoSimples = `Com base no histórico dos últimos 3 meses, este produto vende em média ${mediaStr} unidades por mês, o que dá um ritmo de ${ritmoStr} unidades por dia. Como faltam ${dias} dias para o lote vencer, a previsão é vender cerca de ${vendaPrevista} unidades. Como o estoque atual no CD é de ${estoque} unidades, sobram cerca de ${sobraPrevista} unidades sem vender até a data de validade (${lote.escoaTempoPercent}% escoado).`;
+    explicacaoSimples = `Com base no histórico recente de vendas (mês atual e últimos meses), este produto vende em média ${mediaStr} unidades por mês, o que dá um ritmo de ${ritmoStr} unidades por dia. Como faltam ${dias} dias para o lote vencer, a previsão é vender cerca de ${vendaPrevista} unidades. Como o estoque atual no CD é de ${estoque} unidades, sobram cerca de ${sobraPrevista} unidades sem vender até a data de validade (${lote.escoaTempoPercent}% escoado).`;
   }
 
   const avisoIrregularidade = lote.vendaIrregular
