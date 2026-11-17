@@ -20,7 +20,11 @@ import {
   Layers,
   Tag,
   HelpCircle,
+  Clock,
+  TrendingDown,
+  ShieldAlert,
 } from "lucide-react";
+import { calculateStockAnalytics } from "@/lib/stock-turnover-analytics";
 
 interface ReviewTableProps {
   products: EncarteProduct[];
@@ -30,6 +34,7 @@ interface ReviewTableProps {
   onToggleIncluded: (id: string, included: boolean) => void;
   onEditProduct: (product: EncarteProduct) => void;
   onDeleteProduct: (id: string) => void;
+  onOpenStockAdmin?: () => void;
 }
 
 export const ReviewTable: React.FC<ReviewTableProps> = ({
@@ -40,6 +45,7 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
   onToggleIncluded,
   onEditProduct,
   onDeleteProduct,
+  onOpenStockAdmin,
 }) => {
   // Referências para os inputs de preço para navegar com Enter para o próximo pendente
   const priceInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
@@ -187,7 +193,14 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
               const unitCheck = deriveSaleUnit(p?.packaging, p?.unit, p?.name, p?.unitConfirmed);
 
               // Diagnóstico de pendências com cor E texto explícito (Acessibilidade)
-              const issues: { type: string; label: string; className: string }[] = [];
+              const issues: {
+                type: string;
+                label: string;
+                className: string;
+                onClick?: () => void;
+                title?: string;
+              }[] = [];
+
               if (!hasPrice) {
                 issues.push({
                   type: "price",
@@ -221,6 +234,35 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                   type: "expired",
                   label: "Vencido",
                   className: "bg-red-100 text-red-900 border-red-300 font-bold",
+                });
+              }
+
+              // Métricas Internas de Giro e Validade Crítica (≤ 5 dias)
+              const stockAnalytics = calculateStockAnalytics(p);
+              if (stockAnalytics.isExpiringIn5DaysOrLess && !isExpired) {
+                issues.push({
+                  type: "critical-expiry",
+                  label: `⏰ Vence em ${stockAnalytics.daysToExpiry}d`,
+                  className: "bg-red-100 text-red-900 border-red-300 font-bold cursor-pointer hover:bg-red-200",
+                  onClick: onOpenStockAdmin,
+                  title: `Vencimento crítico em ${stockAnalytics.daysToExpiry} dia(s). Clique para abrir Área Administrativa.`,
+                });
+              }
+              if (stockAnalytics.hasZeroSales5Days) {
+                issues.push({
+                  type: "stagnant",
+                  label: "⚠️ 0 vendas (5d)",
+                  className: "bg-amber-100 text-amber-950 border-amber-300 font-bold cursor-pointer hover:bg-amber-200",
+                  onClick: onOpenStockAdmin,
+                  title: "Esse produto não vendeu nada nos últimos 5 dias. Clique para abrir Área Administrativa.",
+                });
+              } else if (stockAnalytics.hasLowTurnover10Percent) {
+                issues.push({
+                  type: "low-turnover",
+                  label: `📉 Giro ${stockAnalytics.turnoverPercent}% (5d)`,
+                  className: "bg-orange-100 text-orange-950 border-orange-300 font-semibold cursor-pointer hover:bg-orange-200",
+                  onClick: onOpenStockAdmin,
+                  title: `Giro Crítico: apenas ${stockAnalytics.turnoverPercent}% do estoque vendido em 5 dias. Clique para abrir Área Administrativa.`,
                 });
               }
 
@@ -341,11 +383,16 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                         </button>
                       )}
 
-                      {/* Marcadores de Pendência com Ícone e Texto Explicativo (Cor nunca é o único sinal) */}
+                      {/* Marcadores de Pendência e Indicadores Administrativos de Giro/Validade */}
                       {issues.map((iss, i) => (
                         <span
                           key={i}
                           className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded border text-[9.5px] ${iss.className}`}
+                          title={iss.title}
+                          onClick={iss.onClick ? (e) => { e.stopPropagation(); iss.onClick!(); } : undefined}
+                          role={iss.onClick ? "button" : undefined}
+                          tabIndex={iss.onClick ? 0 : undefined}
+                          onKeyDown={iss.onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); iss.onClick!(); } } : undefined}
                         >
                           {iss.type === "price" && (
                             <AlertCircle className="h-3 w-3" />
@@ -361,6 +408,15 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                           )}
                           {iss.type === "expired" && (
                             <CalendarX className="h-3 w-3" />
+                          )}
+                          {iss.type === "critical-expiry" && (
+                            <Clock className="h-3 w-3 text-red-600" />
+                          )}
+                          {iss.type === "stagnant" && (
+                            <TrendingDown className="h-3 w-3 text-amber-700" />
+                          )}
+                          {iss.type === "low-turnover" && (
+                            <ShieldAlert className="h-3 w-3 text-orange-700" />
                           )}
                           <span>{iss.label}</span>
                         </span>

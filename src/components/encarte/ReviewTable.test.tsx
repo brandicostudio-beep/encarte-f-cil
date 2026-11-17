@@ -77,4 +77,39 @@ describe("ReviewTable - Edição rápida de estoque e preço", () => {
     expect(html).toContain('id="price-prod-2"');
     expect(html).toContain('value="4,90"');
   });
+
+  it("Exibe badges administrativas quando produto estiver próximo do vencimento ou sem giro", () => {
+    const criticalProduct: EncarteProduct = {
+      id: "prod-critico",
+      code: "99999",
+      name: "IOGURTE NATURAL 170G",
+      packaging: "UNIDADE 1X170 GR",
+      validity: "22/11/2026", // Faltam 5 dias
+      price: "3,50",
+      unit: "UND",
+      stock: "40 UND",
+      badge: "nenhum",
+      image: "https://example.com/iogurte.jpg",
+      included: true,
+      registeredAt: "2026-11-12T10:00:00.000Z",
+      initialStockQuantity: 40,
+      currentStockQuantity: 40, // 0 vendas em 5d
+    };
+
+    const html = renderToString(
+      React.createElement(ReviewTable, {
+        products: [criticalProduct],
+        onPriceChange: vi.fn(),
+        onStockChange: vi.fn(),
+        onUnitChange: vi.fn(),
+        onToggleIncluded: vi.fn(),
+        onEditProduct: vi.fn(),
+        onDeleteProduct: vi.fn(),
+        onOpenStockAdmin: vi.fn(),
+      })
+    );
+
+    expect(html).toContain("Vence em");
+    expect(html).toContain("0 vendas (5d)");
+  });
 });

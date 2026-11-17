@@ -40,6 +40,11 @@ import { TemplateAreaAdjuster } from "@/components/encarte/TemplateAreaAdjuster"
 import { SpreadsheetModal } from "@/components/encarte/SpreadsheetModal";
 import { PdfStockModal } from "@/components/encarte/PdfStockModal";
 import { PdfPriceModal } from "@/components/encarte/PdfPriceModal";
+import { StockTurnoverAdminModal } from "@/components/encarte/StockTurnoverAdminModal";
+import {
+  calculateTurnoverExecutiveSummary,
+  extractStockQuantity,
+} from "@/lib/stock-turnover-analytics";
 import { ProductEditModal } from "@/components/encarte/ProductEditModal";
 import { StoreSettingsModal } from "@/components/encarte/StoreSettingsModal";
 import { HowItWorksModal } from "@/components/encarte/HowItWorksModal";
@@ -103,6 +108,8 @@ import {
   Info,
   Undo2,
   Tag,
+  ShieldAlert,
+  TrendingDown,
 } from "lucide-react";
 import { ColecoesWorkspace } from "@/components/colecoes/ColecoesWorkspace";
 
@@ -193,6 +200,7 @@ function EncarteApp() {
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false);
   const [pdfStockOpen, setPdfStockOpen] = useState(false);
   const [pdfPriceOpen, setPdfPriceOpen] = useState(false);
+  const [stockTurnoverOpen, setStockTurnoverOpen] = useState(false);
   const [storeSettingsOpen, setStoreSettingsOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<EncarteProduct | null>(null);
@@ -767,8 +775,21 @@ function EncarteApp() {
         ? loaded.filter((p) => p.included !== false && Boolean(p.price || p.precoManuscrito))
         : loaded;
 
+    const nowIso = new Date().toISOString();
+    const enrichedItems = itemsToLoad.map((p) => {
+      const stockQty = extractStockQuantity(p.stock);
+      return {
+        ...p,
+        registeredAt: p.registeredAt || nowIso,
+        initialStockQuantity:
+          p.initialStockQuantity !== undefined ? p.initialStockQuantity : stockQty,
+        currentStockQuantity:
+          p.currentStockQuantity !== undefined ? p.currentStockQuantity : stockQty,
+      };
+    });
+
     // 2. Persistir lista de produtos no estado de forma resiliente (ordenados por validade)
-    const sorted = sortProductsByValidityAsc(itemsToLoad);
+    const sorted = sortProductsByValidityAsc(enrichedItems);
     try {
       updateProductsState(sorted);
     } catch (err) {
@@ -795,10 +816,61 @@ function EncarteApp() {
     } catch {}
   };
 
-  // Carregar dados de demonstração (16 produtos com codes, fotos e validade)
+  // Carregar dados de demonstração (16 produtos com codes, fotos, validade e giro)
   const handleLoadSample = () => {
     const samples = getSampleProducts();
-    updateProductsState(samples);
+    const now = new Date();
+    const daysAgo = (d: number) => {
+      const dt = new Date(now);
+      dt.setDate(dt.getDate() - d);
+      return dt.toISOString();
+    };
+    const daysAhead = (d: number) => {
+      const dt = new Date(now);
+      dt.setDate(dt.getDate() + d);
+      return `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
+    };
+
+    const enriched = samples.map((p, idx) => {
+      const stockNum = extractStockQuantity(p.stock);
+      // Item 3 (LEITE UHT INTEGRAL): Vence em 4 dias (≤ 5 dias crítico)
+      if (idx === 2) {
+        return {
+          ...p,
+          validity: daysAhead(4),
+          registeredAt: daysAgo(2),
+          initialStockQuantity: 240,
+          currentStockQuantity: 220,
+        };
+      }
+      // Item 6 (MAIONESE TRADICIONAL): Cadastrado há 6 dias com 0 vendas (estagnado)
+      if (idx === 5) {
+        return {
+          ...p,
+          registeredAt: daysAgo(6),
+          initialStockQuantity: 95,
+          currentStockQuantity: 95,
+        };
+      }
+      // Item 8 (SUCO INTEGRAL): Vendeu 3 de 60 = 5% em 5 dias (baixo giro ≤ 10%)
+      if (idx === 7) {
+        return {
+          ...p,
+          registeredAt: daysAgo(5),
+          initialStockQuantity: 60,
+          currentStockQuantity: 57,
+          stock: "57 UND",
+        };
+      }
+      return {
+        ...p,
+        registeredAt: daysAgo(2),
+        initialStockQuantity: stockNum > 0 ? stockNum + 10 : 0,
+        currentStockQuantity: stockNum,
+      };
+    });
+
+    updateProductsState(enriched);
     setUnmatchedPhotos([]);
     setCompletedSteps((prev) => new Set([...prev, "origem", "dados"]));
     navigateToStep("precos");
@@ -890,13 +962,30 @@ function EncarteApp() {
     );
 
     let updatedCount = 0;
+    const nowIso = new Date().toISOString();
     const updated = products.map((p) => {
       const match = updateMap.get(p.code.toLowerCase().trim());
       if (match) {
         updatedCount++;
+        const newStockStr = match.stock || p.stock;
+        const newStockQty = extractStockQuantity(newStockStr);
+        const prevInit =
+          p.initialStockQuantity !== undefined
+            ? p.initialStockQuantity
+            : extractStockQuantity(p.stock);
+        const history = p.stockHistory || [];
+
         return {
           ...p,
-          stock: match.stock || p.stock,
+          stock: newStockStr,
+          registeredAt: p.registeredAt || nowIso,
+          initialStockQuantity: prevInit,
+          currentStockQuantity: newStockQty,
+          lastStockUpdate: nowIso,
+          stockHistory: [
+            ...history,
+            { date: nowIso, quantity: newStockQty, source: "pdf" as const, obs: match.obs },
+          ],
           validity: match.validity || p.validity,
           price:
             match.price && (!p.price || p.price === "0,00" || p.price === "0" || p.price.trim() === "")
@@ -951,10 +1040,35 @@ function EncarteApp() {
   };
 
   const handleStockChange = (id: string, newStock: string) => {
-    const updated = products.map((p) =>
-      p.id === id ? { ...p, stock: newStock } : p
-    );
+    const nowIso = new Date().toISOString();
+    const newStockQty = extractStockQuantity(newStock);
+    const updated = products.map((p) => {
+      if (p.id !== id) return p;
+      const prevInit =
+        p.initialStockQuantity !== undefined
+          ? p.initialStockQuantity
+          : extractStockQuantity(p.stock);
+      const history = p.stockHistory || [];
+
+      return {
+        ...p,
+        stock: newStock,
+        registeredAt: p.registeredAt || nowIso,
+        initialStockQuantity: prevInit,
+        currentStockQuantity: newStockQty,
+        lastStockUpdate: nowIso,
+        stockHistory: [
+          ...history,
+          { date: nowIso, quantity: newStockQty, source: "manual" as const },
+        ],
+      };
+    });
     updateProductsState(updated);
+  };
+
+  const handleUpdateSingleProduct = (updatedProd: EncarteProduct) => {
+    const list = products.map((p) => (p.id === updatedProd.id ? updatedProd : p));
+    updateProductsState(list);
   };
 
   const handleUnitChange = (id: string, newUnit: string) => {
@@ -1151,6 +1265,11 @@ function EncarteApp() {
     const start = (currentPage - 1) * perPage;
     return (flyerProducts || []).slice(start, start + perPage);
   }, [flyerProducts, currentPage, perPage]);
+
+  // Sumário Executivo de Giro de Estoque & Validade (Área Administrativa Interna)
+  const turnoverSummary = useMemo(() => {
+    return calculateTurnoverExecutiveSummary(products);
+  }, [products]);
 
   // Lista filtrada da tabela com base no painel de pendências e busca
   const filteredProducts = useMemo(() => {
@@ -1599,6 +1718,23 @@ function EncarteApp() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setStockTurnoverOpen(true)}
+              className="min-h-[44px] bg-neutral-900 text-neutral-100 border-neutral-700 hover:bg-neutral-800 text-xs font-semibold relative"
+              title="Acompanhamento administrativo interno de giro de estoque e controle de validade"
+              data-testid="admin-turnover-top-btn"
+            >
+              <ShieldAlert className="h-4 w-4 mr-1.5 text-amber-400" />
+              Área Administrativa: Giro & Validade
+              {turnoverSummary.criticalExpiryCount + turnoverSummary.stagnantCount > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.2 bg-red-600 text-white rounded-full font-mono font-black text-[10px] animate-pulse">
+                  {turnoverSummary.criticalExpiryCount + turnoverSummary.stagnantCount}
+                </span>
+              )}
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => navigate({ to: "/colecoes" })}
               className="min-h-[44px] bg-neutral-900 text-neutral-300 border-neutral-700 hover:bg-neutral-800 text-xs font-semibold"
             >
@@ -1874,6 +2010,23 @@ function EncarteApp() {
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => setStockTurnoverOpen(true)}
+                        className="min-h-[44px] text-xs font-bold text-amber-950 bg-amber-50 border-amber-300 hover:bg-amber-100"
+                        title="Acompanhar giro de estoque, produtos sem vendas nos últimos 5 dias e validade crítica"
+                        data-testid="admin-turnover-toolbar-btn"
+                      >
+                        <ShieldAlert className="h-4 w-4 mr-1.5 text-amber-700" />
+                        Painel de Giro & Validade
+                        {turnoverSummary.criticalExpiryCount + turnoverSummary.stagnantCount > 0 && (
+                          <span className="ml-1.5 px-1.5 py-0.2 bg-red-600 text-white rounded-full font-mono font-black text-[10px]">
+                            {turnoverSummary.criticalExpiryCount + turnoverSummary.stagnantCount}
+                          </span>
+                        )}
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => setPdfStockOpen(true)}
                         className="min-h-[44px] text-xs font-bold text-red-800 bg-red-50 border-red-300 hover:bg-red-100"
                         title="Suba o relatório escaneado em PDF para associar o estoque a cada código automaticamente"
@@ -1914,6 +2067,7 @@ function EncarteApp() {
                     onToggleIncluded={handleToggleIncluded}
                     onEditProduct={(p) => setEditProduct(p)}
                     onDeleteProduct={handleDeleteProduct}
+                    onOpenStockAdmin={() => setStockTurnoverOpen(true)}
                   />
                 </div>
               )}
@@ -2555,6 +2709,15 @@ function EncarteApp() {
         onOpenChange={setPdfPriceOpen}
         products={products}
         onApplyPrices={handleApplyPdfPrices}
+      />
+
+      {/* 1d. Área Administrativa Interna: Giro de Estoque & Controle de Validade */}
+      <StockTurnoverAdminModal
+        open={stockTurnoverOpen}
+        onOpenChange={setStockTurnoverOpen}
+        products={products}
+        onUpdateProduct={handleUpdateSingleProduct}
+        onEditProduct={(p) => setEditProduct(p)}
       />
 
       {/* 2. Edição Detalhada por Item */}

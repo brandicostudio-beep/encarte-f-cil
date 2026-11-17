@@ -214,6 +214,17 @@ export interface EncarteProduct {
   }[] | undefined;
   needsReview?: boolean | undefined;
   reviewReason?: string | undefined;
+  // Acompanhamento interno administrativo de giro e validade
+  registeredAt?: string | undefined;          // Data ISO do cadastro inicial do produto no sistema
+  initialStockQuantity?: number | undefined;  // Estoque inicial no momento do cadastro
+  currentStockQuantity?: number | undefined;  // Estoque numérico atual apurado
+  lastStockUpdate?: string | undefined;       // Data ISO da última atualização de estoque
+  stockHistory?: {
+    date: string;
+    quantity: number;
+    source: "cadastro" | "pdf" | "manual";
+    obs?: string;
+  }[] | undefined;
 }
 
 export interface StoreConfig {
