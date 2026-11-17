@@ -23,17 +23,25 @@ interface PainelValidadeHeaderProps {
   activeSnapshot: ValidadeSnapshot | null;
   snapshotsList: ValidadeSnapshot[];
   onSelectSnapshot: (id: string) => void;
-  onOpenImportModal: () => void;
-  onBackToEncarte: () => void;
+  onOpenImport?: () => void;
+  onOpenImportModal?: () => void;
+  onBackToEncarte?: () => void;
 }
 
 export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
   activeSnapshot,
   snapshotsList,
   onSelectSnapshot,
+  onOpenImport,
   onOpenImportModal,
   onBackToEncarte,
 }) => {
+  const handleOpenImport = onOpenImportModal || onOpenImport || (() => {});
+  const handleBack =
+    onBackToEncarte ||
+    (() => {
+      if (typeof window !== "undefined") window.location.href = "/";
+    });
   const formattedUpdateDate = activeSnapshot
     ? new Date(activeSnapshot.criadoEm).toLocaleString("pt-BR", {
         day: "2-digit",
@@ -51,7 +59,7 @@ export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
           <Button
             variant="outline"
             size="sm"
-            onClick={onBackToEncarte}
+            onClick={handleBack}
             className="min-h-[48px] px-3 font-bold text-neutral-200 bg-neutral-800/80 border-neutral-700 hover:bg-neutral-700 hover:text-white transition-colors"
             title="Voltar ao Editor de Encartes"
           >
@@ -136,7 +144,7 @@ export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
           {/* Botão de Importação Principal */}
           <Button
             size="lg"
-            onClick={onOpenImportModal}
+            onClick={handleOpenImport}
             className="min-h-[52px] px-5 text-sm sm:text-base font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg transition-transform active:scale-95"
             title="Importar planilha exportada do Winthor/WMS (.csv ou .xlsx)"
           >

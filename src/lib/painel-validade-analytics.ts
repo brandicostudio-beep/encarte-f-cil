@@ -239,8 +239,46 @@ export function processarLote(
   );
   const vendaIrregular = isVendaIrregular(vendaM1, vendaM2, vendaM3);
 
-  // Valor financeiro em risco
+  // Valor financeiro em risco focado na sobra prevista
   const valorEmRisco = Math.round(precoVenda * sobraPrevistaUnidades * 100) / 100;
+  const prejuizoPrevistoSobra = valorEmRisco;
+
+  // Multiplicador de Esforço Comercial e Recomendação Acionável
+  let multiplicadorEsforco: number | null = null;
+  if (!isVencido && diasParaVencer > 0 && estoque > 0) {
+    if (ritmoAtualDia > 0) {
+      multiplicadorEsforco = Math.round((ritmoNecessarioDia / ritmoAtualDia) * 10) / 10;
+    }
+  }
+
+  let nivelEsforco: "normal" | "atencao" | "alerta_promocao" | "critico_queima" = "normal";
+  let recomendacaoComercial = "Demanda suficiente para escoar todo o lote no ritmo natural.";
+
+  if (isVencido || diasParaVencer < 0) {
+    nivelEsforco = "critico_queima";
+    recomendacaoComercial = "Lote vencido. Retirar da área de venda e providenciar descarte ou devolução.";
+  } else if (isSemVenda || mediaMensalFechada === 0) {
+    nivelEsforco = "critico_queima";
+    recomendacaoComercial = "Sem saída nos últimos 3 meses. Requer queima agressiva imediata no encarte ou negociação de devolução.";
+  } else if (escoaTempoPercent >= 100 || sobraPrevistaUnidades <= 0) {
+    nivelEsforco = "normal";
+    recomendacaoComercial = "Demanda suficiente para escoar 100% do lote dentro do prazo no ritmo normal.";
+  } else if (multiplicadorEsforco !== null && multiplicadorEsforco <= 1.5) {
+    nivelEsforco = "atencao";
+    recomendacaoComercial = `Necessita aceleração leve (${multiplicadorEsforco}x). Recomenda-se destaque de ponta de gôndola ou cartazeamento.`;
+  } else if (multiplicadorEsforco !== null && multiplicadorEsforco <= 2.5) {
+    nivelEsforco = "alerta_promocao";
+    recomendacaoComercial = `Necessita acelerar ${multiplicadorEsforco}x o giro. Recomenda-se incluir no Encarte com desconto promocional leve (15% a 20%).`;
+  } else {
+    const multTxt = multiplicadorEsforco ? `${multiplicadorEsforco}x` : "muito elevado";
+    nivelEsforco = "critico_queima";
+    recomendacaoComercial = `Situação crítica (precisa acelerar ${multTxt}). Recomenda-se super queima de validade (30% a 50%) ou repasse comercial urgente.`;
+  }
+
+  // Proporcional esperado do mês em curso (QTVENDMES)
+  const diaDaImportacao = referenceDate.getDate();
+  const diasDoMes = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0).getDate();
+  const vendaEsperadaMesAtual = Math.round(mediaMensalFechada * (diaDaImportacao / diasDoMes) * 10) / 10;
 
   // Faixas
   const faixaVencimento = classifyFaixaVencimento(diasParaVencer);
@@ -300,6 +338,11 @@ export function processarLote(
     nomeComprador: raw.nomeComprador || "Não informado",
     prazoval: raw.prazoval,
     percentTolerancia: raw.percentTolerancia,
+    multiplicadorEsforco,
+    nivelEsforco,
+    recomendacaoComercial,
+    prejuizoPrevistoSobra,
+    vendaEsperadaMesAtual,
     isNovoLote,
     saiuDoEncarte,
   };
@@ -716,5 +759,10 @@ export function gerarDiagnosticoSobraCompleto(
     isVencido: lote.isVencido,
     vendaIrregular: lote.vendaIrregular,
     avisoIrregularidade,
+    multiplicadorEsforco: lote.multiplicadorEsforco ?? null,
+    nivelEsforco: lote.nivelEsforco ?? "normal",
+    recomendacaoComercial: lote.recomendacaoComercial || "",
+    prejuizoPrevistoSobra: lote.prejuizoPrevistoSobra ?? lote.valorEmRisco ?? 0,
+    vendaEsperadaMesAtual: lote.vendaEsperadaMesAtual ?? 0,
   };
 }

@@ -83,6 +83,13 @@ export interface ValidadeDiagnosticoSobra {
   isVencido: boolean;
   vendaIrregular: boolean;
   avisoIrregularidade: string | null;
+
+  // Inteligência de Esforço Comercial e Risco da Sobra
+  multiplicadorEsforco: number | null; // RitmoNecessario / RitmoAtual (ex: 1.5x)
+  nivelEsforco: "normal" | "atencao" | "alerta_promocao" | "critico_queima";
+  recomendacaoComercial: string;
+  prejuizoPrevistoSobra: number; // sobraPrevista * precoVenda
+  vendaEsperadaMesAtual: number; // Média mensal * (diaAtual / diasDoMes)
 }
 
 export interface ValidadeLoteCalculado {
@@ -122,6 +129,13 @@ export interface ValidadeLoteCalculado {
   giroMesPercent: number;     // min(100, (mediaMensalFechada / estoque) * 100)
   ritmoMesStatus: RitmoMesStatus;
   vendaIrregular: boolean;    // max >= 3*min ou zero com positivo
+
+  // Inteligência de Esforço Comercial e Risco da Sobra
+  multiplicadorEsforco?: number | null; // RitmoNecessario / RitmoAtual (ex: 1.5x)
+  nivelEsforco?: "normal" | "atencao" | "alerta_promocao" | "critico_queima";
+  recomendacaoComercial?: string;
+  prejuizoPrevistoSobra?: number; // sobraPrevista * precoVenda
+  vendaEsperadaMesAtual?: number; // Média mensal * (diaAtual / diasDoMes)
 
   // Classificações
   faixaVencimento: FaixaVencimento;

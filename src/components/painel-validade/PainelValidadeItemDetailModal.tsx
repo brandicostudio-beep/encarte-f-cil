@@ -22,6 +22,8 @@ import {
   ArrowRight,
   HelpCircle,
   CheckCircle2,
+  Target,
+  Zap,
 } from "lucide-react";
 import {
   gerarDiagnosticoSobraCompleto,
@@ -200,12 +202,12 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
             {/* Estoque e Dias até Vencer */}
             <div className="bg-white/95 p-3.5 rounded-xl border border-neutral-200/80 text-xs space-y-1.5">
               <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
-                Estoque atual e prazo
+                Estoque atual (QTDISP_WMS) e prazo
               </div>
               <div className="flex justify-between items-center pt-1">
-                <span className="text-neutral-600">Estoque atual disponível:</span>
+                <span className="text-neutral-600">Disponível para venda:</span>
                 <span className="font-mono font-bold text-neutral-900">
-                  {diagnostico.estoque} un
+                  {diagnostico.estoque} <span className="text-neutral-500 font-normal">{lote.embalagem}</span>
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -275,6 +277,47 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
             <p className="text-neutral-800 leading-relaxed font-medium text-sm">
               {diagnostico.explicacaoSimples}
             </p>
+          </div>
+
+          {/* 5. Ação Comercial Recomendada & Risco Financeiro Real da Sobra */}
+          <div className="bg-white/95 p-4 rounded-xl border border-neutral-200/80 text-xs space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-800 flex items-center gap-1.5">
+                <Target className="h-4 w-4 text-emerald-600" />
+                <span>Diagnóstico Comercial & Ação Recomendada:</span>
+              </div>
+
+              {diagnostico.multiplicadorEsforco && diagnostico.multiplicadorEsforco > 1 && (
+                <span
+                  className={`inline-flex items-center gap-1 text-[11px] font-black px-2.5 py-0.5 rounded-full ${
+                    diagnostico.multiplicadorEsforco > 2.5
+                      ? "bg-red-100 text-red-800 border border-red-300"
+                      : diagnostico.multiplicadorEsforco > 1.5
+                      ? "bg-orange-100 text-orange-800 border border-orange-300"
+                      : "bg-amber-100 text-amber-800 border border-amber-300"
+                  }`}
+                >
+                  <Zap className="h-3 w-3" />
+                  Acelerar giro em {diagnostico.multiplicadorEsforco}x
+                </span>
+              )}
+            </div>
+
+            <div className="p-3 rounded-lg bg-neutral-50 border border-neutral-200/90 text-sm font-semibold text-neutral-800 leading-relaxed">
+              {diagnostico.recomendacaoComercial}
+            </div>
+
+            {/* Prejuízo financeiro real previsto caso a sobra ocorra */}
+            {diagnostico.sobraPrevista > 0 && diagnostico.prejuizoPrevistoSobra > 0 && (
+              <div className="flex items-center justify-between pt-2 border-t border-neutral-100 text-xs">
+                <span className="text-neutral-600">
+                  Prejuízo previsto se nada for feito (preço de venda da sobra):
+                </span>
+                <span className="font-mono font-black text-red-700 text-sm">
+                  R$ {diagnostico.prejuizoPrevistoSobra.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* 5. Alerta de Venda Irregular (se houver) */}
@@ -377,6 +420,11 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
                 </span>
                 <span className="font-mono font-bold text-neutral-900">
                   {lote.vendaMesAtualRaw === null ? "sem dados" : `${lote.vendaMesAtual} un`}
+                  {diagnostico.vendaEsperadaMesAtual > 0 && (
+                    <span className="text-[10px] font-normal text-neutral-500 ml-1.5">
+                      (esperado: ~{diagnostico.vendaEsperadaMesAtual} un)
+                    </span>
+                  )}
                 </span>
               </div>
               <div className="h-3 w-full bg-neutral-200 rounded-full overflow-hidden">

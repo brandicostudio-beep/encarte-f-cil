@@ -17,6 +17,8 @@ import {
 import {
   calcularContadoresKpi,
   filtrarLotes,
+  processarLote,
+  gerarDiagnosticoSobraCompleto,
 } from "@/lib/painel-validade-analytics";
 import type { ValidadeLoteCalculado, ValidadeSnapshot } from "@/types/painel-validade";
 
@@ -918,5 +920,59 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
 
     // Botão Limpar tudo presente
     expect(clean).toContain("Limpar tudo");
+  });
+
+  it("Cálculo Inteligente: considera estritamente QTDISP_WMS, calcula multiplicador de esforço e prejuízo real da sobra", () => {
+    const rawLote = {
+      codprod: "26032",
+      descricao: "SALGADINHO LAYS BATATA SALT VINEGAR",
+      embalagem: "1X62 GR",
+      dtval: "07/12/2026", // 20 dias a partir de 17/11/2026
+      qtdisp_wms: 35,      // Estoque oficial considerado
+      qtest_winthor: 50,   // Estoque contábil diferente (deve ser IGNORADO)
+      preco_venda: 4.90,
+      qtvendmes: 5,        // Mês atual em curso
+      qtvendmes1: 24,      // M-1
+      qtvendmes2: 18,      // M-2
+      qtvendmes3: 18,      // M-3
+      codcomprador: "18031",
+      nomeComprador: "LUDMYLLA",
+    };
+
+    const refDate = new Date("2026-11-17T00:00:00");
+    const lote = processarLote(rawLote, refDate);
+
+    // 1. Confirma que o estoque considerado é estritamente qtdisp_wms (35), e não qtest_winthor (50)
+    expect(lote.estoque).toBe(35);
+
+    // 2. Média mensal: (24 + 18 + 18) / 3 = 20 un/mês
+    expect(lote.mediaMensalFechada).toBe(20);
+
+    // 3. Ritmo atual: 20 / 30 = 0.67 un/dia
+    expect(lote.ritmoAtualDia).toBeCloseTo(0.67, 2);
+
+    // 4. Dias para vencer: 20 dias
+    expect(lote.diasParaVencer).toBe(20);
+
+    // 5. Ritmo necessário para escoar: 35 un / 20 dias = 1.75 un/dia
+    expect(lote.ritmoNecessarioDia).toBeCloseTo(1.75, 2);
+
+    // 6. Multiplicador de Esforço Comercial: 1.75 / 0.67 ~= 2.6x (aceleração crítica)
+    expect(lote.multiplicadorEsforco).toBeGreaterThanOrEqual(2.5);
+    expect(lote.nivelEsforco).toBe("critico_queima");
+    expect(lote.recomendacaoComercial).toContain("queima");
+
+    // 7. Venda prevista em 20 dias: 0.67 * 20 ~= 13.4 un
+    // Sobra prevista: 35 - 13.4 = 21.6 un
+    expect(lote.sobraPrevistaUnidades).toBeCloseTo(21.6, 1);
+
+    // 8. Prejuízo financeiro real previsto na sobra: sobra * precoVenda = 21.6 * 4.90 = R$ 105.84
+    expect(lote.prejuizoPrevistoSobra).toBeCloseTo(105.84, 1);
+
+    // 9. Diagnóstico renderizado no modal
+    const diag = gerarDiagnosticoSobraCompleto(lote);
+    expect(diag.estoque).toBe(35);
+    expect(diag.multiplicadorEsforco).toBeGreaterThanOrEqual(2.5);
+    expect(diag.recomendacaoComercial).toContain("queima");
   });
 });

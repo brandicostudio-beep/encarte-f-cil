@@ -11,6 +11,7 @@ import {
   Sparkles,
   ChevronRight,
   HelpCircle,
+  Zap,
 } from "lucide-react";
 import {
   Tooltip,
@@ -182,6 +183,21 @@ export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
                     Novo Lote
                   </span>
                 )}
+
+                {/* Badge Aceleração de Giro (Multiplicador de Esforço) */}
+                {lote.multiplicadorEsforco && lote.multiplicadorEsforco > 1.5 && (
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-black border ${
+                      lote.multiplicadorEsforco > 2.5
+                        ? "bg-red-100 text-red-800 border-red-300"
+                        : "bg-orange-100 text-orange-800 border-orange-300"
+                    }`}
+                    title={`Necessita acelerar vendas em ${lote.multiplicadorEsforco}x`}
+                  >
+                    <Zap className="h-3 w-3" />
+                    {lote.multiplicadorEsforco}x giro
+                  </span>
+                )}
               </div>
 
               {/* Badge Vencimento */}
@@ -250,7 +266,7 @@ export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
                 </div>
                 <div>
                   <div className="text-[10px] text-neutral-500 uppercase font-semibold">
-                    Estoque Disponível
+                    Estoque (QTDISP_WMS)
                   </div>
                   <div className="text-base font-black text-neutral-900 font-mono leading-none">
                     {lote.estoque} <span className="text-xs font-normal text-neutral-500">{lote.embalagem}</span>
