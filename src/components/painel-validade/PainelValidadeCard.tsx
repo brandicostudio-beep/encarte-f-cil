@@ -1,0 +1,245 @@
+import React from "react";
+import type { ValidadeLoteCalculado } from "@/types/painel-validade";
+import {
+  Package,
+  Clock,
+  TrendingDown,
+  User,
+  AlertCircle,
+  CheckCircle2,
+  Calendar,
+  Sparkles,
+  ChevronRight,
+} from "lucide-react";
+
+interface PainelValidadeCardProps {
+  lote: ValidadeLoteCalculado;
+  onOpenDetail: (lote: ValidadeLoteCalculado) => void;
+}
+
+export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
+  lote,
+  onOpenDetail,
+}) => {
+  // Cores da faixa de vencimento
+  const getVencimentoBadge = () => {
+    if (lote.isVencido) {
+      return {
+        bg: "bg-red-950 text-white border-red-900",
+        label: `🚫 VENCIDO (${Math.abs(lote.diasParaVencer)}d atrás)`,
+      };
+    }
+    if (lote.diasParaVencer === 0) {
+      return {
+        bg: "bg-red-700 text-white border-red-800 animate-pulse",
+        label: "🚨 Vence HOJE!",
+      };
+    }
+    if (lote.diasParaVencer === 1) {
+      return {
+        bg: "bg-red-600 text-white border-red-700 animate-pulse",
+        label: "🚨 Vence AMANHÃ (1d)",
+      };
+    }
+    if (lote.diasParaVencer <= 7) {
+      return {
+        bg: "bg-red-600 text-white border-red-700",
+        label: `🔥 Vence em ${lote.diasParaVencer} dias`,
+      };
+    }
+    if (lote.diasParaVencer <= 30) {
+      return {
+        bg: "bg-orange-500 text-white border-orange-600",
+        label: `⏰ Vence em ${lote.diasParaVencer} dias`,
+      };
+    }
+    if (lote.diasParaVencer <= 60) {
+      return {
+        bg: "bg-amber-400 text-amber-950 border-amber-500",
+        label: `⚠️ Vence em ${lote.diasParaVencer} dias`,
+      };
+    }
+    if (lote.diasParaVencer <= 90) {
+      return {
+        bg: "bg-emerald-600 text-white border-emerald-700",
+        label: `🟢 Vence em ${lote.diasParaVencer} dias`,
+      };
+    }
+    return {
+      bg: "bg-neutral-100 text-neutral-800 border-neutral-300",
+      label: `📅 ${lote.diasParaVencer} dias`,
+    };
+  };
+
+  const vencBadge = getVencimentoBadge();
+
+  // Cores da barra de Escoa a Tempo
+  const getEscoaBarColors = () => {
+    if (lote.escoaTempoPercent >= 100) {
+      return {
+        barBg: "bg-emerald-500",
+        textClass: "text-emerald-700",
+        label: "100% Escoa a tempo",
+      };
+    }
+    if (lote.escoaTempoPercent >= 60) {
+      return {
+        barBg: "bg-amber-500",
+        textClass: "text-amber-800",
+        label: `${Math.round(lote.escoaTempoPercent)}% No limite`,
+      };
+    }
+    return {
+      barBg: "bg-red-600",
+      textClass: "text-red-700",
+      label: `${Math.round(lote.escoaTempoPercent)}% Vai sobrar`,
+    };
+  };
+
+  const escoaBar = getEscoaBarColors();
+
+  // Destaque de borda para casos críticos
+  const isCritico =
+    lote.diasParaVencer <= 30 && lote.escoaTempoPercent < 60 && !lote.isVencido;
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpenDetail(lote)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpenDetail(lote);
+        }
+      }}
+      className={`rounded-2xl border bg-white p-5 shadow-xs hover:shadow-md transition-all cursor-pointer text-left flex flex-col justify-between gap-4 group ${
+        lote.isVencido
+          ? "border-red-900/50 bg-red-50/20"
+          : isCritico
+          ? "border-l-8 border-l-red-600 border-neutral-200"
+          : lote.diasParaVencer <= 7
+          ? "border-l-8 border-l-orange-500 border-neutral-200"
+          : "border-neutral-200 hover:border-neutral-400"
+      }`}
+    >
+      {/* 1. TOPO: CÓDIGO, SELO NO ENCARTE & VENCIMENTO */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Código do produto */}
+          <span className="font-mono font-bold text-sm bg-neutral-100 text-neutral-800 px-2 py-0.5 rounded-md border border-neutral-200">
+            {lote.codprod}
+          </span>
+
+          {/* Selo Amarelo Grande NO ENCARTE (Conforme Especificação) */}
+          {lote.noEncarte && (
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs sm:text-sm font-black bg-yellow-400 text-yellow-950 border border-yellow-500 shadow-xs uppercase tracking-wider"
+              title="Este produto está incluído e ativo no encarte do Geraencarte"
+            >
+              <Sparkles className="h-4 w-4 text-yellow-900 shrink-0" />
+              NO ENCARTE
+            </span>
+          )}
+
+          {/* Lote novo no snapshot */}
+          {lote.isNovoLote && (
+            <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+              Novo Lote
+            </span>
+          )}
+        </div>
+
+        {/* Badge Vencimento */}
+        <span
+          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs sm:text-sm font-black border shadow-2xs ${vencBadge.bg}`}
+        >
+          <Clock className="h-4 w-4 shrink-0" />
+          {vencBadge.label}
+        </span>
+      </div>
+
+      {/* 2. NOME DO PRODUTO (>= 22px em negrito para 70+ e clareza visual) */}
+      <div>
+        <h2
+          className="font-black text-neutral-900 tracking-tight leading-snug line-clamp-2 group-hover:text-red-700 transition-colors"
+          style={{ fontSize: "22px" }}
+          title={lote.descricao}
+        >
+          {lote.descricao}
+        </h2>
+        <div className="text-xs text-neutral-500 font-medium mt-1 flex items-center gap-2">
+          <span>Embalagem: <strong className="text-neutral-700">{lote.embalagem}</strong></span>
+          <span>•</span>
+          <span>Validade: <strong className="text-neutral-800 font-mono">{lote.dtval}</strong></span>
+        </div>
+      </div>
+
+      {/* 3. BARRA DE ESCOA A TEMPO (%) COM NÚMERO ESCRITO */}
+      <div className="bg-neutral-50 p-3 rounded-xl border border-neutral-200/80 space-y-1.5">
+        <div className="flex items-center justify-between text-xs font-bold">
+          <span className="text-neutral-600">Escoa a tempo até o vencimento:</span>
+          <span className={`font-mono text-sm font-black ${escoaBar.textClass}`}>
+            {escoaBar.label}
+          </span>
+        </div>
+
+        {/* Barra de Progresso Colorida */}
+        <div className="w-full h-3 rounded-full bg-neutral-200 overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${escoaBar.barBg}`}
+            style={{ width: `${Math.min(100, Math.max(3, lote.escoaTempoPercent))}%` }}
+          />
+        </div>
+
+        {/* Projeção de Sobra ou Saída */}
+        <div className="flex items-center justify-between text-[11px] text-neutral-500 font-medium pt-0.5">
+          <span>Ritmo atual: <strong>{lote.ritmoAtualDia} un/dia</strong></span>
+          {lote.sobraPrevistaUnidades > 0 ? (
+            <span className="text-red-700 font-bold">
+              Previsão de sobra: ~{Math.round(lote.sobraPrevistaUnidades)} un
+            </span>
+          ) : (
+            <span className="text-emerald-700 font-bold">
+              Estoque deve escoar totalmente
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* 4. RODAPÉ DO CARD: ESTOQUE, COMPRADOR E BOTÃO DETALHES */}
+      <div className="flex items-center justify-between pt-2 border-t border-neutral-100 text-xs">
+        {/* Estoque em destaque */}
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-700">
+            <Package className="h-4 w-4" />
+          </div>
+          <div>
+            <div className="text-[10px] text-neutral-500 uppercase font-semibold">
+              Estoque Disponível
+            </div>
+            <div className="text-base font-black text-neutral-900 font-mono leading-none">
+              {lote.estoque} <span className="text-xs font-normal text-neutral-500">{lote.embalagem}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Comprador & Ação */}
+        <div className="flex items-center gap-2">
+          <div className="text-right hidden sm:block">
+            <div className="text-[10px] text-neutral-500 uppercase font-semibold">
+              Comprador
+            </div>
+            <div className="text-xs font-bold text-neutral-700 truncate max-w-[120px]">
+              {lote.nomeComprador}
+            </div>
+          </div>
+
+          <div className="h-9 w-9 rounded-xl bg-neutral-100 group-hover:bg-neutral-900 group-hover:text-white flex items-center justify-center transition-colors">
+            <ChevronRight className="h-5 w-5" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

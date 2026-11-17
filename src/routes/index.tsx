@@ -111,6 +111,7 @@ import {
   Tag,
   ShieldAlert,
   TrendingDown,
+  BarChart3,
 } from "lucide-react";
 import { ColecoesWorkspace } from "@/components/colecoes/ColecoesWorkspace";
 
@@ -1745,6 +1746,16 @@ function EncarteApp() {
               className="min-h-[44px] bg-neutral-900 text-neutral-300 border-neutral-700 hover:bg-neutral-800 text-xs font-semibold"
             >
               Encarte de Coleções
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate({ to: "/painel-validade" as never })}
+              className="min-h-[44px] bg-blue-950/70 text-blue-300 border-blue-700 hover:bg-blue-900 hover:text-white text-xs font-bold"
+              title="Painel Interno de Validade e Giro (Distribuição / Comprador)"
+            >
+              <BarChart3 className="h-4 w-4 mr-1.5 text-blue-400" />
+              Painel de Validade (Interno)
             </Button>
             <Button
               variant="outline"

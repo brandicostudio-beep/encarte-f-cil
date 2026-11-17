@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AcessoRouteImport } from './routes/acesso'
 import { Route as ColecoesRouteImport } from './routes/colecoes'
+import { Route as PainelValidadeRouteImport } from './routes/painel-validade'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +29,44 @@ const ColecoesRoute = ColecoesRouteImport.update({
   path: '/colecoes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PainelValidadeRoute = PainelValidadeRouteImport.update({
+  id: '/painel-validade',
+  path: '/painel-validade',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/acesso': typeof AcessoRoute
   '/colecoes': typeof ColecoesRoute
+  '/painel-validade': typeof PainelValidadeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/acesso': typeof AcessoRoute
   '/colecoes': typeof ColecoesRoute
+  '/painel-validade': typeof PainelValidadeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/acesso': typeof AcessoRoute
   '/colecoes': typeof ColecoesRoute
+  '/painel-validade': typeof PainelValidadeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/acesso' | '/colecoes'
+  fullPaths: '/' | '/acesso' | '/colecoes' | '/painel-validade'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/acesso' | '/colecoes'
-  id: '__root__' | '/' | '/acesso' | '/colecoes'
+  to: '/' | '/acesso' | '/colecoes' | '/painel-validade'
+  id: '__root__' | '/' | '/acesso' | '/colecoes' | '/painel-validade'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AcessoRoute: typeof AcessoRoute
   ColecoesRoute: typeof ColecoesRoute
+  PainelValidadeRoute: typeof PainelValidadeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ColecoesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/painel-validade': {
+      id: '/painel-validade'
+      path: '/painel-validade'
+      fullPath: '/painel-validade'
+      preLoaderRoute: typeof PainelValidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcessoRoute: AcessoRoute,
   ColecoesRoute: ColecoesRoute,
+  PainelValidadeRoute: PainelValidadeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
