@@ -68,6 +68,8 @@ import {
   saveProjectAsUnified,
   renameProjectUnified,
   loadProjectUnified,
+  downloadProjectFile,
+  importProjectFromFile,
 } from "@/lib/project-sync-manager";
 import { loadProjectLocal } from "@/lib/project-indexeddb";
 import { checkDriveStatusFn } from "@/lib/project.functions";
@@ -760,6 +762,38 @@ function EncarteApp() {
       setProjectStatusNotice(`Renomeado para "${newName}"`);
     } else {
       alert(res.error || "Erro ao renomear projeto.");
+    }
+  };
+
+  // Baixar arquivo do projeto atual diretamente no computador (.json)
+  const handleDownloadCurrentProject = () => {
+    if (currentProject) {
+      downloadProjectFile({
+        ...currentProject,
+        products,
+        campaign,
+        store,
+      });
+      setSavedNotice("Arquivo do projeto baixado no computador (.json)!");
+    }
+  };
+
+  // Importar arquivo de encarte salvo no computador (.json)
+  const handleImportProjectFile = async (file: File) => {
+    setIsSavingProject(true);
+    setProjectStatusNotice("Lendo arquivo do computador...");
+    try {
+      const res = await importProjectFromFile(file);
+      if (res.ok && res.project) {
+        await handleOpenProject(res.project.id);
+        setSavedNotice(`Projeto "${res.project.name}" carregado do arquivo local!`);
+      } else {
+        alert(res.error || "Arquivo de projeto inválido ou incompatível.");
+      }
+    } catch (err: any) {
+      alert(err.message || "Erro ao ler arquivo.");
+    } finally {
+      setIsSavingProject(false);
     }
   };
 
@@ -1818,6 +1852,8 @@ function EncarteApp() {
         }}
         onOpenUpdateCheck={() => setUpdateCheckOpen(true)}
         onNewProject={handleNewProject}
+        onDownloadFile={handleDownloadCurrentProject}
+        onImportFile={handleImportProjectFile}
       />
 
       {/* 2. ETAPAS VISÍVEIS NO TOPO (Origem, Dados, Preços, Campanha, Exportar) */}

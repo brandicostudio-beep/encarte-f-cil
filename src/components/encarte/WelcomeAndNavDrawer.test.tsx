@@ -141,4 +141,25 @@ describe("UI/UX Redesign: WelcomeHubModal & NavigationDrawer (Estilo Apple)", ()
     // Não contém texto A4
     expect(html).not.toContain("A4");
   });
+
+  it("ProjectTopBar: exibe botão de download direto do arquivo .json quando habilitado", () => {
+    const html = renderToString(
+      <ProjectTopBar
+        projectName="Encarte Ofertas da Semana"
+        saveStatus="synced"
+        statusNotice="Sincronizado no Google Drive"
+        onSave={() => {}}
+        onSaveAs={() => {}}
+        onRename={() => {}}
+        onOpenProjects={() => {}}
+        onOpenVersionHistory={() => {}}
+        onOpenUpdateCheck={() => {}}
+        onNewProject={() => {}}
+        onDownloadFile={() => {}}
+        onImportFile={() => {}}
+      />
+    );
+
+    expect(html).toContain("Baixar (.json)");
+  });
 });

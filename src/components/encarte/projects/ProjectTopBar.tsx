@@ -23,6 +23,8 @@ import {
   Check,
   X,
   ChevronDown,
+  Download,
+  FolderOpen,
 } from "lucide-react";
 import type { ProjectSyncStatus } from "@/types/project";
 import { validateProjectName } from "@/lib/project-serializer";
@@ -42,6 +44,8 @@ interface ProjectTopBarProps {
   onOpenVersionHistory: () => void;
   onOpenUpdateCheck: () => void;
   onNewProject: () => void;
+  onDownloadFile?: () => void;
+  onImportFile?: (file: File) => void;
 }
 
 export const ProjectTopBar: React.FC<ProjectTopBarProps> = ({
@@ -59,11 +63,14 @@ export const ProjectTopBar: React.FC<ProjectTopBarProps> = ({
   onOpenVersionHistory,
   onOpenUpdateCheck,
   onNewProject,
+  onDownloadFile,
+  onImportFile,
 }) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(projectName);
   const [nameError, setNameError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const localFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setNameDraft(projectName);
@@ -193,6 +200,24 @@ export const ProjectTopBar: React.FC<ProjectTopBarProps> = ({
                   <Copy className="h-3.5 w-3.5 mr-2 text-neutral-400" />
                   Salvar Como...
                 </DropdownMenuItem>
+                {onDownloadFile && (
+                  <DropdownMenuItem
+                    onClick={onDownloadFile}
+                    className="hover:bg-neutral-800 focus:bg-neutral-800 cursor-pointer text-xs font-medium text-cyan-400 focus:text-cyan-300"
+                  >
+                    <Download className="h-3.5 w-3.5 mr-2 text-cyan-400" />
+                    Baixar Arquivo no Computador (.json)
+                  </DropdownMenuItem>
+                )}
+                {onImportFile && (
+                  <DropdownMenuItem
+                    onClick={() => localFileInputRef.current?.click()}
+                    className="hover:bg-neutral-800 focus:bg-neutral-800 cursor-pointer text-xs font-medium text-amber-300 focus:text-amber-200"
+                  >
+                    <FolderOpen className="h-3.5 w-3.5 mr-2 text-amber-400" />
+                    Buscar Arquivo no Computador (.json)
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={onOpenVersionHistory}
                   className="hover:bg-neutral-800 focus:bg-neutral-800 cursor-pointer text-xs font-medium"
@@ -277,6 +302,34 @@ export const ProjectTopBar: React.FC<ProjectTopBarProps> = ({
           <History className="h-3.5 w-3.5 mr-1.5 text-[#FFD400]" />
           Versões
         </Button>
+
+        {/* Botão Baixar Arquivo Local (.json) direto na barra */}
+        {onDownloadFile && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onDownloadFile}
+            className="min-h-[34px] px-2.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 hover:text-white border-neutral-700 text-xs font-semibold shadow-xs transition-colors hidden sm:flex items-center cursor-pointer"
+            title="Baixar arquivo deste encarte no computador (.json)"
+          >
+            <Download className="h-3.5 w-3.5 mr-1.5 text-cyan-400" />
+            Baixar (.json)
+          </Button>
+        )}
+
+        {/* Input oculto para buscar arquivo local .json */}
+        <input
+          ref={localFileInputRef}
+          type="file"
+          accept=".json,.encarte"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file && onImportFile) onImportFile(file);
+            if (localFileInputRef.current) localFileInputRef.current.value = "";
+          }}
+          className="hidden"
+        />
 
         {/* Botão Salvar (Ctrl+S) */}
         <Button

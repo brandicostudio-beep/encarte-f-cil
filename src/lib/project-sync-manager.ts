@@ -27,6 +27,8 @@ import {
   analyzeProjectUpdates,
   validateProjectName,
   stripHeavyImagesForStorage,
+  serializeProject,
+  deserializeProject,
 } from "./project-serializer";
 import { getCachedPhoto } from "./drive-cache";
 
@@ -61,12 +63,47 @@ export function rehydrateProductPhotos(products: EncarteProduct[]): EncarteProdu
 }
 
 /**
- * Salva o projeto ativo no IndexedDB local e, se conectado, sincroniza com o Google Drive.
+ * Salva o projeto SOMENTE no computador (IndexedDB local), de forma instantânea (<20ms).
+ */
+export async function saveProjectLocallyOnly(
+  project: ProjectData,
+  isNewVersion = false,
+  callbacks?: SyncManagerCallbacks
+): Promise<{ ok: boolean; version: number; project?: ProjectData; error?: string }> {
+  callbacks?.onStatusChange?.("unsaved", "Salvando no computador...");
+
+  const versionToSave = isNewVersion ? (project.version || 1) + 1 : (project.version || 1);
+  const now = new Date().toISOString();
+
+  const projectToSave: ProjectData = {
+    ...project,
+    version: versionToSave,
+    updatedAt: now,
+  };
+
+  const localRes = await saveProjectLocal(projectToSave, isNewVersion);
+  if (!localRes.ok) {
+    callbacks?.onStatusChange?.("sync_error", "Erro ao salvar no computador.");
+    return { ok: false, version: projectToSave.version, error: localRes.error };
+  }
+
+  const timeStr = `${String(new Date().getHours()).padStart(2, "0")}:${String(
+    new Date().getMinutes()
+  ).padStart(2, "0")}`;
+
+  callbacks?.onStatusChange?.("local_only", `Salvo no computador às ${timeStr}`);
+  callbacks?.onProjectSaved?.(projectToSave, `Salvo às ${timeStr} no computador`);
+  return { ok: true, version: versionToSave, project: projectToSave };
+}
+
+/**
+ * Salva o projeto ativo no IndexedDB local de imediato e, se conectado, sincroniza com o Google Drive.
  */
 export async function saveProjectUnified(
   project: ProjectData,
   isNewVersion = false,
-  callbacks?: SyncManagerCallbacks
+  callbacks?: SyncManagerCallbacks,
+  options?: { localOnly?: boolean }
 ): Promise<{ ok: boolean; version: number; error?: string }> {
   callbacks?.onStatusChange?.("unsaved", "Salvando projeto...");
 
@@ -89,6 +126,17 @@ export async function saveProjectUnified(
   const timeStr = `${String(new Date().getHours()).padStart(2, "0")}:${String(
     new Date().getMinutes()
   ).padStart(2, "0")}`;
+
+  // Se o usuário optou por salvar apenas no computador, finaliza imediatamente!
+  if (options?.localOnly) {
+    callbacks?.onStatusChange?.("local_only", `Salvo no computador às ${timeStr}`);
+    callbacks?.onProjectSaved?.(projectToSave, `Salvo às ${timeStr} no computador`);
+    return { ok: true, version: versionToSave };
+  }
+
+  // Notifica IMEDIATAMENTE que o projeto já está seguro salvo localmente
+  callbacks?.onStatusChange?.("local_only", `Salvo no PC às ${timeStr} • Sincronizando com Google Drive...`);
+  callbacks?.onProjectSaved?.(projectToSave, `Salvo às ${timeStr}`);
 
   // 2. Tentar sincronizar com Google Drive
   try {
@@ -120,6 +168,85 @@ export async function saveProjectUnified(
   callbacks?.onStatusChange?.("local_only", `Salvo às ${timeStr} (Offline)`);
   callbacks?.onProjectSaved?.(projectToSave, `Salvo às ${timeStr} localmente`);
   return { ok: true, version: versionToSave };
+}
+
+/**
+ * Exporta e baixa o arquivo do projeto (.json) diretamente para a pasta do computador.
+ */
+export function downloadProjectFile(project: ProjectData): { ok: boolean; filename?: string; error?: string } {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return { ok: false, error: "Ambiente sem suporte a DOM" };
+  }
+  try {
+    const jsonStr = serializeProject(project);
+    const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const safeName = project.name.trim().replace(/[\\/:*?"<>|\s]+/g, "_").toLowerCase() || "encarte";
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = `encarte_${safeName}_v${project.version || 1}_${dateStr}.json`;
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {}
+    }, 1000);
+    return { ok: true, filename };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "Erro ao baixar arquivo." };
+  }
+}
+
+/**
+ * Carrega um projeto pelo ID e faz o download direto como arquivo .json no computador.
+ */
+export async function downloadProjectById(projectId: string): Promise<{ ok: boolean; error?: string }> {
+  const res = await loadProjectUnified(projectId);
+  if (!res.ok || !res.project) {
+    return { ok: false, error: res.error || "Não foi possível carregar o projeto para exportação." };
+  }
+  downloadProjectFile(res.project);
+  return { ok: true };
+}
+
+/**
+ * Importa um arquivo .json ou .encarte salvo no computador e grava no IndexedDB local.
+ */
+export async function importProjectFromFile(file: File): Promise<{
+  ok: boolean;
+  project?: ProjectData;
+  error?: string;
+}> {
+  try {
+    const text = await file.text();
+    const res = deserializeProject(text);
+    if (!res.ok || !res.project) {
+      return { ok: false, error: res.error || "Arquivo de projeto inválido ou incompatível." };
+    }
+
+    const importedProject: ProjectData = {
+      ...res.project,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Salva imediatamente no banco local
+    const localSave = await saveProjectLocal(importedProject, false);
+    if (!localSave.ok) {
+      return { ok: false, error: localSave.error || "Erro ao salvar o projeto no computador." };
+    }
+
+    invalidateDriveIndexCache();
+    return { ok: true, project: importedProject };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Falha ao processar o arquivo selecionado.",
+    };
+  }
 }
 
 /**

@@ -31,6 +31,10 @@ import {
   listAllProjectsUnified,
   loadProjectUnified,
   invalidateDriveIndexCache,
+  downloadProjectFile,
+  downloadProjectById,
+  importProjectFromFile,
+  saveProjectLocallyOnly,
 } from "./project-sync-manager";
 import {
   checkDriveStatusFn,
@@ -533,5 +537,80 @@ describe("Sistema de Salvamento de Projetos de Encarte", () => {
     expect(names).toContain("Encarte 12_11_2026");
     expect(names).toContain("Encarte 17_11_2026");
     expect(names).toContain("Encarte Ofertas da Semana");
+  });
+
+  it("15. Salva projeto rapidamente no computador (saveProjectLocallyOnly) sem travar com nuvem", async () => {
+    const fastProject: ProjectData = {
+      ...sampleProject,
+      id: "proj-fast-save-01",
+      name: "Encarte Salvamento Rapido",
+      updatedAt: new Date().toISOString(),
+    };
+
+    const res = await saveProjectLocallyOnly(fastProject);
+    expect(res.ok).toBe(true);
+    expect(res.project.name).toBe("Encarte Salvamento Rapido");
+
+    const loaded = await loadProjectLocal("proj-fast-save-01");
+    expect(loaded.ok).toBe(true);
+    expect(loaded.project?.name).toBe("Encarte Salvamento Rapido");
+    expect(loaded.project?.products).toHaveLength(2);
+  });
+
+  it("16. Importa arquivo .json do computador salvando no banco local e abrindo perfeitamente", async () => {
+    const exportData: ProjectData = {
+      ...sampleProject,
+      id: "proj-imported-file-01",
+      name: "Encarte Baixado do Computador",
+      updatedAt: new Date().toISOString(),
+    };
+
+    const jsonContent = serializeProject(exportData);
+    const mockFile = new File([jsonContent], "encarte_salvo.json", { type: "application/json" });
+
+    const importRes = await importProjectFromFile(mockFile);
+    expect(importRes.ok).toBe(true);
+    expect(importRes.project?.name).toBe("Encarte Baixado do Computador");
+
+    // Confirma que foi gravado e pode ser lido pelo sistema
+    const local = await loadProjectLocal(importRes.project!.id);
+    expect(local.ok).toBe(true);
+    expect(local.project?.name).toBe("Encarte Baixado do Computador");
+  });
+
+  it("17. Gera download do arquivo .json com nome limpo e seguro", () => {
+    const originalDocument = (globalThis as any).document;
+    const originalWindow = (globalThis as any).window;
+    const originalCreate = URL.createObjectURL;
+    const originalRevoke = URL.revokeObjectURL;
+
+    const mockElement = {
+      href: "",
+      download: "",
+      click: vi.fn(),
+    };
+    (globalThis as any).document = {
+      createElement: vi.fn().mockReturnValue(mockElement),
+      body: {
+        appendChild: vi.fn(),
+        removeChild: vi.fn(),
+      },
+    };
+    (globalThis as any).window = globalThis;
+    URL.createObjectURL = vi.fn().mockReturnValue("blob:http://localhost/mock-blob");
+    URL.revokeObjectURL = vi.fn();
+
+    try {
+      const res = downloadProjectFile(sampleProject);
+      expect(res.ok).toBe(true);
+      expect(res.filename).toContain("encarte_ofertas_da_semana");
+      expect(res.filename?.endsWith(".json")).toBe(true);
+      expect(mockElement.click).toHaveBeenCalled();
+    } finally {
+      (globalThis as any).document = originalDocument;
+      (globalThis as any).window = originalWindow;
+      URL.createObjectURL = originalCreate;
+      URL.revokeObjectURL = originalRevoke;
+    }
   });
 });

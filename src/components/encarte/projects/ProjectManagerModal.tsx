@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,9 @@ import {
   Grid,
   List,
   RotateCcw,
+  Download,
+  FolderOpen,
+  FileUp,
 } from "lucide-react";
 import type { ProjectIndexItem } from "@/types/project";
 import {
@@ -45,6 +48,8 @@ import {
   duplicateProjectUnified,
   deleteProjectUnified,
   restoreProjectUnified,
+  downloadProjectById,
+  importProjectFromFile,
 } from "@/lib/project-sync-manager";
 import { validateProjectName } from "@/lib/project-serializer";
 
@@ -68,12 +73,14 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
   onCheckUpdates,
 }) => {
   const [tab, setTab] = useState<"recent" | "trash">("recent");
+  const [storageFilter, setStorageFilter] = useState<"all" | "drive" | "local">("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"recent" | "oldest" | "name">("recent");
   const [projects, setProjects] = useState<ProjectIndexItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [driveConnected, setDriveConnected] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Estados para modal de renomear
   const [renameTarget, setRenameTarget] = useState<ProjectIndexItem | null>(null);
@@ -100,8 +107,25 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
     }
   }, [open, tab]);
 
-  // Filtragem e ordenação
+  // Contadores de projetos ativos e na nuvem
+  const activeProjects = projects.filter((p) => !p.isTrashed);
+  const trashedProjects = projects.filter((p) => p.isTrashed);
+  const driveCount = activeProjects.filter((p) => p.syncStatus === "synced" || p.syncStatus === "cloud_only").length;
+  const localCount = activeProjects.filter((p) => p.syncStatus !== "cloud_only").length;
+
+  // Filtragem por busca e por origem (Nuvem Google Drive vs Computador Local)
   const filteredProjects = projects
+    .filter((p) => {
+      if (tab === "trash") return p.isTrashed;
+      if (p.isTrashed) return false;
+      if (storageFilter === "drive") {
+        return p.syncStatus === "synced" || p.syncStatus === "cloud_only";
+      }
+      if (storageFilter === "local") {
+        return p.syncStatus !== "cloud_only";
+      }
+      return true;
+    })
     .filter((p) => {
       if (!search.trim()) return true;
       return p.name.toLowerCase().includes(search.toLowerCase().trim());
@@ -115,6 +139,32 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
       }
       return a.name.localeCompare(b.name);
     });
+
+  const handleDownload = async (p: ProjectIndexItem) => {
+    const res = await downloadProjectById(p.id);
+    if (!res.ok) {
+      alert(res.error || "Erro ao baixar arquivo do projeto.");
+    }
+  };
+
+  const handleImportFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsLoading(true);
+    try {
+      const res = await importProjectFromFile(file);
+      if (res.ok && res.project) {
+        await loadProjects(true);
+        onOpenChange(false);
+        onOpenProject(res.project.id);
+      } else {
+        alert(res.error || "Arquivo de projeto inválido.");
+      }
+    } finally {
+      setIsLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const handleStartRename = (p: ProjectIndexItem) => {
     setRenameTarget(p);
@@ -211,57 +261,117 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
                   ) : (
                     <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300 text-[11px] gap-1">
                       <HardDrive className="w-3 h-3 text-amber-600" />
-                      Salvo Localmente (IndexedDB)
+                      Salvo Localmente (Neste Computador)
                     </Badge>
                   )}
-                  {driveConnected && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => loadProjects(true)}
-                      disabled={isLoading}
-                      className="h-6 px-2 text-[11px] gap-1 text-neutral-600 hover:text-neutral-900 border border-neutral-300/60 rounded-md"
-                      title="Sincronizar novamente com o Google Drive"
-                    >
-                      <RefreshCw className={`w-3 h-3 text-neutral-500 ${isLoading ? "animate-spin" : ""}`} />
-                      Sincronizar
-                    </Button>
-                  )}
                   <span className="text-xs text-neutral-500">
-                    {projects.length} {projects.length === 1 ? "projeto" : "projetos"}
+                    {activeProjects.length} {activeProjects.length === 1 ? "projeto ativo" : "projetos ativos"}
                   </span>
                 </div>
               </div>
 
-              {/* Botão Novo Encarte */}
-              <Button
-                type="button"
-                onClick={() => {
-                  onOpenChange(false);
-                  onNewProject();
-                }}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold gap-1.5 shadow-sm"
-              >
-                <Plus className="w-4 h-4" />
-                Criar Novo Encarte
-              </Button>
+              {/* Botões de Ação no Topo: Buscar no Drive, Buscar no PC, Criar Novo */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Botão Buscar no Google Drive */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => loadProjects(true)}
+                  disabled={isLoading}
+                  className="bg-white hover:bg-neutral-100 text-neutral-800 border-neutral-300 font-semibold text-xs gap-1.5 shadow-2xs cursor-pointer h-9 px-3"
+                  title="Varre e sincroniza todos os encartes salvos no Google Drive em qualquer computador"
+                >
+                  <Cloud className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Buscar no Google</span>
+                  {isLoading && <RefreshCw className="w-3 h-3 animate-spin text-neutral-500 ml-1" />}
+                </Button>
+
+                {/* Botão Buscar / Abrir Arquivo Local */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isLoading}
+                  className="bg-white hover:bg-neutral-100 text-neutral-800 border-neutral-300 font-semibold text-xs gap-1.5 shadow-2xs cursor-pointer h-9 px-3"
+                  title="Buscar e carregar um arquivo .json salvo na pasta local do computador ou pendrive"
+                >
+                  <FolderOpen className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Buscar na Pasta Local (.json)</span>
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json,.encarte"
+                  onChange={handleImportFileInput}
+                  className="hidden"
+                />
+
+                {/* Botão Novo Encarte */}
+                <Button
+                  type="button"
+                  onClick={() => {
+                    onOpenChange(false);
+                    onNewProject();
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold gap-1.5 shadow-sm h-9 px-3.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  Criar Novo
+                </Button>
+              </div>
             </div>
 
             {/* Abas e Controles de Busca */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mt-5">
-              {/* Abas */}
-              <div className="flex items-center bg-neutral-200/80 p-0.5 rounded-lg text-xs font-semibold">
+              {/* Abas e Filtros de Armazenamento */}
+              <div className="flex items-center bg-neutral-200/80 p-0.5 rounded-lg text-xs font-semibold flex-wrap gap-0.5">
                 <button
                   type="button"
-                  onClick={() => setTab("recent")}
+                  onClick={() => {
+                    setTab("recent");
+                    setStorageFilter("all");
+                  }}
                   className={`px-3 py-1.5 rounded-md transition-all ${
-                    tab === "recent"
+                    tab === "recent" && storageFilter === "all"
                       ? "bg-white text-neutral-900 shadow-xs font-bold"
                       : "text-neutral-600 hover:text-neutral-900"
                   }`}
                 >
-                  Arquivos Recentes
+                  Todos ({activeProjects.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab("recent");
+                    setStorageFilter("drive");
+                  }}
+                  className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
+                    tab === "recent" && storageFilter === "drive"
+                      ? "bg-white text-neutral-900 shadow-xs font-bold"
+                      : "text-neutral-600 hover:text-neutral-900"
+                  }`}
+                  title="Mostrar apenas projetos sincronizados com o Google Drive"
+                >
+                  <Cloud className="w-3.5 h-3.5 text-emerald-600" />
+                  Google Drive ({driveCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab("recent");
+                    setStorageFilter("local");
+                  }}
+                  className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
+                    tab === "recent" && storageFilter === "local"
+                      ? "bg-white text-neutral-900 shadow-xs font-bold"
+                      : "text-neutral-600 hover:text-neutral-900"
+                  }`}
+                  title="Mostrar apenas projetos salvos localmente neste computador"
+                >
+                  <HardDrive className="w-3.5 h-3.5 text-amber-600" />
+                  Neste Computador ({localCount})
                 </button>
                 <button
                   type="button"
@@ -273,7 +383,7 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
                   }`}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  Lixeira
+                  Lixeira ({trashedProjects.length})
                 </button>
               </div>
 
@@ -469,6 +579,13 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
                                   <Copy className="w-3.5 h-3.5 mr-2 text-neutral-500" />
                                   Duplicar
                                 </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleDownload(p)}
+                                  className="cursor-pointer"
+                                >
+                                  <Download className="w-3.5 h-3.5 mr-2 text-emerald-600" />
+                                  Baixar Arquivo (.json)
+                                </DropdownMenuItem>
                                 {onViewVersionHistory && (
                                   <DropdownMenuItem
                                     onClick={() => onViewVersionHistory(p.id)}
@@ -633,6 +750,9 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
                                       </DropdownMenuItem>
                                       <DropdownMenuItem onClick={() => handleDuplicate(p)}>
                                         <Copy className="w-3.5 h-3.5 mr-2" /> Duplicar
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleDownload(p)}>
+                                        <Download className="w-3.5 h-3.5 mr-2 text-emerald-600" /> Baixar (.json)
                                       </DropdownMenuItem>
                                       {onViewVersionHistory && (
                                         <DropdownMenuItem onClick={() => onViewVersionHistory(p.id)}>
