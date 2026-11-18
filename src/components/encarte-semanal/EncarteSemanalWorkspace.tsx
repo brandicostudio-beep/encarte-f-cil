@@ -521,10 +521,10 @@ export const EncarteSemanalWorkspace: React.FC = () => {
               type="button"
               onClick={handleBackToHome}
               className="px-3 py-1.5 rounded-lg font-semibold text-neutral-400 hover:text-white hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
-              title="Ir para o Gerador de Encartes Principal"
+              title="Ir para o Encarte de Validade"
             >
               <LayoutGrid className="w-3.5 h-3.5 text-red-400" />
-              <span className="hidden sm:inline">Encartes</span>
+              <span>Validade</span>
             </button>
 
             <span
@@ -532,27 +532,17 @@ export const EncarteSemanalWorkspace: React.FC = () => {
               title="Você está no Encarte Semanal permanente"
             >
               <Sparkles className="w-3.5 h-3.5 text-neutral-950" />
-              <span>Semanal (4×5)</span>
+              <span>Semanal</span>
             </span>
 
             <button
               type="button"
               onClick={handleNavigateValidade}
-              className="px-3 py-1.5 rounded-lg font-semibold text-neutral-400 hover:text-amber-200 hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
-              title="Ir para o Painel de Validade (Rotina 8230)"
+              className="px-3 py-1.5 rounded-lg font-semibold text-neutral-400 hover:text-blue-300 hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Ir para o Painel de Acompanhamento (Rotina 8230)"
             >
-              <CalendarClock className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Validade (8230)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleNavigateColecoes}
-              className="px-3 py-1.5 rounded-lg font-semibold text-neutral-400 hover:text-purple-300 hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
-              title="Ir para o Encarte de Coleções"
-            >
-              <Layers className="w-3.5 h-3.5 text-purple-400" />
-              <span className="hidden md:inline">Coleções</span>
+              <CalendarClock className="w-3.5 h-3.5 text-blue-400" />
+              <span>Acompanhamento</span>
             </button>
           </nav>
 

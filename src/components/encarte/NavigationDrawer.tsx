@@ -99,7 +99,7 @@ export const NavigationDrawerContent: React.FC<NavigationDrawerContentProps> = (
           </span>
 
           <div className="space-y-1">
-            {/* Gerador de Encartes (Ativo) */}
+            {/* Encarte de Validade (Ativo) */}
             <button
               type="button"
               onClick={onClose}
@@ -111,10 +111,10 @@ export const NavigationDrawerContent: React.FC<NavigationDrawerContentProps> = (
                 </div>
                 <div className="truncate">
                   <div className="text-sm font-bold text-white truncate">
-                    Gerador de Encartes
+                    Validade
                   </div>
                   <div className="text-[11px] text-neutral-400 truncate">
-                    Diagramação de ofertas para impressão e redes
+                    Encarte de ofertas e controle de validade
                   </div>
                 </div>
               </div>
@@ -141,7 +141,7 @@ export const NavigationDrawerContent: React.FC<NavigationDrawerContentProps> = (
                 </div>
                 <div className="truncate">
                   <div className="text-sm font-semibold text-neutral-200 group-hover:text-amber-300 truncate">
-                    Encarte Semanal
+                    Semanal
                   </div>
                   <div className="text-[11px] text-neutral-400 truncate">
                     Modelo permanente • 20 produtos (4×5)
@@ -153,37 +153,7 @@ export const NavigationDrawerContent: React.FC<NavigationDrawerContentProps> = (
               </span>
             </button>
 
-            {/* Encarte de Coleções */}
-            <button
-              type="button"
-              onClick={() => {
-                if (onNavigateToColecoes) {
-                  handleItemClick(onNavigateToColecoes);
-                } else {
-                  window.location.href = "/colecoes";
-                }
-              }}
-              className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-neutral-800/60 text-neutral-200 border border-transparent hover:border-purple-500/40 text-left transition-all group cursor-pointer"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                  <LayoutGrid className="w-4 h-4" />
-                </div>
-                <div className="truncate">
-                  <div className="text-sm font-semibold text-neutral-200 group-hover:text-purple-300 truncate">
-                    Encarte de Coleções
-                  </div>
-                  <div className="text-[11px] text-neutral-400 truncate">
-                    Linhas temáticas com variações e sobreposição
-                  </div>
-                </div>
-              </div>
-              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
-                9:16
-              </span>
-            </button>
-
-            {/* Painel de Validade */}
+            {/* Painel de Acompanhamento */}
             <button
               type="button"
               onClick={() => handleItemClick(onNavigateToValidade)}
@@ -195,7 +165,7 @@ export const NavigationDrawerContent: React.FC<NavigationDrawerContentProps> = (
                 </div>
                 <div className="truncate">
                   <div className="text-sm font-semibold text-neutral-200 group-hover:text-white truncate">
-                    Painel de Validade
+                    Acompanhamento
                   </div>
                   <div className="text-[11px] text-neutral-400 truncate">
                     Giro e risco de lotes (Rotina 8230)

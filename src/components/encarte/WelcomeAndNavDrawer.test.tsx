@@ -70,9 +70,11 @@ describe("UI/UX Redesign: WelcomeHubModal & NavigationDrawer (Estilo Apple)", ()
     expect(html).toContain("Cescom Distribuidor");
 
     // Seção de fluxos
-    expect(html).toContain("Gerador de Encartes");
-    expect(html).toContain("Painel de Validade");
+    expect(html).toContain("Validade");
+    expect(html).toContain("Semanal");
+    expect(html).toContain("Acompanhamento");
     expect(html).toContain("Rotina 8230");
+    expect(html).not.toContain("Coleções");
     expect(html).toContain("Tela de Boas-Vindas");
 
     // Seção de configurações e administração

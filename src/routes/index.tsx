@@ -1752,14 +1752,14 @@ function EncarteApp() {
               </div>
             </button>
 
-            {/* Segmented Control Minimalista (Estilo Apple): Fluxos do Sistema */}
+            {/* Segmented Control Unificado (Validade, Semanal, Acompanhamento) */}
             <nav className="flex items-center bg-neutral-900 border border-neutral-800 p-0.5 rounded-xl ml-1 sm:ml-3">
               <span
                 className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-[#6B1124] to-[#C91E2A] text-white shadow-2xs flex items-center gap-1.5 cursor-default"
-                title="Você está no Gerador de Encartes"
+                title="Você está no Encarte de Validade"
               >
                 <LayoutGrid className="w-3.5 h-3.5 text-red-200" />
-                <span className="hidden md:inline">Encartes</span>
+                <span>Validade</span>
               </span>
 
               <button
@@ -1769,28 +1769,17 @@ function EncarteApp() {
                 title="Ir para o Encarte Semanal (Ofertas da Semana 4x5)"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden lg:inline">Semanal</span>
+                <span>Semanal</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => navigate({ to: "/painel-validade" as never })}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:text-white hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
-                title="Ir para o Painel de Validade (Rotina 8230)"
+                title="Ir para o Painel de Acompanhamento (Rotina 8230)"
               >
                 <CalendarClock className="w-3.5 h-3.5 text-blue-400" />
-                <span className="hidden md:inline">Validade (Rotina 8230)</span>
-                <span className="md:hidden">Validade</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigate({ to: "/colecoes" as never })}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:text-purple-300 hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
-                title="Ir para o Encarte de Coleções 9:16"
-              >
-                <Layers className="w-3.5 h-3.5 text-purple-400" />
-                <span className="hidden xl:inline">Coleções</span>
+                <span>Acompanhamento</span>
               </button>
             </nav>
           </div>

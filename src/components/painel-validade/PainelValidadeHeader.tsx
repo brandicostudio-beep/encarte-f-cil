@@ -89,7 +89,7 @@ export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white uppercase">
-                Painel de Validade
+                Painel de Acompanhamento
               </h1>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase tracking-wider">
                 <ShieldCheck className="h-3.5 w-3.5" />
@@ -99,18 +99,28 @@ export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
                 Rotina 8230
               </span>
 
-              {/* Segmented Control: Dois Fluxos */}
-              <nav className="hidden md:flex items-center bg-neutral-950 border border-neutral-800 p-0.5 rounded-xl ml-2">
+              {/* Segmented Control: Validade, Semanal, Acompanhamento */}
+              <nav className="hidden md:flex items-center bg-neutral-950 border border-neutral-800 p-0.5 rounded-xl ml-2 text-xs">
                 <button
                   type="button"
                   onClick={handleBack}
-                  className="px-2.5 py-1 rounded-lg text-xs font-semibold text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all cursor-pointer"
-                  title="Ir para o Gerador de Encartes"
+                  className="px-2.5 py-1 rounded-lg font-semibold text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all cursor-pointer"
+                  title="Ir para o Encarte de Validade"
                 >
-                  🎨 Encartes
+                  Validade
                 </button>
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-gradient-to-r from-[#6B1124] to-[#C91E2A] text-white shadow-2xs cursor-default">
-                  📦 Validade (8230)
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== "undefined") window.location.href = "/encarte-semanal";
+                  }}
+                  className="px-2.5 py-1 rounded-lg font-semibold text-neutral-400 hover:text-amber-300 hover:bg-neutral-800 transition-all cursor-pointer"
+                  title="Ir para o Encarte Semanal"
+                >
+                  ✨ Semanal
+                </button>
+                <span className="px-2.5 py-1 rounded-lg font-bold bg-gradient-to-r from-[#6B1124] to-[#C91E2A] text-white shadow-2xs cursor-default">
+                  Acompanhamento
                 </span>
               </nav>
             </div>

@@ -242,16 +242,6 @@ export const WelcomeHubModal: React.FC<WelcomeHubModalProps> = ({
                 <Sparkles className="w-3.5 h-3.5 mr-1.5" />
                 Acessar Encarte Semanal
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  window.location.href = "/colecoes";
-                }}
-                className="w-full sm:w-auto bg-neutral-900 border-neutral-700 text-neutral-300 hover:text-white text-xs h-9"
-              >
-                Coleções 9:16
-              </Button>
             </div>
           </div>
         </div>

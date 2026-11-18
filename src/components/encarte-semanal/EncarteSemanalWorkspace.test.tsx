@@ -22,10 +22,12 @@ describe("EncarteSemanalWorkspace: Navegação e Desbloqueio de Abas", () => {
     // 2. Botão Menu Drawer lateral com data-testid
     expect(html).toContain('data-testid="btn-semanal-menu-drawer"');
 
-    // 3. Segmented control com os fluxos do sistema (Encartes, Semanal, Validade, Coleções)
+    // 3. Segmented control unificado com os 3 fluxos do sistema (Validade, Semanal, Acompanhamento)
     expect(html).toContain("Validade");
-    expect(html).toContain("Coleções");
     expect(html).toContain("Semanal");
+    expect(html).toContain("Acompanhamento");
+    // O módulo Coleções foi excluído conforme solicitado pelo usuário
+    expect(html).not.toContain("Coleções");
   });
 
   it("renderiza a aba de preview com o modelo de fundo e 20 boxes interativos estilo Canva/Figma mesmo sem produtos", () => {
