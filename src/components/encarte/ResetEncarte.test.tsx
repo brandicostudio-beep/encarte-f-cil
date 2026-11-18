@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import React from "react";
+import { readFileSync } from "node:fs";
+import * as LucideIcons from "lucide-react";
 import { renderToString } from "react-dom/server";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { EditorStepper } from "./EditorStepper";
 import { SourceSelector } from "./SourceSelector";
 import { DEFAULT_CAMPAIGN } from "@/types/encarte";
@@ -96,8 +100,6 @@ describe("Novo Encarte e Zerar Dados (ResetEncarte)", () => {
   });
 
   it("Componentes Checkbox e Label renderizam sem erros de referência na etapa de campanha", () => {
-    const { Checkbox } = require("@/components/ui/checkbox");
-    const { Label } = require("@/components/ui/label");
 
     expect(() => {
       renderToString(
@@ -117,9 +119,7 @@ describe("Novo Encarte e Zerar Dados (ResetEncarte)", () => {
     }).not.toThrow();
   });
   it("Todos os ícones e elementos JSX da rota index estão devidamente importados sem ReferenceError", () => {
-    const fs = require("fs");
-    const LucideIcons = require("lucide-react");
-    const code = fs.readFileSync("src/routes/index.tsx", "utf-8");
+    const code = readFileSync("src/routes/index.tsx", "utf-8");
 
     const tags = new Set([...code.matchAll(/<([A-Z][A-Za-z0-9_]*)/g)].map((m: any) => m[1]));
     const imported = new Set();
@@ -134,7 +134,7 @@ describe("Novo Encarte e Zerar Dados (ResetEncarte)", () => {
 
     const missingIcons: string[] = [];
     for (const tag of tags) {
-      if (LucideIcons[tag] && !imported.has(tag)) {
+      if (Object.hasOwn(LucideIcons, tag) && !imported.has(tag)) {
         const isLocal = new RegExp(`(?:const|function|class)\\s+${tag}\\b`).test(code);
         if (!isLocal) {
           missingIcons.push(tag);

@@ -442,6 +442,11 @@ export const PdfPriceContent: React.FC<PdfPriceContentProps> = ({
   );
 };
 
+export interface PdfPriceModalProps extends PdfPriceContentProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
 export const PdfPriceModal: React.FC<PdfPriceModalProps> = ({
   open,
   onOpenChange,

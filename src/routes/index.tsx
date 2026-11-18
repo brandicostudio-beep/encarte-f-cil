@@ -137,6 +137,10 @@ export const Route = createFileRoute("/")({
         content:
           "Do zero ao encarte digital para WhatsApp e redes sociais (Story 9:16), com validação de preços, códigos e validades.",
       },
+      { property: "og:title", content: "Gerador de Encartes de Varejo - Story 9:16 Digital" },
+      { property: "og:description", content: "Crie encartes digitais com preços, códigos e validades." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: EncarteApp,
@@ -181,7 +185,7 @@ function EncarteApp() {
   const handleLogout = () => {
     // Encerra a sessão sem apagar os produtos e configurações salvas do encarte
     clearClientSession();
-    navigate({ to: "/acesso" });
+    navigate({ to: "/acesso", search: { redirect: undefined } });
   };
 
   // FLUXO DE ETAPAS (Origem, Dados, Preços, Campanha, Exportar)
@@ -954,7 +958,19 @@ function EncarteApp() {
       // Se não encontrou produtos como categoria, tenta como página de produto individual
       const prodRes = await extractProduct({ data: { url } });
       if (prodRes.ok && prodRes.product) {
-        return { ok: true, products: [prodRes.product] };
+        return {
+          ok: true,
+          products: [{
+            ...prodRes.product,
+            id: crypto.randomUUID(),
+            code: "",
+            validity: "",
+            stock: "",
+            unit: "UND",
+            badge: "nenhum" as const,
+            included: true,
+          }],
+        };
       }
       return {
         ok: false,

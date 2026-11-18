@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Use Vitest imports and ES module imports in application tests; Bun-only imports and CommonJS require do not resolve TypeScript components in the configured test runner.

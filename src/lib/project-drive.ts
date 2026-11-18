@@ -329,11 +329,12 @@ export async function reconcileDriveIndexWithSubfolders(
               (f.name.endsWith(".json") || f.mimeType === "application/json")
           );
 
-          if (jsonFiles.length > 0) {
-            discoveredFileId = jsonFiles[0].id;
+          if (typeof jsonFiles[0]?.id === "string") {
+            const fileId: string = jsonFiles[0].id;
+            discoveredFileId = fileId;
             try {
               const mediaRes = await fetchFn(
-                `${config.baseUrl}/files/${encodeURIComponent(discoveredFileId)}?alt=media&supportsAllDrives=true`,
+                `${config.baseUrl}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
                 { headers: config.headers }
               );
               if (mediaRes.ok) {
@@ -452,10 +453,11 @@ export async function readDriveIndex(
     let indexFileId: string | undefined;
 
     if (Array.isArray(data.files) && data.files.length > 0 && data.files[0]?.id) {
-      indexFileId = data.files[0].id;
+      const fileId: string = data.files[0].id;
+      indexFileId = fileId;
       try {
         const mediaRes = await fetchFn(
-          `${config.baseUrl}/files/${encodeURIComponent(indexFileId)}?alt=media&supportsAllDrives=true`,
+          `${config.baseUrl}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
           { headers: config.headers }
         );
         if (mediaRes.ok) {
