@@ -183,6 +183,24 @@ export async function parseEncarteSemanalSpreadsheet(
       return;
     }
 
+    // Validação 1.1: Ignorar linha de cabeçalho duplicada (ex: linha onde código é "Codprod", "Código", etc.)
+    const lowerCode = code.toLowerCase().trim();
+    const isHeaderRow =
+      lowerCode === "codprod" ||
+      lowerCode === "codigo" ||
+      lowerCode === "código" ||
+      lowerCode === "cod" ||
+      lowerCode === "cód" ||
+      lowerCode === "sku" ||
+      lowerCode === "id" ||
+      lowerCode === "referencia" ||
+      lowerCode === "ref";
+
+    if (isHeaderRow) {
+      // Ignora silenciosamente a linha de cabeçalho
+      return;
+    }
+
     // Validação 2: Código duplicado
     if (seenCodes.has(code.toLowerCase())) {
       warnings.push(

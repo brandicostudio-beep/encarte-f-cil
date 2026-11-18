@@ -49,6 +49,38 @@ describe("EncarteSemanalWorkspace: Navegação e Desbloqueio de Abas", () => {
     // E deve renderizar o canvas com o modelo de fundo e o rodapé
     expect(html).toContain('alt="Modelo Encarte Semanal"');
     expect(html).toContain('data-testid="semanal-rendered-footer"');
+    // Não deve conter a máscara artificial #330409 que descoloria o primeiro quadro
+    expect(html).not.toContain('backgroundColor: "#330409"');
+    expect(html).not.toContain('background-color:#330409');
+    expect(html).toContain('Clique para editar o rodapé');
+  });
+
+  it("renderiza célula do Encarte Semanal com barra bege em zIndex 20 na frente da foto", async () => {
+    const { EncarteSemanalCell } = await import("./EncarteSemanalCell");
+    const { DEFAULT_ENCARTE_SEMANAL_GRID } = await import("@/types/encarte-semanal");
+    const { calculateEncarteSemanalGridCells } = await import("@/lib/encarte-semanal-layout");
+
+    const cells = calculateEncarteSemanalGridCells(DEFAULT_ENCARTE_SEMANAL_GRID);
+    const mockProduct = {
+      id: "prod-1",
+      code: "2110",
+      description: "ALVEJANTE Q BOA FLORAL - 12X1 LT",
+      image: "https://example.com/qboa.png",
+    };
+
+    const html = renderToString(
+      <EncarteSemanalCell
+        product={mockProduct}
+        cell={cells[0]}
+        interactive={true}
+        isSelected={false}
+      />
+    );
+
+    // Barra bege deve estar com zIndex: 20
+    expect(html).toContain("z-index:20");
+    expect(html).toContain("2110");
+    expect(html).toContain("ALVEJANTE Q BOA FLORAL - 12X1 LT");
   });
 
   it("busca produtos com predição de texto por código ou descrição", async () => {

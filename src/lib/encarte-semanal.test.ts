@@ -371,4 +371,29 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     expect(result.updatedProducts[0].image).toContain("23396");
     expect(result.updatedProducts[1].image).toContain("19559");
   });
+
+  // =========================================================================
+  // Teste 11: Ignora linha de cabeçalho 'Codprod' / 'PRODUTO' e não cria produto fantasma
+  // =========================================================================
+  it("Teste 11: Ignora linha de cabeçalho 'Codprod' / 'PRODUTO' sem criar produto fantasma", async () => {
+    const rows = [
+      ["Codprod", "PRODUTO"], // Cabeçalho principal
+      ["Codprod", "PRODUTO"], // Linha de cabeçalho duplicada no meio/início dos dados
+      ["2110", "ALVEJANTE Q BOA FLORAL - 12X1 LT"],
+      ["18689", "DESENGORDURANTE Q BOA COZINHA"],
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Dados");
+    const buffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+
+    const result = await parseEncarteSemanalSpreadsheet(buffer, "teste_cabecalho.xlsx");
+    expect(result.success).toBe(true);
+    // Deve conter exatamente 2 produtos reais, ignorando "Codprod"
+    expect(result.products.length).toBe(2);
+    expect(result.products[0].code).toBe("2110");
+    expect(result.products[0].description).toBe("ALVEJANTE Q BOA FLORAL - 12X1 LT");
+    expect(result.products[1].code).toBe("18689");
+  });
 });

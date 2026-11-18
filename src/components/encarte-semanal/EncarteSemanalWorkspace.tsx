@@ -92,6 +92,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
+  const [isEditingFooter, setIsEditingFooter] = useState<boolean>(false);
 
   // Modais
   const [sourceModalOpen, setSourceModalOpen] = useState<boolean>(false);
@@ -940,20 +941,6 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                   className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
                 />
 
-                {/* MÁSCARA DE COBERTURA: Célula 1 (0, 0)
-                    Cobre o texto "FOTO" da arte original para não vazar */}
-                <div
-                  className="absolute pointer-events-none"
-                  style={{
-                    left: `${gridCells[0]?.x || 29}px`,
-                    top: `${gridCells[0]?.y || 475}px`,
-                    width: `${gridCells[0]?.width || 257}px`,
-                    height: `${gridCells[0]?.photoAreaHeight || 221}px`,
-                    backgroundColor: "#330409",
-                    zIndex: 1,
-                  }}
-                />
-
                 {/* Células dos Produtos da Grade (20 boxes interativos estilo Canva/Figma) */}
                 {gridCells.map((cell, idx) => {
                   const product = getProductAtSlot(idx);
@@ -996,23 +983,63 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                   );
                 })}
 
-                {/* MÁSCARA DO RODAPÉ: Cobre o texto de guia ("TEXTO EDITÁVEL" e seta vermelha)
-                    e renderiza as datas da oferta de forma limpa e nítida */}
+                {/* RODAPÉ EDITÁVEL NA ARTE: Cobre as guias ("TEXTO EDITÁVEL") e permite edição direta estilo Canva/Figma */}
                 <div
-                  className="absolute bottom-0 left-0 right-0 pointer-events-none flex items-center justify-center px-8"
+                  className={`absolute bottom-0 left-0 right-0 flex items-center justify-center px-6 transition-all group ${
+                    isEditingFooter
+                      ? "ring-2 ring-amber-400 bg-black/95 z-40"
+                      : "hover:ring-1 hover:ring-amber-400/80 cursor-pointer bg-[#0a0204] z-20"
+                  }`}
                   style={{
                     height: "65px",
-                    backgroundColor: "#0a0204",
-                    zIndex: 20,
                   }}
+                  onClick={() => setIsEditingFooter(true)}
+                  title="Clique para editar as datas da oferta no rodapé"
                 >
-                  <div
-                    className="text-center text-white font-black text-[12px] leading-tight tracking-wide drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] whitespace-pre-line uppercase"
-                    data-testid="semanal-rendered-footer"
-                  >
-                    {footerText ||
-                      "OFERTA VÁLIDA DO DIA 16/11 AO DIA 21/11 OU ENQUANTO DURAREM OS ESTOQUES PROMOCIONAIS."}
-                  </div>
+                  {isEditingFooter ? (
+                    <div
+                      className="w-full flex items-center gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="text"
+                        autoFocus
+                        value={footerText}
+                        onChange={(e) => handleFooterTextChange(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === "Escape") {
+                            setIsEditingFooter(false);
+                          }
+                        }}
+                        onBlur={() => setIsEditingFooter(false)}
+                        placeholder="Ex: OFERTA VÁLIDA DO DIA 16/11 AO DIA 21/11 OU ENQUANTO DURAREM OS ESTOQUES."
+                        className="w-full bg-neutral-900 border border-amber-400 rounded px-3 py-1.5 text-center text-white font-black text-[12px] uppercase tracking-wide focus:outline-none focus:ring-1 focus:ring-amber-300"
+                        data-testid="input-semanal-footer-canvas"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingFooter(false)}
+                        className="bg-amber-500 hover:bg-amber-600 text-neutral-950 font-black text-[10px] px-2.5 py-1 rounded shadow-sm shrink-0 uppercase cursor-pointer"
+                      >
+                        OK
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative w-full flex items-center justify-center">
+                      <div
+                        className="text-center text-white font-black text-[12px] leading-tight tracking-wide drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] whitespace-pre-line uppercase select-none group-hover:text-amber-200 transition-colors"
+                        data-testid="semanal-rendered-footer"
+                      >
+                        {footerText ||
+                          "OFERTA VÁLIDA DO DIA 16/11 AO DIA 21/11 OU ENQUANTO DURAREM OS ESTOQUES PROMOCIONAIS."}
+                      </div>
+                      {/* Badge flutuante de edição em hover */}
+                      <span className="absolute -top-7 bg-neutral-900 text-amber-300 border border-amber-500/40 text-[10px] font-bold px-2 py-0.5 rounded shadow opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none flex items-center gap-1">
+                        <Edit2 className="h-3 w-3" />
+                        Clique para editar o rodapé
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

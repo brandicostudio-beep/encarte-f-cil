@@ -96,15 +96,18 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
     );
   }
 
-  // Escala: se for > 10 trata como porcentagem (ex: 115 => 1.15)
-  const rawScale = product.scale ?? 1.15;
+  // Escala: padrão 1.0 (se for > 10 trata como porcentagem, ex: 100 => 1.0)
+  const rawScale = product.scale ?? 1.0;
   const scale = rawScale > 10 ? rawScale / 100 : rawScale;
   const offsetX = product.offsetX ?? 0;
   const offsetY = product.offsetY ?? 0;
-  const overlapY = product.overlapY ?? 15;
+  const overlapY = product.overlapY ?? 0;
 
-  const imgW = width * scale;
-  const imgH = (photoAreaHeight + overlapY) * scale;
+  // Dimensões proporcionais da foto contidas confortavelmente na área de foto
+  const baseW = width * 0.92;
+  const baseH = photoAreaHeight * 0.94;
+  const imgW = baseW * scale;
+  const imgH = baseH * scale;
 
   return (
     <div
@@ -155,9 +158,9 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
         </button>
       )}
 
-      {/* Área da foto (com overflow visível para sobreposição avançada) */}
+      {/* Área da foto (zIndex: 10, com contenção para não vazar nas linhas acima/abaixo) */}
       <div
-        className="absolute left-0 right-0 top-0 overflow-visible"
+        className="absolute left-0 right-0 top-0 overflow-hidden flex items-center justify-center"
         style={{ height: `${photoAreaHeight}px`, zIndex: 10 }}
       >
         {product.image ? (
@@ -165,12 +168,12 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
             src={product.image}
             alt={product.description}
             draggable={false}
-            className="pointer-events-none absolute object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.65)]"
+            className="pointer-events-none absolute object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.65)]"
             style={{
               width: `${imgW}px`,
               height: `${imgH}px`,
               left: `${(width - imgW) / 2 + offsetX}px`,
-              top: `${(photoAreaHeight - imgH) / 2 + offsetY + overlapY / 2}px`,
+              top: `${(photoAreaHeight - imgH) / 2 + offsetY + overlapY}px`,
             }}
           />
         ) : (
@@ -186,10 +189,10 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
         )}
       </div>
 
-      {/* Barra Inferior Bege (#F6E0A6) com COD e DESCRIÇÃO */}
+      {/* Barra Inferior Bege (#F6E0A6) com COD e DESCRIÇÃO: zIndex: 20 (SEMPRE EM FRENTE, SEM SOBREPOSIÇÃO) */}
       <div
         className="absolute bottom-0 left-0 right-0 flex flex-col items-center justify-end"
-        style={{ zIndex: 5 }}
+        style={{ zIndex: 20 }}
       >
         {product.limit && (
           <div

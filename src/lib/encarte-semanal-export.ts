@@ -124,15 +124,8 @@ export async function renderEncarteSemanalPageToCanvas(
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
   }
 
-  // 2. COBRIR TEXTOS DE GUIA DA ARTE
-  // Na célula 1 (col 0, row 0), a arte modelo possui o texto "FOTO".
-  // Cobrimos essa área com um patch da cor bordô de fundo para garantir que não apareça.
+  // 2. CALCULAR CÉLULAS DA GRADE
   const cells = calculateEncarteSemanalGridCells(gridConfig);
-  if (cells.length > 0) {
-    const cell0 = cells[0];
-    ctx.fillStyle = "#330409";
-    ctx.fillRect(cell0.x + 2, cell0.y + 2, cell0.width - 4, cell0.photoAreaHeight - 4);
-  }
 
   // 3. RENDERIZAR CADA CÉLULA (FOTO + BARRA COM COD E DESCRIÇÃO)
   for (let i = 0; i < cells.length; i++) {
