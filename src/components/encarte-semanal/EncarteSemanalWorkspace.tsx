@@ -164,15 +164,27 @@ export const EncarteSemanalWorkspace: React.FC = () => {
 
   // Abrir encarte salvo previamente na pasta do computador
   const handleOpenFromComputer = async () => {
+    const isIframe = typeof window !== "undefined" && window.self !== window.top;
+    if (isIframe) {
+      openProjectFileInputRef.current?.click();
+      return;
+    }
+
     try {
       const result = await openEncarteSemanalFromComputer();
       if (result.ok && result.project) {
         applyLoadedProject(result.project, result.fileHandle);
-      } else if (!result.ok && result.error && result.error.includes("não suporta")) {
-        // Fallback para navegadores sem showOpenFilePicker
-        openProjectFileInputRef.current?.click();
-      } else if (result.error && !result.error.includes("cancelad")) {
-        alert(result.error);
+      } else if (!result.ok) {
+        if (
+          result.error &&
+          (result.error.includes("não suporta") ||
+            result.error.includes("sub frame") ||
+            result.error.includes("Cross origin"))
+        ) {
+          openProjectFileInputRef.current?.click();
+        } else if (result.error && !result.error.includes("cancelad")) {
+          alert(result.error);
+        }
       }
     } catch {
       openProjectFileInputRef.current?.click();

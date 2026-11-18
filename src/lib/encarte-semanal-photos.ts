@@ -12,7 +12,9 @@ import {
   type LoadedPhoto,
 } from "./photo-bank";
 import { getCachedPhoto } from "./drive-cache";
-import { getActiveSnapshot } from "./painel-validade-storage";
+import { getActiveSnapshot, getActiveEncartePhotoMap } from "./painel-validade-storage";
+import { resolverFotoProduto } from "./painel-validade-analytics";
+import { getThumbnailFallbackUrl } from "./parse-product";
 
 /**
  * Associa as fotos carregadas aos produtos do Encarte Semanal.
@@ -73,27 +75,35 @@ export function matchPhotosWithSemanalProducts(
 }
 
 /**
- * Tenta encontrar automaticamente uma foto para o código no cache local,
- * no snapshot ativo da Rotina 8230 ou nos projetos salvos.
+ * Tenta encontrar automaticamente uma foto para o código usando
+ * O MESMO SISTEMA DE RESOLUÇÃO DO ACOMPANHAMENTO DE VALIDADE INTERNO:
+ * 1. resolverFotoProduto (com mapa de fotos do último encarte/editor)
+ * 2. Cache local do Google Drive / Nuvem
+ * 3. Snapshot ativo da Rotina 8230 (lote.foto)
+ * 4. Fallback Cescom AgileCDN (https://cescom.agilecdn.com.br/{code}_thumb_1.jpg)
  */
 export function findKnownPhotoForCode(code: string): string | undefined {
   if (!code) return undefined;
-  const cleanCode = code.trim().toLowerCase();
+  const cleanCode = code.trim();
 
-  // 1. Tentar cache do Drive
+  // 1. Usar a mesma resolução do Acompanhamento de Validade Interno
   try {
-    const cached = getCachedPhoto(cleanCode);
-    if (cached && cached.dataUrl) return cached.dataUrl;
-  } catch {
-    /* ignore */
+    const encarteMap = getActiveEncartePhotoMap();
+    const resolved = resolverFotoProduto(cleanCode, undefined, encarteMap);
+    if (resolved && resolved.trim()) {
+      return resolved.trim();
+    }
+  } catch (err) {
+    console.warn("Aviso ao resolver foto pelo painel de validade:", err);
   }
 
-  // 2. Tentar snapshot do painel de validade
+  // 2. Tentar snapshot do painel de validade (Rotina 8230)
   try {
     const snapshot = getActiveSnapshot();
     if (snapshot && snapshot.lotes) {
+      const cleanLower = cleanCode.toLowerCase();
       const found = snapshot.lotes.find(
-        (l) => l.codprod && l.codprod.trim().toLowerCase() === cleanCode
+        (l) => l.codprod && l.codprod.trim().toLowerCase() === cleanLower
       );
       if (found && found.foto) return found.foto;
     }
@@ -101,7 +111,52 @@ export function findKnownPhotoForCode(code: string): string | undefined {
     /* ignore */
   }
 
+  // 3. Fallback do cache do Drive direto
+  try {
+    const cached = getCachedPhoto(cleanCode);
+    if (cached && cached.dataUrl) return cached.dataUrl;
+  } catch {
+    /* ignore */
+  }
+
+  // 4. Fallback direto do AgileCDN Cescom
+  try {
+    const cdnUrl = getThumbnailFallbackUrl(cleanCode);
+    if (cdnUrl) return cdnUrl;
+  } catch {}
+
   return undefined;
+}
+
+/**
+ * Puxa automaticamente as fotos para todos os produtos que ainda não possuem foto,
+ * utilizando o mesmo sistema do acompanhamento de validade.
+ */
+export function autoResolvePhotosForSemanalProducts(products: EncarteSemanalProduct[]): {
+  updatedProducts: EncarteSemanalProduct[];
+  resolvedCount: number;
+} {
+  let resolvedCount = 0;
+  const updatedProducts = products.map((prod) => {
+    if (prod.image && prod.image.trim()) {
+      return prod;
+    }
+
+    const photo = findKnownPhotoForCode(prod.code);
+    if (photo && photo.trim()) {
+      resolvedCount++;
+      return {
+        ...prod,
+        image: photo.trim(),
+      };
+    }
+    return prod;
+  });
+
+  return {
+    updatedProducts,
+    resolvedCount,
+  };
 }
 
 export { processPhotoBankUpload };

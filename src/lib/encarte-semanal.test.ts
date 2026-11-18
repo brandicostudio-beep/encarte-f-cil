@@ -345,4 +345,30 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     const fileRes = await readEncarteSemanalFromFile(invalidFile);
     expect(fileRes.ok).toBe(false);
   });
+
+  // =========================================================================
+  // Teste 10: Puxa fotos usando o mesmo sistema do Acompanhamento de Validade
+  // =========================================================================
+  it("Teste 10: Puxa fotos automaticamente usando o mesmo sistema do Acompanhamento de Validade", async () => {
+    const { findKnownPhotoForCode, autoResolvePhotosForSemanalProducts } = await import(
+      "./encarte-semanal-photos"
+    );
+
+    // 1. Código 23396 deve resolver automaticamente via AgileCDN / Validade Interno
+    const photoUrl = findKnownPhotoForCode("23396");
+    expect(photoUrl).toBeDefined();
+    expect(photoUrl).toContain("23396");
+    expect(photoUrl).toContain("cescom.agilecdn.com.br");
+
+    // 2. autoResolvePhotosForSemanalProducts deve resolver em lote
+    const mockProducts: EncarteSemanalProduct[] = [
+      { id: "1", code: "23396", description: "PRODUTO CESCOM AGILE" },
+      { id: "2", code: "19559", description: "OUTRO PRODUTO CESCOM" },
+    ];
+
+    const result = autoResolvePhotosForSemanalProducts(mockProducts);
+    expect(result.resolvedCount).toBe(2);
+    expect(result.updatedProducts[0].image).toContain("23396");
+    expect(result.updatedProducts[1].image).toContain("19559");
+  });
 });

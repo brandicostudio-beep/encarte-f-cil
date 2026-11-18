@@ -21,11 +21,14 @@ import {
   Image as ImageIcon,
   Check,
   Loader2,
+  Sparkles,
+  Zap,
 } from "lucide-react";
 import { parseEncarteSemanalSpreadsheet } from "@/lib/encarte-semanal-parser";
 import {
   matchPhotosWithSemanalProducts,
   findKnownPhotoForCode,
+  autoResolvePhotosForSemanalProducts,
 } from "@/lib/encarte-semanal-photos";
 import { processPhotoBankUpload } from "@/lib/photo-bank";
 import {
@@ -59,7 +62,9 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const zipInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
+  // Subir e processar planilha
   const handleSpreadsheetUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -70,15 +75,20 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
       const result = await parseEncarteSemanalSpreadsheet(file);
       setWarnings(result.warnings);
 
-      // Tenta cruzar fotos conhecidas no cache para os produtos importados
-      const initialProducts = result.products.map((p) => {
-        const cachedPhoto = findKnownPhotoForCode(p.code);
-        return cachedPhoto ? { ...p, image: cachedPhoto } : p;
-      });
+      // Puxa fotos automaticamente usando o mesmo sistema do acompanhamento de validade interno
+      const { updatedProducts, resolvedCount } = autoResolvePhotosForSemanalProducts(result.products);
+      setStagedProducts(updatedProducts);
 
-      setStagedProducts(initialProducts);
+      if (resolvedCount > 0) {
+        setPhotoMatchMessage(
+          `✓ ${resolvedCount} foto(s) puxadas automaticamente do Acompanhamento de Validade / Cescom CDN.`
+        );
+      } else {
+        setPhotoMatchMessage(null);
+      }
+
       // Avança para a aba de fotos se houver produtos
-      if (initialProducts.length > 0) {
+      if (updatedProducts.length > 0) {
         setActiveTab("fotos");
       }
     } catch (err: any) {
@@ -88,10 +98,31 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
     }
   };
 
-  // Carregar fotos de pasta local via File System Access
+  // Puxar fotos automaticamente do Acompanhamento de Validade / CDN / Drive
+  const handleAutoPullPhotos = () => {
+    setIsMatchingPhotos(true);
+    try {
+      const { updatedProducts, resolvedCount } = autoResolvePhotosForSemanalProducts(stagedProducts);
+      setStagedProducts(updatedProducts);
+      setPhotoMatchMessage(
+        resolvedCount > 0
+          ? `✓ ${resolvedCount} foto(s) puxadas com sucesso usando o sistema do Acompanhamento de Validade / Cescom CDN.`
+          : "Nenhuma foto nova encontrada no acompanhamento para os produtos pendentes."
+      );
+    } catch (err: any) {
+      setPhotoMatchMessage(`Erro ao puxar fotos: ${err?.message || err}`);
+    } finally {
+      setIsMatchingPhotos(false);
+    }
+  };
+
+  // Carregar fotos de pasta local com fallback seguro para iframes / Lovable preview
   const handleSelectLocalFolder = async () => {
-    if (!isFileSystemAccessSupported()) {
-      alert("Seu navegador não suporta a seleção direta de pastas. Use o envio de ZIP ou imagens.");
+    const isIframe = typeof window !== "undefined" && window.self !== window.top;
+
+    // Se estiver em iframe ou navegador sem suporte nativo a showDirectoryPicker, usa input nativo seguro
+    if (isIframe || !isFileSystemAccessSupported()) {
+      folderInputRef.current?.click();
       return;
     }
 
@@ -129,11 +160,45 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
         `✓ ${matchResult.matchedCount} foto(s) associada(s) aos produtos a partir da pasta local.`
       );
     } catch (err: any) {
-      if (err.name !== "AbortError") {
-        setPhotoMatchMessage(`Erro ao acessar pasta: ${err?.message || err}`);
+      // Se for bloqueio de cross-origin sub frame, usa imediatamente o seletor nativo sem erro
+      if (
+        err.name === "SecurityError" ||
+        String(err).includes("sub frame") ||
+        String(err).includes("Cross origin")
+      ) {
+        folderInputRef.current?.click();
+      } else if (err.name !== "AbortError") {
+        setPhotoMatchMessage(`Aviso ao acessar pasta: ${err?.message || err}`);
       }
     } finally {
       setIsMatchingPhotos(false);
+    }
+  };
+
+  // Processa pasta selecionada via input webkitdirectory
+  const handleFolderInputFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsMatchingPhotos(true);
+    try {
+      const loadedPhotos = await processPhotoBankUpload(files);
+      if (loadedPhotos.length === 0) {
+        setPhotoMatchMessage("Nenhuma foto válida (.png, .jpg, .webp) encontrada na pasta.");
+        setIsMatchingPhotos(false);
+        return;
+      }
+
+      const matchResult = matchPhotosWithSemanalProducts(loadedPhotos, stagedProducts, "folder");
+      setStagedProducts(matchResult.updatedProducts);
+      setPhotoMatchMessage(
+        `✓ ${matchResult.matchedCount} foto(s) associada(s) aos produtos a partir da pasta selecionada.`
+      );
+    } catch (err: any) {
+      setPhotoMatchMessage(`Erro ao processar pasta: ${err?.message || err}`);
+    } finally {
+      setIsMatchingPhotos(false);
+      e.target.value = "";
     }
   };
 
@@ -160,6 +225,7 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
       setPhotoMatchMessage(`Erro ao processar fotos: ${err?.message || err}`);
     } finally {
       setIsMatchingPhotos(false);
+      e.target.value = "";
     }
   };
 
@@ -207,9 +273,36 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
             Carregar Planilha & Fotos do Encarte Semanal
           </DialogTitle>
           <DialogDescription className="text-neutral-400 text-xs">
-            Suba uma planilha (.xlsx ou .csv) contendo os códigos e descrições dos produtos. Em seguida, vincule as fotos da sua pasta local, ZIP ou Google Drive.
+            Suba uma planilha (.xlsx ou .csv) contendo os códigos e descrições dos produtos. As fotos são puxadas automaticamente com a mesma tecnologia do acompanhamento de validade.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Inputs ocultos para arquivos e pastas */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="hidden"
+          onChange={handleSpreadsheetUpload}
+        />
+        <input
+          ref={zipInputRef}
+          type="file"
+          multiple
+          accept=".zip,image/*"
+          className="hidden"
+          onChange={handlePhotoFilesUpload}
+        />
+        <input
+          ref={folderInputRef}
+          type="file"
+          // @ts-ignore
+          webkitdirectory=""
+          directory=""
+          multiple
+          className="hidden"
+          onChange={handleFolderInputFiles}
+        />
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="my-2">
           <TabsList className="bg-neutral-950 border border-neutral-800">
@@ -225,26 +318,19 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
               className="text-xs data-[state=active]:bg-neutral-800 data-[state=active]:text-amber-300"
             >
               <ImageIcon className="h-3.5 w-3.5 mr-1.5" />
-              2. Vincular Fotos ({withPhotoCount}/{stagedProducts.length})
+              2. Fotos ({withPhotoCount}/{stagedProducts.length})
             </TabsTrigger>
           </TabsList>
 
           {/* ABA 1: PLANILHA */}
           <TabsContent value="planilha" className="space-y-4 pt-3">
             <div className="border-2 border-dashed border-neutral-700 hover:border-amber-400/70 rounded-xl p-6 text-center bg-neutral-950/50 transition-colors">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                className="hidden"
-                onChange={handleSpreadsheetUpload}
-              />
               <FileSpreadsheet className="h-10 w-10 text-amber-400 mx-auto mb-2" />
               <p className="text-sm font-bold text-white mb-1">
                 {spreadsheetFileName || "Clique para selecionar a planilha (.xlsx ou .csv)"}
               </p>
               <p className="text-xs text-neutral-400 max-w-md mx-auto mb-3">
-                Identificamos automaticamente as colunas de <strong>código</strong> e <strong>descrição</strong>, independentemente da ordem.
+                Identificamos automaticamente as colunas de <strong>código</strong> e <strong>descrição</strong>. As fotos são vinculadas automaticamente pelo sistema do acompanhamento de validade.
               </p>
               <Button
                 type="button"
@@ -257,12 +343,12 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
                 {isParsing ? (
                   <>
                     <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                    Processando Planilha...
+                    Processando Planilha & Puxando Fotos...
                   </>
                 ) : (
                   <>
                     <Upload className="h-3.5 w-3.5 mr-1.5 text-amber-300" />
-                    Escolher Arquivo da Máquina
+                    Escolher Arquivo (.xlsx / .csv)
                   </>
                 )}
               </Button>
@@ -317,8 +403,46 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
 
           {/* ABA 2: FOTOS */}
           <TabsContent value="fotos" className="space-y-4 pt-3">
+            {/* CARD PRINCIPAL: PUXAR FOTOS COMO NO ACOMPANHAMENTO DE VALIDADE */}
+            <div className="p-4 rounded-xl bg-gradient-to-r from-amber-950/50 via-neutral-950 to-neutral-950 border border-amber-500/40 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold tracking-wider uppercase text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Zap className="h-3 w-3 text-amber-400" />
+                    Automático • Mesmo do Acompanhamento
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-amber-400" />
+                  Puxar Fotos Automaticamente
+                </h4>
+                <p className="text-xs text-neutral-300 leading-relaxed">
+                  Busca instantaneamente as fotos no <strong>Acompanhamento de Validade</strong>, no histórico de encartes, no Google Drive e no catálogo CDN da Cescom.
+                </p>
+              </div>
+              <Button
+                type="button"
+                onClick={handleAutoPullPhotos}
+                disabled={isMatchingPhotos}
+                className="bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-xs h-9 shrink-0 shadow-md"
+              >
+                {isMatchingPhotos ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    Buscando Fotos...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    Puxar Fotos do Acompanhamento
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* FONTES ADICIONAIS: PASTA LOCAL, ZIP E DRIVE */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {/* Opção 1: Pasta Local */}
+              {/* Opção 1: Pasta do Computador (com fallback seguro contra erro de iframe) */}
               <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 flex flex-col justify-between">
                 <div className="space-y-2">
                   <FolderOpen className="h-6 w-6 text-amber-400" />
@@ -349,14 +473,6 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
                     Envie um arquivo .zip com todas as imagens ou selecione várias fotos juntas.
                   </p>
                 </div>
-                <input
-                  ref={zipInputRef}
-                  type="file"
-                  multiple
-                  accept=".zip,image/*"
-                  className="hidden"
-                  onChange={handlePhotoFilesUpload}
-                />
                 <Button
                   type="button"
                   size="sm"
