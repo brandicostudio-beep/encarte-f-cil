@@ -83,10 +83,10 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
   // Estado para exclusão definitiva
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<ProjectIndexItem | null>(null);
 
-  const loadProjects = async () => {
+  const loadProjects = async (force = false) => {
     setIsLoading(true);
     try {
-      const res = await listAllProjectsUnified(tab === "trash");
+      const res = await listAllProjectsUnified(tab === "trash", force);
       setProjects(res.items);
       setDriveConnected(res.driveConnected);
     } finally {
@@ -96,7 +96,7 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
 
   useEffect(() => {
     if (open) {
-      loadProjects();
+      loadProjects(true);
     }
   }, [open, tab]);
 
@@ -202,7 +202,7 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
                   <Folder className="w-6 h-6 text-red-600" />
                   Meus Projetos de Encarte
                 </DialogTitle>
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
                   {driveConnected ? (
                     <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 text-[11px] gap-1">
                       <Cloud className="w-3 h-3 text-emerald-600" />
@@ -213,6 +213,20 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
                       <HardDrive className="w-3 h-3 text-amber-600" />
                       Salvo Localmente (IndexedDB)
                     </Badge>
+                  )}
+                  {driveConnected && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => loadProjects(true)}
+                      disabled={isLoading}
+                      className="h-6 px-2 text-[11px] gap-1 text-neutral-600 hover:text-neutral-900 border border-neutral-300/60 rounded-md"
+                      title="Sincronizar novamente com o Google Drive"
+                    >
+                      <RefreshCw className={`w-3 h-3 text-neutral-500 ${isLoading ? "animate-spin" : ""}`} />
+                      Sincronizar
+                    </Button>
                   )}
                   <span className="text-xs text-neutral-500">
                     {projects.length} {projects.length === 1 ? "projeto" : "projetos"}

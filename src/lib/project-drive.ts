@@ -63,16 +63,35 @@ export async function getOrCreateRootFolder(
   }
 
   try {
-    // 1. Procurar pasta existente com esse nome
+    // 1. Procurar pastas existentes com esse nome
     const q = `name = '${ROOT_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
     const searchUrl = `${config.baseUrl}/files?q=${encodeURIComponent(
       q
-    )}&fields=files(id,name)&pageSize=1&supportsAllDrives=true`;
+    )}&fields=files(id,name,modifiedTime)&pageSize=10&supportsAllDrives=true`;
 
     const searchRes = await fetchFn(searchUrl, { headers: config.headers });
     if (searchRes.ok) {
       const data = await searchRes.json();
-      if (Array.isArray(data.files) && data.files.length > 0 && data.files[0]?.id) {
+      if (Array.isArray(data.files) && data.files.length > 0) {
+        if (data.files.length === 1 && data.files[0]?.id) {
+          return { ok: true, folderId: data.files[0].id };
+        }
+        // Se houver mais de uma pasta com o mesmo nome, seleciona a que possui subpastas ou a mais recente
+        for (const f of data.files) {
+          try {
+            const childQ = `'${f.id}' in parents and trashed = false`;
+            const childUrl = `${config.baseUrl}/files?q=${encodeURIComponent(
+              childQ
+            )}&pageSize=1&fields=files(id)&supportsAllDrives=true`;
+            const childRes = await fetchFn(childUrl, { headers: config.headers });
+            if (childRes.ok) {
+              const childData = await childRes.json();
+              if (Array.isArray(childData.files) && childData.files.length > 0) {
+                return { ok: true, folderId: f.id };
+              }
+            }
+          } catch {}
+        }
         return { ok: true, folderId: data.files[0].id };
       }
     }
@@ -173,26 +192,7 @@ async function uploadJsonFileToDrive(
   if (!config) return { ok: false, error: "Conexão com Drive indisponível." };
 
   try {
-    if (existingFileId) {
-      // Atualizar conteúdo de arquivo existente
-      const patchUrl = `${config.baseUrl}/files/${encodeURIComponent(
-        existingFileId
-      )}?uploadType=media&supportsAllDrives=true`;
-      const res = await fetchFn(patchUrl, {
-        method: "PATCH",
-        headers: {
-          ...config.headers,
-          "Content-Type": "application/json; charset=UTF-8",
-        },
-        body: jsonString,
-      });
-
-      if (res.ok) {
-        return { ok: true, fileId: existingFileId };
-      }
-    }
-
-    // Criar novo arquivo via multipart/related
+    // Criar arquivo via multipart/related
     const boundary = "-------EncarteFacilBoundary" + Date.now();
     const delimiter = "\r\n--" + boundary + "\r\n";
     const closeDelim = "\r\n--" + boundary + "--";
@@ -224,12 +224,199 @@ async function uploadJsonFileToDrive(
 
     if (res.ok) {
       const created = await res.json();
+      // Se havia um arquivo existente anterior, exclui para não deixar duplicata
+      if (existingFileId && existingFileId !== created.id) {
+        try {
+          await fetchFn(
+            `${config.baseUrl}/files/${encodeURIComponent(existingFileId)}?supportsAllDrives=true`,
+            {
+              method: "DELETE",
+              headers: config.headers,
+            }
+          );
+        } catch {}
+      }
       return { ok: true, fileId: created.id };
     }
 
     return { ok: false, error: `Falha ao gravar arquivo "${name}" no Drive.` };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Erro no Drive" };
+  }
+}
+
+/**
+ * Realiza varredura ativa em todas as subpastas da pasta raiz "Encartes Fácil".
+ * Se houver projetos existentes no Drive que não constem no indice.json
+ * (por exemplo, criados em outro computador, por sessões anteriores ou sem atualização de índice),
+ * inspeciona os arquivos .json de cada pasta e recupera os projetos automaticamente.
+ */
+export async function reconcileDriveIndexWithSubfolders(
+  rootFolderId: string,
+  baseIndex: ProjectIndexFile,
+  existingIndexFileId?: string,
+  options: DriveOpOptions = {}
+): Promise<{ ok: boolean; index: ProjectIndexFile; indexFileId?: string }> {
+  const { token, fetchFn = fetch } = options;
+  const config = getDriveRequestConfig(token);
+  if (!config) return { ok: false, index: baseIndex, indexFileId: existingIndexFileId };
+
+  try {
+    // 1. Listar todas as subpastas dentro de "Encartes Fácil"
+    const folderQuery = `'${rootFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+    const folderUrl = `${config.baseUrl}/files?q=${encodeURIComponent(
+      folderQuery
+    )}&fields=files(id,name,createdTime,modifiedTime)&pageSize=100&supportsAllDrives=true`;
+
+    const folderRes = await fetchFn(folderUrl, { headers: config.headers });
+    if (!folderRes.ok) {
+      return { ok: true, index: baseIndex, indexFileId: existingIndexFileId };
+    }
+
+    const folderData = await folderRes.json();
+    const driveFolders: Array<{ id: string; name: string; createdTime?: string; modifiedTime?: string }> =
+      Array.isArray(folderData.files) ? folderData.files : [];
+
+    const existingProjects = [...(baseIndex.projects || [])];
+    let hasChanges = false;
+
+    const projectFolderIdMap = new Set<string>();
+    const projectIdMap = new Set<string>();
+    for (const p of existingProjects) {
+      if (p.driveFolderId) projectFolderIdMap.add(p.driveFolderId);
+      if (p.id) projectIdMap.add(p.id);
+    }
+
+    for (const folder of driveFolders) {
+      const nameMatch = folder.name.match(/^(.*?)\s*\[([a-zA-Z0-9_-]+)\]$/);
+      const extractedName = nameMatch ? nameMatch[1].trim() : folder.name.trim();
+      const extractedId = nameMatch ? nameMatch[2].trim() : undefined;
+
+      // Se já consta no índice, garante apenas atualização de IDs e datas
+      if (projectFolderIdMap.has(folder.id) || (extractedId && projectIdMap.has(extractedId))) {
+        const existing = existingProjects.find(
+          (p) => p.driveFolderId === folder.id || (extractedId && p.id === extractedId)
+        );
+        if (existing) {
+          if (!existing.driveFolderId) {
+            existing.driveFolderId = folder.id;
+            hasChanges = true;
+          }
+          if (folder.modifiedTime && (!existing.updatedAt || new Date(folder.modifiedTime) > new Date(existing.updatedAt))) {
+            existing.updatedAt = folder.modifiedTime;
+            hasChanges = true;
+          }
+        }
+        continue;
+      }
+
+      // PASTA NÃO MAPEADA NO ÍNDICE: descobre os arquivos .json dentro dela
+      let discoveredFileId: string | undefined;
+      let discoveredProjectData: any = null;
+
+      try {
+        const filesQuery = `'${folder.id}' in parents and trashed = false`;
+        const filesUrl = `${config.baseUrl}/files?q=${encodeURIComponent(
+          filesQuery
+        )}&fields=files(id,name,mimeType,modifiedTime,size)&orderBy=name+desc&pageSize=10&supportsAllDrives=true`;
+
+        const filesRes = await fetchFn(filesUrl, { headers: config.headers });
+        if (filesRes.ok) {
+          const filesData = await filesRes.json();
+          const jsonFiles = (filesData.files || []).filter(
+            (f: any) =>
+              typeof f.name === "string" &&
+              (f.name.endsWith(".json") || f.mimeType === "application/json")
+          );
+
+          if (jsonFiles.length > 0) {
+            discoveredFileId = jsonFiles[0].id;
+            try {
+              const mediaRes = await fetchFn(
+                `${config.baseUrl}/files/${encodeURIComponent(discoveredFileId)}?alt=media&supportsAllDrives=true`,
+                { headers: config.headers }
+              );
+              if (mediaRes.ok) {
+                const text = await mediaRes.text();
+                discoveredProjectData = JSON.parse(text);
+              }
+            } catch {}
+          }
+        }
+      } catch {}
+
+      const effectiveId =
+        discoveredProjectData?.id ||
+        extractedId ||
+        `drive_folder_${folder.id}`;
+      const effectiveName =
+        discoveredProjectData?.name ||
+        extractedName ||
+        folder.name;
+      const effectiveVersion =
+        Number(discoveredProjectData?.version) || 1;
+      const effectiveItemCount =
+        Array.isArray(discoveredProjectData?.products)
+          ? discoveredProjectData.products.length
+          : 0;
+      const effectiveCreatedAt =
+        discoveredProjectData?.createdAt ||
+        folder.createdTime ||
+        folder.modifiedTime ||
+        new Date().toISOString();
+      const effectiveUpdatedAt =
+        discoveredProjectData?.updatedAt ||
+        folder.modifiedTime ||
+        folder.createdTime ||
+        new Date().toISOString();
+
+      const newItem: ProjectIndexItem = {
+        id: effectiveId,
+        name: effectiveName,
+        createdAt: effectiveCreatedAt,
+        updatedAt: effectiveUpdatedAt,
+        currentVersion: effectiveVersion,
+        versionCount: (discoveredProjectData?.versionHistory?.length || 0) + 1,
+        itemCount: effectiveItemCount,
+        sourceType: discoveredProjectData?.source?.type || "manual",
+        sourceName: discoveredProjectData?.source?.filename || "Google Drive",
+        syncStatus: "synced",
+        isTrashed: Boolean(discoveredProjectData?.isTrashed),
+        trashedAt: discoveredProjectData?.trashedAt,
+        driveFolderId: folder.id,
+        driveFileId: discoveredFileId,
+      };
+
+      existingProjects.push(newItem);
+      projectFolderIdMap.add(folder.id);
+      projectIdMap.add(effectiveId);
+      hasChanges = true;
+    }
+
+    const updatedIndex: ProjectIndexFile = {
+      ...baseIndex,
+      updatedAt: new Date().toISOString(),
+      projects: existingProjects.sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      ),
+    };
+
+    let savedIndexFileId = existingIndexFileId;
+    if (hasChanges) {
+      try {
+        const writeRes = await writeDriveIndex(rootFolderId, updatedIndex, existingIndexFileId, options);
+        if (writeRes.ok && writeRes.fileId) {
+          savedIndexFileId = writeRes.fileId;
+        }
+      } catch (err) {
+        console.warn("Aviso: Falha ao salvar índice reconciliado no Drive:", err);
+      }
+    }
+
+    return { ok: true, index: updatedIndex, indexFileId: savedIndexFileId };
+  } catch (err) {
+    console.error("Erro na reconciliação de pastas do Drive:", err);
+    return { ok: true, index: baseIndex, indexFileId: existingIndexFileId };
   }
 }
 
@@ -248,7 +435,7 @@ export async function readDriveIndex(
     const q = `'${rootFolderId}' in parents and name = '${INDEX_FILE_NAME}' and trashed = false`;
     const searchUrl = `${config.baseUrl}/files?q=${encodeURIComponent(
       q
-    )}&fields=files(id,name)&pageSize=1&supportsAllDrives=true`;
+    )}&orderBy=modifiedTime+desc&fields=files(id,name,modifiedTime)&pageSize=10&supportsAllDrives=true`;
 
     const searchRes = await fetchFn(searchUrl, { headers: config.headers });
     if (!searchRes.ok) {
@@ -256,27 +443,46 @@ export async function readDriveIndex(
     }
 
     const data = await searchRes.json();
-    if (!Array.isArray(data.files) || data.files.length === 0 || !data.files[0]?.id) {
-      // Índice ainda não existe: retorna estrutura vazia
-      return {
-        ok: true,
-        index: { app: "encartes-facil", version: 1, updatedAt: new Date().toISOString(), projects: [] },
-      };
+    let index: ProjectIndexFile = {
+      app: "encartes-facil",
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      projects: [],
+    };
+    let indexFileId: string | undefined;
+
+    if (Array.isArray(data.files) && data.files.length > 0 && data.files[0]?.id) {
+      indexFileId = data.files[0].id;
+      try {
+        const mediaRes = await fetchFn(
+          `${config.baseUrl}/files/${encodeURIComponent(indexFileId)}?alt=media&supportsAllDrives=true`,
+          { headers: config.headers }
+        );
+        if (mediaRes.ok) {
+          const text = await mediaRes.text();
+          const parsed = JSON.parse(text);
+          if (parsed && Array.isArray(parsed.projects)) {
+            index = parsed;
+          }
+        }
+      } catch (err) {
+        console.warn("Aviso ao ler indice.json existente:", err);
+      }
     }
 
-    const fileId = data.files[0].id;
-    const mediaRes = await fetchFn(
-      `${config.baseUrl}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
-      { headers: config.headers }
+    // Reconciliação automática com todas as subpastas da pasta Encartes Fácil
+    const reconcileRes = await reconcileDriveIndexWithSubfolders(
+      rootFolderId,
+      index,
+      indexFileId,
+      options
     );
 
-    if (!mediaRes.ok) {
-      return { ok: false, error: "Falha ao ler conteúdo de indice.json." };
-    }
-
-    const text = await mediaRes.text();
-    const parsed = JSON.parse(text);
-    return { ok: true, index: parsed, indexFileId: fileId };
+    return {
+      ok: true,
+      index: reconcileRes.index,
+      indexFileId: reconcileRes.indexFileId || indexFileId,
+    };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Erro lendo índice do Drive" };
   }
@@ -479,6 +685,11 @@ export async function loadProjectFromDriveById(
       }
     }
 
+    // Se o targetFolderId não foi informado mas o projectId deriva do folderId
+    if (!targetFolderId && projectId.startsWith("drive_folder_")) {
+      targetFolderId = projectId.replace("drive_folder_", "");
+    }
+
     // 3. Se não temos a pasta do projeto ainda, busca pelo nome no Drive
     if (!targetFolderId) {
       const q = `'${rootRes.folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and name contains '[${projectId.replace(/'/g, "\\'")}]' and trashed = false`;
@@ -499,9 +710,9 @@ export async function loadProjectFromDriveById(
     }
 
     // 4. Buscar os arquivos JSON de versão dentro da pasta do projeto, ordenados pelo nome desc (projeto-v002 antes de v001)
-    const filesQuery = `'${targetFolderId}' in parents and mimeType = 'application/json' and trashed = false`;
+    const filesQuery = `'${targetFolderId}' in parents and trashed = false`;
     const filesRes = await fetchFn(
-      `${config.baseUrl}/files?q=${encodeURIComponent(filesQuery)}&orderBy=name+desc&fields=files(id,name)&pageSize=10&supportsAllDrives=true`,
+      `${config.baseUrl}/files?q=${encodeURIComponent(filesQuery)}&orderBy=name+desc&fields=files(id,name,mimeType)&pageSize=10&supportsAllDrives=true`,
       { headers: config.headers }
     );
 
@@ -511,7 +722,7 @@ export async function loadProjectFromDriveById(
 
     const filesData = await filesRes.json();
     const jsonFiles = (filesData.files || []).filter((f: any) =>
-      typeof f.name === "string" && f.name.endsWith(".json")
+      typeof f.name === "string" && (f.name.endsWith(".json") || f.mimeType === "application/json")
     );
 
     if (jsonFiles.length === 0) {

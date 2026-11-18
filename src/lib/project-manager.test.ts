@@ -37,6 +37,7 @@ import {
   getDriveProjectsIndexFn,
   loadProjectFromDriveByIdFn,
 } from "./project.functions";
+import { reconcileDriveIndexWithSubfolders } from "./project-drive";
 
 // Mock das server functions para teste unitário do cliente
 vi.mock("./project.functions", () => ({
@@ -456,5 +457,81 @@ describe("Sistema de Salvamento de Projetos de Encarte", () => {
     const cachedLocal = await loadProjectLocal(cloudProjectId);
     expect(cachedLocal.ok).toBe(true);
     expect(cachedLocal.project?.id).toBe(cloudProjectId);
+  });
+
+  it("14. Reconciliação do Google Drive: descobre pastas de encartes existentes no Drive que não constavam no indice.json", async () => {
+    // Simula a situação do usuário:
+    // O Drive tem subpastas "Encarte 12_11_2026", "Encarte 17_11_2026", "Encarte Ofertas da Semana [proj_456]"
+    // Mas o indice.json estava vazio ou continha apenas 0 itens!
+    const mockBaseIndex = {
+      app: "encartes-facil",
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      projects: [],
+    };
+
+    const mockFetch = async (url: string, opts: any = {}) => {
+      const urlStr = decodeURIComponent(String(url));
+      // Listagem de pastas filhas de Encartes Fácil
+      if (urlStr.includes("mimeType = 'application/vnd.google-apps.folder'")) {
+        return {
+          ok: true,
+          json: async () => ({
+            files: [
+              { id: "folder_1", name: "Encarte 12_11_2026", createdTime: "2026-11-12T10:00:00Z", modifiedTime: "2026-11-12T11:00:00Z" },
+              { id: "folder_2", name: "Encarte 17_11_2026", createdTime: "2026-11-17T10:00:00Z", modifiedTime: "2026-11-17T11:00:00Z" },
+              { id: "folder_3", name: "Encarte Ofertas da Semana [proj_456]", createdTime: "2026-11-18T10:00:00Z", modifiedTime: "2026-11-18T11:00:00Z" },
+            ],
+          }),
+        };
+      }
+      // Listagem de arquivos dentro da pasta
+      if (urlStr.includes("parents and trashed = false")) {
+        const folderMatch = urlStr.match(/'(folder_\d+)' in parents/);
+        const fId = folderMatch ? folderMatch[1] : "folder_1";
+        return {
+          ok: true,
+          json: async () => ({
+            files: [
+              { id: `file_json_${fId}`, name: "projeto-v001.json", mimeType: "application/json" },
+            ],
+          }),
+        };
+      }
+      // Leitura do arquivo JSON
+      if (urlStr.includes("alt=media")) {
+        const idMatch = urlStr.match(/file_json_(folder_\d+)/);
+        const folderId = idMatch ? idMatch[1] : "folder_3";
+        return {
+          ok: true,
+          text: async () => JSON.stringify({
+            id: folderId === "folder_3" ? "proj_456" : `proj_${folderId}`,
+            name: folderId === "folder_1" ? "Encarte 12_11_2026" : folderId === "folder_2" ? "Encarte 17_11_2026" : "Encarte Ofertas da Semana",
+            version: 1,
+            products: [{ code: "101", name: "Produto Teste", price: "9.99" }],
+          }),
+        };
+      }
+      // Gravação do novo indice.json
+      if (opts.method === "POST") {
+        return {
+          ok: true,
+          json: async () => ({ id: "new_index_file_id" }),
+        };
+      }
+      return { ok: true, json: async () => ({ files: [] }) };
+    };
+
+    const res = await reconcileDriveIndexWithSubfolders("root_folder_id", mockBaseIndex as any, undefined, {
+      token: "mock-token",
+      fetchFn: mockFetch as any,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.index.projects.length).toBe(3);
+    const names = res.index.projects.map((p) => p.name);
+    expect(names).toContain("Encarte 12_11_2026");
+    expect(names).toContain("Encarte 17_11_2026");
+    expect(names).toContain("Encarte Ofertas da Semana");
   });
 });
