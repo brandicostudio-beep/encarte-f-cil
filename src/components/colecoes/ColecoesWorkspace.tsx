@@ -897,6 +897,20 @@ export const ColecoesWorkspace: React.FC = () => {
       <div className="rounded-xl border border-neutral-800 bg-[#141414] p-4 text-white shadow-md">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (typeof window !== "undefined") window.location.href = "/";
+              }}
+              className="bg-neutral-900 border-neutral-700 text-neutral-300 hover:text-white hover:bg-neutral-800 text-xs h-9 flex items-center gap-1.5"
+              title="Voltar ao Gerador de Encartes Principal"
+              data-testid="btn-colecoes-back-to-encartes"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span>Encartes</span>
+            </Button>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-700 text-white font-black text-xl shadow-xs">
               <Layers className="h-5 w-5" />
             </div>

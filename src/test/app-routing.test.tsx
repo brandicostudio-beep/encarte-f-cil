@@ -14,4 +14,20 @@ describe("App routing", () => {
 
     expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
   });
+
+  it("matches a page for /encarte-semanal instead of falling back to not found", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+
+    const matches = router.matchRoutes("/encarte-semanal");
+
+    expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
+  });
+
+  it("matches a page for /colecoes instead of falling back to not found", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+
+    const matches = router.matchRoutes("/colecoes");
+
+    expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
+  });
 });

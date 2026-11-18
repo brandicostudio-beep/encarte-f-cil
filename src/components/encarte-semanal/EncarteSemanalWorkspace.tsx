@@ -36,6 +36,9 @@ import { EncarteSemanalCell } from "./EncarteSemanalCell";
 import { EncarteSemanalProductModal } from "./EncarteSemanalProductModal";
 import { EncarteSemanalGridConfigModal } from "./EncarteSemanalGridConfigModal";
 import { EncarteSemanalSourceModal } from "./EncarteSemanalSourceModal";
+import { NavigationDrawer } from "@/components/encarte/NavigationDrawer";
+import { useNavigate } from "@tanstack/react-router";
+import { clearClientSession } from "@/lib/auth-constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,9 +64,16 @@ import {
   Save,
   FolderOpen,
   HardDrive,
+  Menu,
+  LayoutGrid,
+  CalendarClock,
+  Layers,
 } from "lucide-react";
 
 export const EncarteSemanalWorkspace: React.FC = () => {
+  const navigate = useNavigate();
+  const [navDrawerOpen, setNavDrawerOpen] = useState<boolean>(false);
+
   // Configurações persistidas
   const [templateImage, setTemplateImage] = useState<string>(() => loadEncarteSemanalTemplate());
   const [gridConfig, setGridConfig] = useState<EncarteSemanalGridConfig>(() =>
@@ -373,21 +383,92 @@ export const EncarteSemanalWorkspace: React.FC = () => {
       {/* 1. CABEÇALHO DO WORKSPACE */}
       <header className="border-b border-neutral-800 bg-[#141414] px-4 py-3 sticky top-0 z-40 shadow-md">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          {/* Título e Subtítulo */}
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-neutral-950 font-black text-xl shadow-md">
-              ES
-            </div>
-            <div>
-              <h1 className="text-base font-black tracking-wide text-white uppercase flex items-center gap-2">
-                Encarte Semanal
-                <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  Ofertas da Semana
-                </span>
-              </h1>
-              <p className="text-[11px] text-neutral-400">
-                Modelo permanente (1080×1920) • 4 colunas × 5 linhas = 20 produtos por tela
-              </p>
+          {/* Navegação, Botão Voltar e Módulos do Sistema */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Botão Menu Lateral (Drawer) */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setNavDrawerOpen(true)}
+              className="h-9 w-9 p-0 text-neutral-400 hover:text-white hover:bg-neutral-800"
+              title="Menu Principal do Sistema"
+              data-testid="btn-semanal-menu-drawer"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+
+            {/* Botão Voltar aos Encartes */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => navigate({ to: "/" as never })}
+              className="bg-neutral-900 border-neutral-700 text-neutral-300 hover:text-white hover:bg-neutral-800 text-xs h-9 flex items-center gap-1.5"
+              title="Voltar ao Gerador de Encartes Principal"
+              data-testid="btn-back-to-encartes"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span>Encartes</span>
+            </Button>
+
+            {/* Segmented Control Minimalista (Estilo Apple): Módulos do Sistema */}
+            <nav className="hidden lg:flex items-center bg-neutral-900 border border-neutral-800 p-0.5 rounded-xl">
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/" as never })}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:text-red-300 hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Ir para o Gerador de Encartes Principal"
+              >
+                <LayoutGrid className="w-3.5 h-3.5 text-red-400" />
+                <span>Encartes</span>
+              </button>
+
+              <span
+                className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-amber-600 to-amber-500 text-neutral-950 shadow-2xs flex items-center gap-1.5 cursor-default"
+                title="Você está no Encarte Semanal permanente"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-neutral-950" />
+                <span>Semanal</span>
+              </span>
+
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/painel-validade" as never })}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:text-red-300 hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Ir para o Painel de Validade (Rotina 8230)"
+              >
+                <CalendarClock className="w-3.5 h-3.5 text-red-400" />
+                <span>Validade</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/colecoes" as never })}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:text-purple-300 hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Ir para o Encarte de Coleções"
+              >
+                <Layers className="w-3.5 h-3.5 text-purple-400" />
+                <span>Coleções</span>
+              </button>
+            </nav>
+
+            {/* Identidade Encarte Semanal */}
+            <div className="flex items-center gap-2.5 pl-2 border-l border-neutral-800">
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-neutral-950 font-black text-sm shadow-md shrink-0">
+                ES
+              </div>
+              <div>
+                <h1 className="text-sm font-black tracking-wide text-white uppercase flex items-center gap-1.5">
+                  Encarte Semanal
+                  <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded-full uppercase tracking-wider">
+                    Ofertas 4×5
+                  </span>
+                </h1>
+                <p className="text-[11px] text-neutral-400 hidden sm:block">
+                  Modelo 1080×1920 • 20 produtos por tela
+                </p>
+              </div>
             </div>
           </div>
 
@@ -629,371 +710,431 @@ export const EncarteSemanalWorkspace: React.FC = () => {
 
       {/* 3. CONTEÚDO PRINCIPAL */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 space-y-4">
-        {products.length === 0 ? (
-          /* Estado Vazio */
-          <div className="bg-[#141414] border border-neutral-800 rounded-2xl p-12 text-center max-w-2xl mx-auto my-12 space-y-4 shadow-xl">
-            <div className="h-16 w-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
-              <FileSpreadsheet className="h-8 w-8" />
+        {/* 3.1 ABA DE PRÉ-VISUALIZAÇÃO DO ENCARTE */}
+        {activeTab === "preview" && (
+          <div className="bg-[#141414] border border-neutral-800 rounded-2xl p-4 space-y-3 shadow-md">
+            {/* Banner Orientador caso não haja produtos carregados */}
+            {products.length === 0 && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                    <FileSpreadsheet className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">Nenhum produto carregado na grade</h4>
+                    <p className="text-xs text-neutral-400">
+                      Visualizando o modelo de fundo permanente e as guias. Carregue a planilha semanal com os códigos ou teste com 20 itens de exemplo.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setSourceModalOpen(true)}
+                    className="bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-xs h-8"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />
+                    Carregar Planilha & Fotos
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleLoadSample}
+                    className="bg-neutral-900 border-neutral-700 text-neutral-300 hover:text-white text-xs h-8"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5 text-purple-400" />
+                    Exemplo (20 Itens)
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Controles de Navegação e Zoom */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-neutral-900 border border-neutral-800 p-2.5 rounded-xl text-xs">
+              {/* Navegação entre páginas */}
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="h-8 bg-neutral-800 border-neutral-700 text-white"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="font-bold text-white px-2">
+                  Tela {currentPage} de {Math.max(1, totalPages)} (
+                  {currentProducts.length} produtos)
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className="h-8 bg-neutral-800 border-neutral-700 text-white"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Informação do Modelo Atual */}
+              <div className="text-[11px] text-neutral-400 hidden sm:block">
+                Grade: 4 colunas × 5 linhas • Barra: {gridConfig.barHeight}px • Resolução: 1080×1920
+              </div>
+
+              {/* Controles de Zoom */}
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setPreviewZoom((z) => Math.max(0.2, z - 0.05))}
+                  className="h-8 text-neutral-300 hover:text-white"
+                  title="Reduzir zoom"
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </Button>
+                <span className="font-mono text-neutral-400 w-12 text-center text-xs">
+                  {Math.round(previewZoom * 100)}%
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setPreviewZoom((z) => Math.min(1.0, z + 0.05))}
+                  className="h-8 text-neutral-300 hover:text-white"
+                  title="Aumentar zoom"
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPreviewZoom(0.38)}
+                  className="h-8 bg-neutral-800 border-neutral-700 text-xs text-neutral-300 hover:text-white"
+                >
+                  <Maximize2 className="h-3.5 w-3.5 mr-1" />
+                  Encaixar na Tela
+                </Button>
+              </div>
             </div>
-            <h2 className="text-xl font-bold text-white">Nenhum produto carregado ainda</h2>
-            <p className="text-xs text-neutral-400 max-w-md mx-auto leading-relaxed">
-              Carregue a planilha semanal com os códigos e descrições dos produtos em oferta. O modelo visual e a grade já estão configurados e prontos para uso.
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-              <Button
-                type="button"
-                onClick={() => setSourceModalOpen(true)}
-                className="bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold"
+
+            {/* Área do Canvas 1080x1920 com Zoom */}
+            <div className="flex justify-center overflow-auto p-4 bg-neutral-950/70 rounded-xl border border-neutral-800 min-h-[640px]">
+              <div
+                style={{
+                  transform: `scale(${previewZoom})`,
+                  transformOrigin: "top center",
+                  marginBottom: `${1920 * (previewZoom - 1)}px`,
+                  width: "1080px",
+                  height: "1920px",
+                }}
+                className="relative shadow-2xl rounded-lg overflow-hidden border border-neutral-800 shrink-0 bg-[#0a0204]"
               >
-                <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Carregar Planilha & Fotos
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleLoadSample}
-                className="bg-neutral-900 border-neutral-700 text-neutral-300 hover:text-white"
-              >
-                <Sparkles className="h-4 w-4 mr-1.5 text-purple-400" />
-                Carregar Exemplo (20 Itens)
-              </Button>
+                {/* Imagem de Fundo (Modelo da Arte) */}
+                <img
+                  src={templateImage}
+                  alt="Modelo Encarte Semanal"
+                  className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+                />
+
+                {/* MÁSCARA DE COBERTURA: Célula 1 (0, 0)
+                    Cobre o texto "FOTO" da arte original para não vazar */}
+                <div
+                  className="absolute pointer-events-none"
+                  style={{
+                    left: `${gridCells[0]?.x || 29}px`,
+                    top: `${gridCells[0]?.y || 475}px`,
+                    width: `${gridCells[0]?.width || 257}px`,
+                    height: `${gridCells[0]?.photoAreaHeight || 221}px`,
+                    backgroundColor: "#330409",
+                    zIndex: 1,
+                  }}
+                />
+
+                {/* Células dos Produtos da Grade */}
+                {currentProducts.map((product, idx) => {
+                  const cell = gridCells[idx];
+                  if (!cell) return null;
+
+                  return (
+                    <div key={product.id || `${product.code}-${idx}`} style={{ zIndex: 10 }}>
+                      <EncarteSemanalCell
+                        product={product}
+                        cell={cell}
+                        interactive={true}
+                        onEdit={handleEditProduct}
+                      />
+                    </div>
+                  );
+                })}
+
+                {/* MÁSCARA DO RODAPÉ: Cobre o texto de guia ("TEXTO EDITÁVEL" e seta vermelha)
+                    e renderiza as datas da oferta de forma limpa e nítida */}
+                <div
+                  className="absolute bottom-0 left-0 right-0 pointer-events-none flex items-center justify-center px-8"
+                  style={{
+                    height: "65px",
+                    backgroundColor: "#0a0204",
+                    zIndex: 20,
+                  }}
+                >
+                  <div
+                    className="text-center text-white font-black text-[12px] leading-tight tracking-wide drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] whitespace-pre-line uppercase"
+                    data-testid="semanal-rendered-footer"
+                  >
+                    {footerText ||
+                      "OFERTA VÁLIDA DO DIA 16/11 AO DIA 21/11 OU ENQUANTO DURAREM OS ESTOQUES PROMOCIONAIS."}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        ) : (
-          <>
-            {/* 3.1 ABA DE PRÉ-VISUALIZAÇÃO DO ENCARTE */}
-            {activeTab === "preview" && (
-              <div className="bg-[#141414] border border-neutral-800 rounded-2xl p-4 space-y-3 shadow-md">
-                {/* Controles de Navegação e Zoom */}
-                <div className="flex flex-wrap items-center justify-between gap-3 bg-neutral-900 border border-neutral-800 p-2.5 rounded-xl text-xs">
-                  {/* Navegação entre páginas */}
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={currentPage <= 1}
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      className="h-8 bg-neutral-800 border-neutral-700 text-white"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="font-bold text-white px-2">
-                      Tela {currentPage} de {Math.max(1, totalPages)} (
-                      {currentProducts.length} produtos)
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={currentPage >= totalPages}
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      className="h-8 bg-neutral-800 border-neutral-700 text-white"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
+        )}
 
-                  {/* Informação do Modelo Atual */}
-                  <div className="text-[11px] text-neutral-400 hidden sm:block">
-                    Grade: 4 colunas × 5 linhas • Barra: {gridConfig.barHeight}px • Resolução: 1080×1920
-                  </div>
+        {/* 3.2 ABA DE TABELA DE PRODUTOS */}
+        {activeTab === "tabela" && (
+          <div className="bg-[#141414] border border-neutral-800 rounded-2xl p-4 space-y-3 shadow-md">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                Produtos Cadastrados ({products.length})
+              </h3>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setSourceModalOpen(true)}
+                  className="bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-xs h-7"
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5 mr-1" />
+                  Importar Planilha
+                </Button>
+                <span className="text-xs text-neutral-400 hidden sm:inline">
+                  Clique em editar para ajustar fotos, códigos e descrições.
+                </span>
+              </div>
+            </div>
 
-                  {/* Controles de Zoom */}
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setPreviewZoom((z) => Math.max(0.2, z - 0.05))}
-                      className="h-8 text-neutral-300 hover:text-white"
-                      title="Reduzir zoom"
-                    >
-                      <ZoomOut className="h-4 w-4" />
-                    </Button>
-                    <span className="font-mono text-neutral-400 w-12 text-center text-xs">
-                      {Math.round(previewZoom * 100)}%
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setPreviewZoom((z) => Math.min(1.0, z + 0.05))}
-                      className="h-8 text-neutral-300 hover:text-white"
-                      title="Aumentar zoom"
-                    >
-                      <ZoomIn className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setPreviewZoom(0.38)}
-                      className="h-8 bg-neutral-800 border-neutral-700 text-xs text-neutral-300 hover:text-white"
-                    >
-                      <Maximize2 className="h-3.5 w-3.5 mr-1" />
-                      Encaixar na Tela
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Área do Canvas 1080x1920 com Zoom */}
-                <div className="flex justify-center overflow-auto p-4 bg-neutral-950/70 rounded-xl border border-neutral-800 min-h-[640px]">
-                  <div
-                    style={{
-                      transform: `scale(${previewZoom})`,
-                      transformOrigin: "top center",
-                      marginBottom: `${1920 * (previewZoom - 1)}px`,
-                      width: "1080px",
-                      height: "1920px",
-                    }}
-                    className="relative shadow-2xl rounded-lg overflow-hidden border border-neutral-800 shrink-0 bg-[#0a0204]"
+            {products.length === 0 ? (
+              <div className="p-12 text-center bg-neutral-950/60 rounded-xl border border-neutral-800 space-y-3">
+                <FileSpreadsheet className="h-10 w-10 text-neutral-500 mx-auto" />
+                <p className="text-sm font-bold text-white">Nenhum produto cadastrado na lista</p>
+                <p className="text-xs text-neutral-400 max-w-md mx-auto">
+                  Carregue uma planilha semanal (.xlsx ou .csv) contendo as colunas de código e descrição para preencher a lista.
+                </p>
+                <div className="flex justify-center gap-2 pt-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setSourceModalOpen(true)}
+                    className="bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-xs"
                   >
-                    {/* Imagem de Fundo (Modelo da Arte) */}
-                    <img
-                      src={templateImage}
-                      alt="Modelo Encarte Semanal"
-                      className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
-                    />
-
-                    {/* MÁSCARA DE COBERTURA: Célula 1 (0, 0)
-                        Cobre o texto "FOTO" da arte original para não vazar */}
-                    <div
-                      className="absolute pointer-events-none"
-                      style={{
-                        left: `${gridCells[0]?.x || 29}px`,
-                        top: `${gridCells[0]?.y || 475}px`,
-                        width: `${gridCells[0]?.width || 257}px`,
-                        height: `${gridCells[0]?.photoAreaHeight || 221}px`,
-                        backgroundColor: "#330409",
-                        zIndex: 1,
-                      }}
-                    />
-
-                    {/* Células dos Produtos da Grade */}
-                    {currentProducts.map((product, idx) => {
-                      const cell = gridCells[idx];
-                      if (!cell) return null;
-
-                      return (
-                        <div key={product.id || `${product.code}-${idx}`} style={{ zIndex: 10 }}>
-                          <EncarteSemanalCell
-                            product={product}
-                            cell={cell}
-                            interactive={true}
-                            onEdit={handleEditProduct}
-                          />
-                        </div>
-                      );
-                    })}
-
-                    {/* MÁSCARA DO RODAPÉ: Cobre o texto de guia ("TEXTO EDITÁVEL" e seta vermelha)
-                        e renderiza as datas da oferta de forma limpa e nítida */}
-                    <div
-                      className="absolute bottom-0 left-0 right-0 pointer-events-none flex items-center justify-center px-8"
-                      style={{
-                        height: "65px",
-                        backgroundColor: "#0a0204",
-                        zIndex: 20,
-                      }}
-                    >
-                      <div
-                        className="text-center text-white font-black text-[12px] leading-tight tracking-wide drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] whitespace-pre-line uppercase"
-                        data-testid="semanal-rendered-footer"
-                      >
-                        {footerText ||
-                          "OFERTA VÁLIDA DO DIA 16/11 AO DIA 21/11 OU ENQUANTO DURAREM OS ESTOQUES PROMOCIONAIS."}
-                      </div>
-                    </div>
-                  </div>
+                    Carregar Planilha & Fotos
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleLoadSample}
+                    className="bg-neutral-900 border-neutral-700 text-neutral-300 hover:text-white text-xs"
+                  >
+                    Carregar Exemplo (20 Itens)
+                  </Button>
                 </div>
               </div>
-            )}
+            ) : (
+              <div className="overflow-x-auto border border-neutral-800 rounded-xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-neutral-900 text-neutral-300 font-bold border-b border-neutral-800">
+                    <tr>
+                      <th className="py-2.5 px-3 w-12 text-center">Ordem</th>
+                      <th className="py-2.5 px-3 w-16">Foto</th>
+                      <th className="py-2.5 px-3 w-28">Código</th>
+                      <th className="py-2.5 px-3">Descrição do Produto</th>
+                      <th className="py-2.5 px-3 w-32">Status da Foto</th>
+                      <th className="py-2.5 px-3 w-24 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800 bg-neutral-950/60">
+                    {products.map((p, index) => (
+                      <tr key={p.id} className="hover:bg-neutral-900/60 transition-colors">
+                        {/* Botões de Ordem */}
+                        <td className="py-2 px-2 text-center">
+                          <div className="flex flex-col items-center justify-center gap-0.5">
+                            <button
+                              type="button"
+                              disabled={index === 0}
+                              onClick={() => handleMoveProduct(index, "up")}
+                              className="h-4 w-5 flex items-center justify-center rounded text-neutral-400 hover:text-white disabled:opacity-20"
+                            >
+                              ▲
+                            </button>
+                            <button
+                              type="button"
+                              disabled={index === products.length - 1}
+                              onClick={() => handleMoveProduct(index, "down")}
+                              className="h-4 w-5 flex items-center justify-center rounded text-neutral-400 hover:text-white disabled:opacity-20"
+                            >
+                              ▼
+                            </button>
+                          </div>
+                        </td>
 
-            {/* 3.2 ABA DE TABELA DE PRODUTOS */}
-            {activeTab === "tabela" && (
-              <div className="bg-[#141414] border border-neutral-800 rounded-2xl p-4 space-y-3 shadow-md">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    Produtos Cadastrados ({products.length})
-                  </h3>
-                  <span className="text-xs text-neutral-400">
-                    Clique em editar para ajustar fotos, códigos e descrições.
-                  </span>
-                </div>
-
-                <div className="overflow-x-auto border border-neutral-800 rounded-xl">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-neutral-900 text-neutral-300 font-bold border-b border-neutral-800">
-                      <tr>
-                        <th className="py-2.5 px-3 w-12 text-center">Ordem</th>
-                        <th className="py-2.5 px-3 w-16">Foto</th>
-                        <th className="py-2.5 px-3 w-28">Código</th>
-                        <th className="py-2.5 px-3">Descrição do Produto</th>
-                        <th className="py-2.5 px-3 w-32">Status da Foto</th>
-                        <th className="py-2.5 px-3 w-24 text-center">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-800 bg-neutral-950/60">
-                      {products.map((p, index) => (
-                        <tr key={p.id} className="hover:bg-neutral-900/60 transition-colors">
-                          {/* Botões de Ordem */}
-                          <td className="py-2 px-2 text-center">
-                            <div className="flex flex-col items-center justify-center gap-0.5">
-                              <button
-                                type="button"
-                                disabled={index === 0}
-                                onClick={() => handleMoveProduct(index, "up")}
-                                className="h-4 w-5 flex items-center justify-center rounded text-neutral-400 hover:text-white disabled:opacity-20"
-                              >
-                                ▲
-                              </button>
-                              <button
-                                type="button"
-                                disabled={index === products.length - 1}
-                                onClick={() => handleMoveProduct(index, "down")}
-                                className="h-4 w-5 flex items-center justify-center rounded text-neutral-400 hover:text-white disabled:opacity-20"
-                              >
-                                ▼
-                              </button>
-                            </div>
-                          </td>
-
-                          {/* Foto */}
-                          <td className="py-2 px-3">
-                            <div className="h-10 w-10 rounded bg-[#330409] border border-neutral-800 flex items-center justify-center overflow-hidden">
-                              {p.image ? (
-                                <img
-                                  src={p.image}
-                                  alt={p.description}
-                                  className="max-h-full max-w-full object-contain"
-                                />
-                              ) : (
-                                <span className="text-[9px] text-amber-400 font-bold">Sem</span>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* Código */}
-                          <td className="py-2 px-3 font-mono font-bold text-amber-400">
-                            {p.code}
-                          </td>
-
-                          {/* Descrição */}
-                          <td className="py-2 px-3 font-semibold text-neutral-200 uppercase">
-                            {p.description}
-                          </td>
-
-                          {/* Status */}
-                          <td className="py-2 px-3">
+                        {/* Foto */}
+                        <td className="py-2 px-3">
+                          <div className="h-10 w-10 rounded bg-[#330409] border border-neutral-800 flex items-center justify-center overflow-hidden">
                             {p.image ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-semibold">
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                Vinculada
-                              </span>
+                              <img
+                                src={p.image}
+                                alt={p.description}
+                                className="max-h-full max-w-full object-contain"
+                              />
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] text-amber-400 font-semibold">
-                                <AlertTriangle className="h-3.5 w-3.5" />
-                                Pendente
-                              </span>
+                              <span className="text-[9px] text-amber-400 font-bold">Sem</span>
                             )}
-                          </td>
+                          </div>
+                        </td>
 
-                          {/* Ações */}
-                          <td className="py-2 px-3 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditProduct(p)}
-                                className="h-7 w-7 p-0 text-neutral-300 hover:text-amber-400"
-                                title="Editar produto"
-                              >
-                                <Edit2 className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteProduct(p.id)}
-                                className="h-7 w-7 p-0 text-red-400 hover:text-red-300"
-                                title="Excluir"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                        {/* Código */}
+                        <td className="py-2 px-3 font-mono font-bold text-amber-400">
+                          {p.code}
+                        </td>
+
+                        {/* Descrição */}
+                        <td className="py-2 px-3 font-semibold text-neutral-200 uppercase">
+                          {p.description}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-2 px-3">
+                          {p.image ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-semibold">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Vinculada
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-amber-400 font-semibold">
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              Pendente
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Ações */}
+                        <td className="py-2 px-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditProduct(p)}
+                              className="h-7 w-7 p-0 text-neutral-300 hover:text-amber-400"
+                              title="Editar produto"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteProduct(p.id)}
+                              className="h-7 w-7 p-0 text-red-400 hover:text-red-300"
+                              title="Excluir"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
+          </div>
+        )}
 
-            {/* 3.3 ABA DE PENDÊNCIAS / SEM FOTO */}
-            {activeTab === "pendencias" && (
-              <div className="bg-[#141414] border border-neutral-800 rounded-2xl p-4 space-y-3 shadow-md">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-400" />
-                      Produtos Sem Foto ({pendingProducts.length})
-                    </h3>
-                    <p className="text-xs text-neutral-400">
-                      Estes produtos não geram cards vazios no encarte exportado até que uma foto seja vinculada.
-                    </p>
-                  </div>
-                </div>
+        {/* 3.3 ABA DE PENDÊNCIAS / SEM FOTO */}
+        {activeTab === "pendencias" && (
+          <div className="bg-[#141414] border border-neutral-800 rounded-2xl p-4 space-y-3 shadow-md">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-400" />
+                  Produtos Sem Foto ({pendingProducts.length})
+                </h3>
+                <p className="text-xs text-neutral-400">
+                  Estes produtos não geram cards vazios no encarte exportado até que uma foto seja vinculada.
+                </p>
+              </div>
+            </div>
 
-                {pendingProducts.length === 0 ? (
-                  <div className="p-8 text-center bg-neutral-950/60 rounded-xl border border-neutral-800 space-y-2">
-                    <CheckCircle2 className="h-8 w-8 text-emerald-400 mx-auto" />
-                    <p className="text-sm font-bold text-white">Nenhuma pendência encontrada!</p>
-                    <p className="text-xs text-neutral-400">
-                      Todos os produtos da planilha possuem foto e estão posicionados nas telas do encarte.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto border border-neutral-800 rounded-xl">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-neutral-900 text-neutral-300 font-bold border-b border-neutral-800">
-                        <tr>
-                          <th className="py-2.5 px-3 w-28">Código</th>
-                          <th className="py-2.5 px-3">Descrição</th>
-                          <th className="py-2.5 px-3 w-36 text-center">Ação</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-neutral-800 bg-neutral-950/60">
-                        {pendingProducts.map((p) => (
-                          <tr key={p.id} className="hover:bg-neutral-900/60 transition-colors">
-                            <td className="py-2.5 px-3 font-mono font-bold text-amber-400">
-                              {p.code}
-                            </td>
-                            <td className="py-2.5 px-3 font-semibold text-neutral-200 uppercase">
-                              {p.description}
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleEditProduct(p)}
-                                className="bg-neutral-800 border-neutral-700 text-amber-300 hover:bg-neutral-700 text-xs h-7"
-                              >
-                                <ImageIcon className="h-3.5 w-3.5 mr-1" />
-                                Vincular Foto
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+            {pendingProducts.length === 0 ? (
+              <div className="p-8 text-center bg-neutral-950/60 rounded-xl border border-neutral-800 space-y-2">
+                <CheckCircle2 className="h-8 w-8 text-emerald-400 mx-auto" />
+                <p className="text-sm font-bold text-white">Nenhuma pendência encontrada!</p>
+                <p className="text-xs text-neutral-400">
+                  Todos os produtos da planilha possuem foto ou a lista está vazia.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto border border-neutral-800 rounded-xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-neutral-900 text-neutral-300 font-bold border-b border-neutral-800">
+                    <tr>
+                      <th className="py-2.5 px-3 w-28">Código</th>
+                      <th className="py-2.5 px-3">Descrição</th>
+                      <th className="py-2.5 px-3 w-36 text-center">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800 bg-neutral-950/60">
+                    {pendingProducts.map((p) => (
+                      <tr key={p.id} className="hover:bg-neutral-900/60 transition-colors">
+                        <td className="py-2.5 px-3 font-mono font-bold text-amber-400">
+                          {p.code}
+                        </td>
+                        <td className="py-2.5 px-3 font-semibold text-neutral-200 uppercase">
+                          {p.description}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEditProduct(p)}
+                            className="bg-neutral-800 border-neutral-700 text-amber-300 hover:bg-neutral-700 text-xs h-7"
+                          >
+                            <ImageIcon className="h-3.5 w-3.5 mr-1" />
+                            Vincular Foto
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
-          </>
+          </div>
         )}
       </main>
 
       {/* 4. MODAIS */}
+      <NavigationDrawer
+        open={navDrawerOpen}
+        onOpenChange={setNavDrawerOpen}
+        onOpenHowItWorks={() => {}}
+        onOpenStoreSettings={() => {}}
+        onOpenStockTurnover={() => {}}
+        onOpenResetModal={() => {}}
+        onOpenWelcomeHub={() => navigate({ to: "/" as never })}
+        onNavigateToValidade={() => navigate({ to: "/painel-validade" as never })}
+        onNavigateToEncarteSemanal={() => setNavDrawerOpen(false)}
+        onNavigateToColecoes={() => navigate({ to: "/colecoes" as never })}
+        onLogout={() => {
+          clearClientSession();
+          navigate({ to: "/acesso" as never });
+        }}
+      />
       <EncarteSemanalSourceModal
         open={sourceModalOpen}
         onOpenChange={setSourceModalOpen}
