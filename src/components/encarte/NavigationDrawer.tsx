@@ -23,6 +23,8 @@ export interface NavigationDrawerProps {
   onOpenResetModal: () => void;
   onOpenWelcomeHub: () => void;
   onNavigateToValidade: () => void;
+  onNavigateToEncarteSemanal?: () => void;
+  onNavigateToColecoes?: () => void;
   onLogout: () => void;
   onOpenProjects?: () => void;
   onOpenVersionHistory?: () => void;
@@ -37,6 +39,8 @@ export interface NavigationDrawerContentProps {
   onOpenResetModal: () => void;
   onOpenWelcomeHub: () => void;
   onNavigateToValidade: () => void;
+  onNavigateToEncarteSemanal?: () => void;
+  onNavigateToColecoes?: () => void;
   onLogout: () => void;
   onOpenProjects?: () => void;
   onOpenVersionHistory?: () => void;
@@ -51,6 +55,8 @@ export const NavigationDrawerContent: React.FC<NavigationDrawerContentProps> = (
   onOpenResetModal,
   onOpenWelcomeHub,
   onNavigateToValidade,
+  onNavigateToEncarteSemanal,
+  onNavigateToColecoes,
   onLogout,
   onOpenProjects,
   onOpenVersionHistory,
@@ -114,6 +120,66 @@ export const NavigationDrawerContent: React.FC<NavigationDrawerContentProps> = (
               </div>
               <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
                 Ativo
+              </span>
+            </button>
+
+            {/* Encarte Semanal (Ofertas da Semana) */}
+            <button
+              type="button"
+              onClick={() => {
+                if (onNavigateToEncarteSemanal) {
+                  handleItemClick(onNavigateToEncarteSemanal);
+                } else {
+                  window.location.href = "/encarte-semanal";
+                }
+              }}
+              className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-neutral-800/60 text-neutral-200 border border-transparent hover:border-amber-500/40 text-left transition-all group cursor-pointer"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div className="truncate">
+                  <div className="text-sm font-semibold text-neutral-200 group-hover:text-amber-300 truncate">
+                    Encarte Semanal
+                  </div>
+                  <div className="text-[11px] text-neutral-400 truncate">
+                    Modelo permanente • 20 produtos (4×5)
+                  </div>
+                </div>
+              </div>
+              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                Ofertas
+              </span>
+            </button>
+
+            {/* Encarte de Coleções */}
+            <button
+              type="button"
+              onClick={() => {
+                if (onNavigateToColecoes) {
+                  handleItemClick(onNavigateToColecoes);
+                } else {
+                  window.location.href = "/colecoes";
+                }
+              }}
+              className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-neutral-800/60 text-neutral-200 border border-transparent hover:border-purple-500/40 text-left transition-all group cursor-pointer"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <LayoutGrid className="w-4 h-4" />
+                </div>
+                <div className="truncate">
+                  <div className="text-sm font-semibold text-neutral-200 group-hover:text-purple-300 truncate">
+                    Encarte de Coleções
+                  </div>
+                  <div className="text-[11px] text-neutral-400 truncate">
+                    Linhas temáticas com variações e sobreposição
+                  </div>
+                </div>
+              </div>
+              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
+                9:16
               </span>
             </button>
 

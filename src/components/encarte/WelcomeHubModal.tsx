@@ -217,6 +217,45 @@ export const WelcomeHubModal: React.FC<WelcomeHubModalProps> = ({
           </div>
         </div>
 
+        {/* Modos Especializados Adicionais: Encarte Semanal & Coleções */}
+        <div className="px-6 sm:px-10 pb-6 pt-0">
+          <div className="p-4 rounded-2xl bg-neutral-950/70 border border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold tracking-wider uppercase text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                Novo Fluxo Rápido
+              </span>
+              <h4 className="text-sm font-bold text-white">
+                Encarte Semanal (Ofertas da Semana)
+              </h4>
+              <p className="text-xs text-neutral-400">
+                Modelo permanente fixo (1080×1920) com 20 produtos por tela (4 colunas × 5 linhas). Suba a planilha e exporte em alta resolução.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+              <Button
+                type="button"
+                onClick={() => {
+                  window.location.href = "/encarte-semanal";
+                }}
+                className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-xs h-9 shadow-md"
+              >
+                <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                Acessar Encarte Semanal
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  window.location.href = "/colecoes";
+                }}
+                className="w-full sm:w-auto bg-neutral-900 border-neutral-700 text-neutral-300 hover:text-white text-xs h-9"
+              >
+                Coleções 9:16
+              </Button>
+            </div>
+          </div>
+        </div>
+
         {/* Rodapé da tela de boas-vindas */}
         <div className="px-6 sm:px-10 py-4 border-t border-neutral-800/80 bg-neutral-950/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-neutral-400">
           <label className="flex items-center gap-2 cursor-pointer select-none">

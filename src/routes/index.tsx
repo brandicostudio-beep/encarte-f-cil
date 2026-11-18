@@ -3445,6 +3445,8 @@ function EncarteApp() {
         onOpenResetModal={() => setResetModalOpen(true)}
         onOpenWelcomeHub={() => setWelcomeHubOpen(true)}
         onNavigateToValidade={() => navigate({ to: "/painel-validade" as never })}
+        onNavigateToEncarteSemanal={() => navigate({ to: "/encarte-semanal" as never })}
+        onNavigateToColecoes={() => navigate({ to: "/colecoes" as never })}
         onOpenProjects={() => setProjectManagerOpen(true)}
         onOpenVersionHistory={() => {
           if (currentProject) {

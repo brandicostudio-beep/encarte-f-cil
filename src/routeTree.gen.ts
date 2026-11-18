@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AcessoRouteImport } from './routes/acesso'
 import { Route as ColecoesRouteImport } from './routes/colecoes'
+import { Route as EncarteSemanalRouteImport } from './routes/encarte-semanal'
 import { Route as PainelValidadeRouteImport } from './routes/painel-validade'
 
 const IndexRoute = IndexRouteImport.update({
@@ -29,6 +30,11 @@ const ColecoesRoute = ColecoesRouteImport.update({
   path: '/colecoes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EncarteSemanalRoute = EncarteSemanalRouteImport.update({
+  id: '/encarte-semanal',
+  path: '/encarte-semanal',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PainelValidadeRoute = PainelValidadeRouteImport.update({
   id: '/painel-validade',
   path: '/painel-validade',
@@ -39,12 +45,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/acesso': typeof AcessoRoute
   '/colecoes': typeof ColecoesRoute
+  '/encarte-semanal': typeof EncarteSemanalRoute
   '/painel-validade': typeof PainelValidadeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/acesso': typeof AcessoRoute
   '/colecoes': typeof ColecoesRoute
+  '/encarte-semanal': typeof EncarteSemanalRoute
   '/painel-validade': typeof PainelValidadeRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,29 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/acesso': typeof AcessoRoute
   '/colecoes': typeof ColecoesRoute
+  '/encarte-semanal': typeof EncarteSemanalRoute
   '/painel-validade': typeof PainelValidadeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/acesso' | '/colecoes' | '/painel-validade'
+  fullPaths:
+    '/' | '/acesso' | '/colecoes' | '/encarte-semanal' | '/painel-validade'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/acesso' | '/colecoes' | '/painel-validade'
-  id: '__root__' | '/' | '/acesso' | '/colecoes' | '/painel-validade'
+  to: '/' | '/acesso' | '/colecoes' | '/encarte-semanal' | '/painel-validade'
+  id:
+    | '__root__'
+    | '/'
+    | '/acesso'
+    | '/colecoes'
+    | '/encarte-semanal'
+    | '/painel-validade'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AcessoRoute: typeof AcessoRoute
   ColecoesRoute: typeof ColecoesRoute
+  EncarteSemanalRoute: typeof EncarteSemanalRoute
   PainelValidadeRoute: typeof PainelValidadeRoute
 }
 
@@ -92,6 +109,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ColecoesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/encarte-semanal': {
+      id: '/encarte-semanal'
+      path: '/encarte-semanal'
+      fullPath: '/encarte-semanal'
+      preLoaderRoute: typeof EncarteSemanalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/painel-validade': {
       id: '/painel-validade'
       path: '/painel-validade'
@@ -106,6 +130,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcessoRoute: AcessoRoute,
   ColecoesRoute: ColecoesRoute,
+  EncarteSemanalRoute: EncarteSemanalRoute,
   PainelValidadeRoute: PainelValidadeRoute,
 }
 export const routeTree = rootRouteImport
