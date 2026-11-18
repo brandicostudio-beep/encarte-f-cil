@@ -154,6 +154,8 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
   const imgH = baseH * scale;
 
   const hasTwoPhotos = Boolean(cleanPhoto1 && cleanPhoto2);
+  const isPhoto1Cutout = Boolean(cleanPhoto1 && cleanPhoto1.startsWith("data:image/png"));
+  const isPhoto2Cutout = Boolean(cleanPhoto2 && cleanPhoto2.startsWith("data:image/png"));
   const displayCode = product.secondaryCode
     ? `${product.code} / ${product.secondaryCode}`
     : product.code;
@@ -226,6 +228,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
                 left: `${width * 0.04 + offsetX}px`,
                 top: `${photoAreaHeight - imgH * 0.90 + offsetY + overlapY}px`,
                 zIndex: 11,
+                mixBlendMode: isPhoto1Cutout ? "normal" : "multiply",
               }}
             />
             {/* Foto 2 (Direita / Variação / Duplicata escalonada) */}
@@ -240,6 +243,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
                 left: `${width * 0.30 + offsetX}px`,
                 top: `${photoAreaHeight - imgH * 0.90 + offsetY + overlapY}px`,
                 zIndex: 12,
+                mixBlendMode: isPhoto2Cutout ? "normal" : "multiply",
               }}
             />
           </div>
@@ -255,6 +259,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
               left: `${(width - imgW) / 2 + offsetX}px`,
               top: `${(photoAreaHeight - imgH) / 2 + offsetY + overlapY}px`,
               zIndex: 11,
+              mixBlendMode: isPhoto1Cutout ? "normal" : "multiply",
             }}
           />
         ) : (

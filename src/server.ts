@@ -53,6 +53,42 @@ export default {
         (globalThis as any).__CF_ENV__ = env;
       } catch {}
     }
+
+    // Proxy de imagens remoto com CORS irrestrito para recorte transparente no canvas
+    try {
+      const reqUrl = new URL(request.url);
+      if (reqUrl.pathname === "/api/proxy-image") {
+        const targetUrl = reqUrl.searchParams.get("url");
+        if (!targetUrl) {
+          return new Response("Missing url param", { status: 400 });
+        }
+        const upstream = await fetch(targetUrl, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+          },
+        });
+        if (!upstream.ok) {
+          return new Response(`Upstream error: ${upstream.status}`, {
+            status: upstream.status,
+          });
+        }
+        const contentType = upstream.headers.get("content-type") || "image/jpeg";
+        const body = await upstream.arrayBuffer();
+        return new Response(body, {
+          status: 200,
+          headers: {
+            "Content-Type": contentType,
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Cache-Control": "public, max-age=604800, immutable",
+          },
+        });
+      }
+    } catch (err: any) {
+      console.warn("Proxy image error:", err);
+    }
+
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);

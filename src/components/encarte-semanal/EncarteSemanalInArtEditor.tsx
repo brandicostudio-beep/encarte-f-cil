@@ -98,10 +98,23 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     setDescription(suggestion.description);
     setShowSuggestions(false);
 
-    // Puxa a foto automaticamente
+    // Puxa a foto automaticamente com recorte de fundo
     const photo = suggestion.image || findKnownPhotoForCode(suggestion.code);
     if (photo) {
       setImage(photo);
+      removeWhiteBackground(photo).then((clean) => {
+        if (clean && clean.startsWith("data:image/png")) {
+          setImage(clean);
+          onSaveProduct({
+            ...updated,
+            image: clean,
+            limit: limit.trim() || undefined,
+            scale,
+            duplicatePhoto,
+            secondaryImage: secondaryImage || undefined,
+          });
+        }
+      });
     }
 
     const updated = createSemanalProductFromSuggestion(suggestion, product);
@@ -180,6 +193,29 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     };
 
     onSaveProduct(updated);
+
+    if (photo1) {
+      removeWhiteBackground(photo1).then((clean) => {
+        if (clean && clean.startsWith("data:image/png")) {
+          setImage(clean);
+          onSaveProduct({
+            ...updated,
+            image: clean,
+          });
+        }
+      });
+    }
+    if (photo2) {
+      removeWhiteBackground(photo2).then((clean) => {
+        if (clean && clean.startsWith("data:image/png")) {
+          setSecondaryImage(clean);
+          onSaveProduct({
+            ...updated,
+            secondaryImage: clean,
+          });
+        }
+      });
+    }
   };
 
   // Upload manual de imagem 1 (recorta fundo branco automaticamente para PNG transparente)
