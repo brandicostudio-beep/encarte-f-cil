@@ -6,6 +6,8 @@ import type {
   ProjectVersionSummary,
 } from "@/types/project";
 import { serializeProject, deserializeProject } from "./project-serializer";
+import { DEFAULT_CAMPAIGN, DEFAULT_STORE } from "@/types/encarte";
+import { parseSpreadsheetFile } from "./spreadsheet-parser";
 
 const ROOT_FOLDER_NAME = "Encartes Fácil";
 const INDEX_FILE_NAME = "indice.json";
@@ -292,57 +294,81 @@ export async function reconcileDriveIndexWithSubfolders(
       const extractedName = nameMatch ? nameMatch[1].trim() : folder.name.trim();
       const extractedId = nameMatch ? nameMatch[2].trim() : undefined;
 
-      // Se já consta no índice, garante apenas atualização de IDs e datas
-      if (projectFolderIdMap.has(folder.id) || (extractedId && projectIdMap.has(extractedId))) {
-        const existing = existingProjects.find(
-          (p) => p.driveFolderId === folder.id || (extractedId && p.id === extractedId)
-        );
-        if (existing) {
-          if (!existing.driveFolderId) {
-            existing.driveFolderId = folder.id;
-            hasChanges = true;
-          }
-          if (folder.modifiedTime && (!existing.updatedAt || new Date(folder.modifiedTime) > new Date(existing.updatedAt))) {
-            existing.updatedAt = folder.modifiedTime;
-            hasChanges = true;
-          }
+      // Verifica se o projeto já consta no índice
+      const existing = existingProjects.find(
+        (p) => p.driveFolderId === folder.id || (extractedId && p.id === extractedId)
+      );
+
+      // Se já consta no índice E já tem itemCount > 0 E tem driveFileId, apenas atualiza datas
+      if (existing && existing.itemCount > 0 && existing.driveFileId) {
+        if (!existing.driveFolderId) {
+          existing.driveFolderId = folder.id;
+          hasChanges = true;
+        }
+        if (folder.modifiedTime && (!existing.updatedAt || new Date(folder.modifiedTime) > new Date(existing.updatedAt))) {
+          existing.updatedAt = folder.modifiedTime;
+          hasChanges = true;
         }
         continue;
       }
 
-      // PASTA NÃO MAPEADA NO ÍNDICE: descobre os arquivos .json dentro dela
+      // Descobre arquivos .json ou projetos dentro da pasta (busca ampla com pageSize=100)
       let discoveredFileId: string | undefined;
       let discoveredProjectData: any = null;
 
       try {
-        const filesQuery = `'${folder.id}' in parents and trashed = false`;
-        const filesUrl = `${config.baseUrl}/files?q=${encodeURIComponent(
-          filesQuery
-        )}&fields=files(id,name,mimeType,modifiedTime,size)&orderBy=name+desc&pageSize=10&supportsAllDrives=true`;
+        // 1. Busca prioritária por arquivos .json (pageSize=100)
+        const jsonQuery = `'${folder.id}' in parents and (name contains '.json' or mimeType = 'application/json') and trashed = false`;
+        const jsonUrl = `${config.baseUrl}/files?q=${encodeURIComponent(
+          jsonQuery
+        )}&fields=files(id,name,mimeType,modifiedTime,size)&orderBy=name+desc&pageSize=100&supportsAllDrives=true`;
 
-        const filesRes = await fetchFn(filesUrl, { headers: config.headers });
-        if (filesRes.ok) {
-          const filesData = await filesRes.json();
-          const jsonFiles = (filesData.files || []).filter(
-            (f: any) =>
-              typeof f.name === "string" &&
-              (f.name.endsWith(".json") || f.mimeType === "application/json")
-          );
+        let filesRes = await fetchFn(jsonUrl, { headers: config.headers });
+        let filesData = filesRes.ok ? await filesRes.json() : { files: [] };
+        let jsonFiles = (filesData.files || []).filter(
+          (f: any) =>
+            typeof f.name === "string" &&
+            (f.name.endsWith(".json") || f.mimeType === "application/json")
+        );
 
-          if (typeof jsonFiles[0]?.id === "string") {
-            const fileId: string = jsonFiles[0].id;
-            discoveredFileId = fileId;
-            try {
-              const mediaRes = await fetchFn(
-                `${config.baseUrl}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
-                { headers: config.headers }
-              );
-              if (mediaRes.ok) {
-                const text = await mediaRes.text();
-                discoveredProjectData = JSON.parse(text);
-              }
-            } catch {}
+        // 2. Se a busca específica por .json não retornou arquivos, faz busca ampla (pageSize=100)
+        if (jsonFiles.length === 0) {
+          const allQuery = `'${folder.id}' in parents and trashed = false`;
+          const allUrl = `${config.baseUrl}/files?q=${encodeURIComponent(
+            allQuery
+          )}&fields=files(id,name,mimeType,modifiedTime,size)&orderBy=modifiedTime+desc&pageSize=100&supportsAllDrives=true`;
+          const allRes = await fetchFn(allUrl, { headers: config.headers });
+          if (allRes.ok) {
+            const allData = await allRes.json();
+            jsonFiles = (allData.files || []).filter(
+              (f: any) =>
+                typeof f.name === "string" &&
+                (f.name.endsWith(".json") || f.name.endsWith(".encarte") || f.mimeType === "application/json")
+            );
           }
+        }
+
+        if (typeof jsonFiles[0]?.id === "string") {
+          const fileId: string = jsonFiles[0].id;
+          discoveredFileId = fileId;
+          try {
+            const mediaRes = await fetchFn(
+              `${config.baseUrl}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
+              { headers: config.headers }
+            );
+            if (mediaRes.ok) {
+              const text = await mediaRes.text();
+              const des = deserializeProject(text);
+              if (des.ok && des.project) {
+                discoveredProjectData = des.project;
+              } else {
+                try {
+                  const raw = JSON.parse(text);
+                  discoveredProjectData = raw.project || raw.data || raw;
+                } catch {}
+              }
+            }
+          } catch {}
         }
       } catch {}
 
@@ -356,10 +382,15 @@ export async function reconcileDriveIndexWithSubfolders(
         folder.name;
       const effectiveVersion =
         Number(discoveredProjectData?.version) || 1;
-      const effectiveItemCount =
-        Array.isArray(discoveredProjectData?.products)
-          ? discoveredProjectData.products.length
-          : 0;
+      const prods =
+        discoveredProjectData?.products ||
+        discoveredProjectData?.items ||
+        discoveredProjectData?.produtos;
+      const effectiveItemCount = Array.isArray(prods)
+        ? prods.length
+        : Number(discoveredProjectData?.itemCount) ||
+          Number(discoveredProjectData?.versionHistory?.[0]?.itemCount) ||
+          0;
       const effectiveCreatedAt =
         discoveredProjectData?.createdAt ||
         folder.createdTime ||
@@ -370,6 +401,31 @@ export async function reconcileDriveIndexWithSubfolders(
         folder.modifiedTime ||
         folder.createdTime ||
         new Date().toISOString();
+
+      // Se o projeto já constava no índice (mas estava com 0 itens ou sem driveFileId), atualiza os dados existentes
+      if (existing) {
+        if (!existing.driveFolderId) {
+          existing.driveFolderId = folder.id;
+          hasChanges = true;
+        }
+        if (effectiveItemCount > 0 && existing.itemCount !== effectiveItemCount) {
+          existing.itemCount = effectiveItemCount;
+          hasChanges = true;
+        }
+        if (discoveredFileId && existing.driveFileId !== discoveredFileId) {
+          existing.driveFileId = discoveredFileId;
+          hasChanges = true;
+        }
+        if (discoveredProjectData?.version) {
+          existing.currentVersion = Number(discoveredProjectData.version);
+          hasChanges = true;
+        }
+        if (discoveredProjectData?.name && discoveredProjectData.name !== folder.name) {
+          existing.name = discoveredProjectData.name;
+          hasChanges = true;
+        }
+        continue;
+      }
 
       const newItem: ProjectIndexItem = {
         id: effectiveId,
@@ -712,28 +768,92 @@ export async function loadProjectFromDriveById(
     }
 
     // 4. Buscar os arquivos JSON de versão dentro da pasta do projeto, ordenados pelo nome desc (projeto-v002 antes de v001)
-    const filesQuery = `'${targetFolderId}' in parents and trashed = false`;
-    const filesRes = await fetchFn(
-      `${config.baseUrl}/files?q=${encodeURIComponent(filesQuery)}&orderBy=name+desc&fields=files(id,name,mimeType)&pageSize=10&supportsAllDrives=true`,
+    const jsonQuery = `'${targetFolderId}' in parents and (name contains '.json' or mimeType = 'application/json') and trashed = false`;
+    let filesRes = await fetchFn(
+      `${config.baseUrl}/files?q=${encodeURIComponent(jsonQuery)}&orderBy=name+desc&fields=files(id,name,mimeType,modifiedTime)&pageSize=100&supportsAllDrives=true`,
       { headers: config.headers }
     );
 
-    if (!filesRes.ok) {
-      return { ok: false, error: "Falha ao buscar arquivos do projeto no Google Drive." };
-    }
-
-    const filesData = await filesRes.json();
-    const jsonFiles = (filesData.files || []).filter((f: any) =>
+    let filesData = filesRes.ok ? await filesRes.json() : { files: [] };
+    let jsonFiles = (filesData.files || []).filter((f: any) =>
       typeof f.name === "string" && (f.name.endsWith(".json") || f.mimeType === "application/json")
     );
 
+    // Se a busca específica por .json não encontrou, faz busca ampla por qualquer arquivo na pasta (pageSize=100)
     if (jsonFiles.length === 0) {
-      return { ok: false, error: "Nenhum arquivo de versão encontrado para este projeto no Google Drive." };
+      const allQuery = `'${targetFolderId}' in parents and trashed = false`;
+      const allRes = await fetchFn(
+        `${config.baseUrl}/files?q=${encodeURIComponent(allQuery)}&orderBy=modifiedTime+desc&fields=files(id,name,mimeType,size)&pageSize=100&supportsAllDrives=true`,
+        { headers: config.headers }
+      );
+      if (allRes.ok) {
+        const allData = await allRes.json();
+        jsonFiles = (allData.files || []).filter((f: any) =>
+          typeof f.name === "string" && (f.name.endsWith(".json") || f.name.endsWith(".encarte") || f.mimeType === "application/json")
+        );
+      }
     }
 
-    // O primeiro arquivo é a versão mais recente
-    const latestFileId = jsonFiles[0].id;
-    return await loadProjectFromDrive(latestFileId, options);
+    if (jsonFiles.length > 0) {
+      // O primeiro arquivo é a versão mais recente
+      const latestFileId = jsonFiles[0].id;
+      return await loadProjectFromDrive(latestFileId, options);
+    }
+
+    // 5. Se não tem JSON, verifica se existe planilha (.csv ou .xlsx) na pasta para recuperar os produtos
+    try {
+      const spreadsheetQuery = `'${targetFolderId}' in parents and (name contains '.csv' or name contains '.xlsx' or mimeType = 'text/csv' or mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') and trashed = false`;
+      const sheetRes = await fetchFn(
+        `${config.baseUrl}/files?q=${encodeURIComponent(spreadsheetQuery)}&orderBy=modifiedTime+desc&fields=files(id,name,mimeType)&pageSize=5&supportsAllDrives=true`,
+        { headers: config.headers }
+      );
+      if (sheetRes.ok) {
+        const sheetData = await sheetRes.json();
+        const csvFile = (sheetData.files || [])[0];
+        if (csvFile && typeof csvFile.id === "string") {
+          const mediaRes = await fetchFn(
+            `${config.baseUrl}/files/${encodeURIComponent(csvFile.id)}?alt=media&supportsAllDrives=true`,
+            { headers: config.headers }
+          );
+          if (mediaRes.ok) {
+            const buffer = await mediaRes.arrayBuffer();
+            const parsed = await parseSpreadsheetFile(new File([buffer], csvFile.name));
+            if (parsed.success && parsed.validProducts.length > 0) {
+              const recoveredProject: ProjectData = {
+                id: projectId,
+                name: found?.name || "Encarte Recuperado",
+                createdAt: found?.createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                version: 1,
+                source: {
+                  type: "spreadsheet",
+                  filename: csvFile.name,
+                  importedAt: new Date().toISOString(),
+                },
+                products: parsed.validProducts,
+                campaign: DEFAULT_CAMPAIGN,
+                store: DEFAULT_STORE,
+                versionHistory: [
+                  {
+                    version: 1,
+                    savedAt: new Date().toISOString(),
+                    itemCount: parsed.validProducts.length,
+                    notes: `Recuperado a partir da planilha ${csvFile.name}`,
+                  },
+                ],
+                driveFolderId: targetFolderId,
+              };
+              return { ok: true, project: recoveredProject };
+            }
+          }
+        }
+      }
+    } catch {}
+
+    return {
+      ok: false,
+      error: `A pasta "${found?.name || "do encarte"}" no Google Drive contém imagens exportadas, mas não possui arquivo de projeto (.json) salvo. Para editar, use a opção "Buscar na Pasta Local (.json)" ou importe a planilha correspondente.`,
+    };
   } catch (err) {
     return {
       ok: false,

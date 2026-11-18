@@ -41,7 +41,7 @@ import {
   getDriveProjectsIndexFn,
   loadProjectFromDriveByIdFn,
 } from "./project.functions";
-import { reconcileDriveIndexWithSubfolders } from "./project-drive";
+import { reconcileDriveIndexWithSubfolders, loadProjectFromDriveById } from "./project-drive";
 
 // Mock das server functions para teste unitário do cliente
 vi.mock("./project.functions", () => ({
@@ -612,5 +612,146 @@ describe("Sistema de Salvamento de Projetos de Encarte", () => {
       URL.createObjectURL = originalCreate;
       URL.revokeObjectURL = originalRevoke;
     }
+  });
+
+  it("18. Reconciliação do Drive corrige projeto que estava preso com 0 itens no índice", async () => {
+    // Simula projeto que estava no índice base com 0 itens e sem driveFileId
+    const baseIndexWithZero = {
+      app: "encartes-facil",
+      version: 1,
+      updatedAt: "2026-11-17T11:20:00Z",
+      projects: [
+        {
+          id: "drive_folder_f2",
+          name: "Encarte 17_11_2026",
+          createdAt: "2026-11-17T11:20:00Z",
+          updatedAt: "2026-11-17T11:20:00Z",
+          currentVersion: 1,
+          versionCount: 1,
+          itemCount: 0, // <--- preso em 0 itens!
+          sourceType: "manual",
+          sourceName: "Google Drive",
+          syncStatus: "synced",
+          isTrashed: false,
+          driveFolderId: "folder_f2",
+          driveFileId: undefined, // <--- sem ID de arquivo
+        },
+      ],
+    };
+
+    const mockFetch = async (url: string, opts: any = {}) => {
+      const urlStr = decodeURIComponent(String(url));
+      if (urlStr.includes("mimeType = 'application/vnd.google-apps.folder'")) {
+        return {
+          ok: true,
+          json: async () => ({
+            files: [
+              { id: "folder_f2", name: "Encarte 17_11_2026", createdTime: "2026-11-17T11:20:00Z", modifiedTime: "2026-11-17T11:20:00Z" },
+            ],
+          }),
+        };
+      }
+      if (urlStr.includes("parents and") && (urlStr.includes("name contains '.json'") || urlStr.includes("trashed = false"))) {
+        return {
+          ok: true,
+          json: async () => ({
+            files: [
+              { id: "file_json_real", name: "projeto-v001.json", mimeType: "application/json" },
+            ],
+          }),
+        };
+      }
+      if (urlStr.includes("alt=media")) {
+        return {
+          ok: true,
+          text: async () => JSON.stringify({
+            id: "proj_real_17",
+            name: "Encarte 17_11_2026",
+            version: 1,
+            products: [
+              { code: "101", name: "Produto A", price: "5.00" },
+              { code: "102", name: "Produto B", price: "12.00" },
+              { code: "103", name: "Produto C", price: "19.90" },
+            ],
+          }),
+        };
+      }
+      if (opts.method === "POST") {
+        return { ok: true, json: async () => ({ id: "idx_id" }) };
+      }
+      return { ok: true, json: async () => ({ files: [] }) };
+    };
+
+    const res = await reconcileDriveIndexWithSubfolders("root_id", baseIndexWithZero as any, undefined, {
+      token: "mock-token",
+      fetchFn: mockFetch as any,
+    });
+
+    expect(res.ok).toBe(true);
+    const item = res.index.projects.find((p) => p.name === "Encarte 17_11_2026");
+    expect(item).toBeDefined();
+    // Verificamos que o itemCount foi corrigido de 0 para 3!
+    expect(item?.itemCount).toBe(3);
+    expect(item?.driveFileId).toBe("file_json_real");
+  });
+
+  it("19. loadProjectFromDriveById abre projeto mesmo quando a pasta tem imagens exportadas", async () => {
+    const mockFetch = async (url: string) => {
+      const urlStr = decodeURIComponent(String(url));
+      // Consulta da pasta raiz Encartes Fácil
+      if (urlStr.includes("name = 'Encartes Fácil'")) {
+        return {
+          ok: true,
+          json: async () => ({ files: [{ id: "root_123", name: "Encartes Fácil" }] }),
+        };
+      }
+      // Leitura do indice.json
+      if (urlStr.includes("indice.json") || urlStr.includes("name = 'indice.json'")) {
+        return {
+          ok: true,
+          json: async () => ({ files: [{ id: "idx_file_id", name: "indice.json" }] }),
+        };
+      }
+      if (urlStr.includes("idx_file_id") && urlStr.includes("alt=media")) {
+        return {
+          ok: true,
+          text: async () => JSON.stringify({
+            app: "encartes-facil",
+            version: 1,
+            projects: [
+              {
+                id: "proj_17_id",
+                name: "Encarte 17_11_2026",
+                driveFolderId: "folder_17_id",
+                driveFileId: "file_json_17",
+              },
+            ],
+          }),
+        };
+      }
+      // Download do arquivo do projeto
+      if (urlStr.includes("file_json_17") && urlStr.includes("alt=media")) {
+        return {
+          ok: true,
+          text: async () => JSON.stringify({
+            id: "proj_17_id",
+            name: "Encarte 17_11_2026",
+            version: 1,
+            products: [{ code: "201", name: "Leite Integral", price: "4.89" }],
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({ files: [] }) };
+    };
+
+    const res = await loadProjectFromDriveById("proj_17_id", "folder_17_id", {
+      token: "mock-token",
+      fetchFn: mockFetch as any,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.project?.name).toBe("Encarte 17_11_2026");
+    expect(res.project?.products).toHaveLength(1);
+    expect(res.project?.products[0]?.name).toBe("Leite Integral");
   });
 });

@@ -50,6 +50,7 @@ import {
   restoreProjectUnified,
   downloadProjectById,
   importProjectFromFile,
+  invalidateDriveIndexCache,
 } from "@/lib/project-sync-manager";
 import { validateProjectName } from "@/lib/project-serializer";
 
@@ -93,6 +94,9 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
   const loadProjects = async (force = false) => {
     setIsLoading(true);
     try {
+      if (force) {
+        invalidateDriveIndexCache();
+      }
       const res = await listAllProjectsUnified(tab === "trash", force);
       setProjects(res.items);
       setDriveConnected(res.driveConnected);
