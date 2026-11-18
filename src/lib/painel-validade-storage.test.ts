@@ -264,4 +264,48 @@ describe("Painel de Validade - Gerenciador de Snapshots e Storage", () => {
     expect(lote101?.noEncarte).toBe(true);
     expect(lote101?.foto).toBe("https://example.com/batata.png");
   });
+
+  it("remove do encarte com persistência: não é ressuscitado por sync e permite re-adicionar", async () => {
+    getStorage().clear();
+
+    const lote26222: ValidadeLoteRaw = {
+      codprod: "26222",
+      descricao: "SALGADINHO PROTEIN TOPWAY",
+      embalagem: "10X30 GR",
+      dtval: "20/12/2026",
+      qtdisp_wms: 22,
+      preco_venda: 8.5,
+    };
+
+    // 1. Simula que 26222 veio no encarte inicial da nuvem
+    saveLastProjectEncarteCache({
+      id: "proj-123",
+      name: "Encarte Ativo",
+      products: [
+        { code: "26222", name: "SALGADINHO PROTEIN", included: true },
+      ],
+    } as any);
+
+    const snap = createSnapshotFromRaw([lote26222], "teste-remocao.csv");
+    expect(snap.lotes[0].noEncarte).toBe(true);
+
+    // 2. Usuário clica para remover do encarte
+    const remRes = removeLoteFromEncarte("26222");
+    expect(remRes.ok).toBe(true);
+
+    // 3. Verifica snapshot ativo imediatamente: deve ser false
+    const activeAposRemocao = getActiveSnapshot()!;
+    expect(activeAposRemocao.lotes[0].noEncarte).toBe(false);
+
+    // 4. Mesmo se o sync rodar novamente em segundo plano, a exclusão explícita prevalece
+    await syncLastEncarteData();
+    const activeAposSync = getActiveSnapshot()!;
+    expect(activeAposSync.lotes[0].noEncarte).toBe(false);
+
+    // 5. Usuário clica para re-adicionar ao encarte
+    const addRes = addLoteToEncarte(activeAposSync.lotes[0]);
+    expect(addRes.ok).toBe(true);
+    const activeAposReAdd = getActiveSnapshot()!;
+    expect(activeAposReAdd.lotes[0].noEncarte).toBe(true);
+  });
 });

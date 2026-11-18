@@ -30,6 +30,7 @@ import {
   filtrarLotes,
   calcularContadoresAlertas,
   calcularContadoresKpi,
+  normalizeProductCode,
 } from "@/lib/painel-validade-analytics";
 import { PainelValidadeHeader } from "./PainelValidadeHeader";
 import { PainelValidadeFilters } from "./PainelValidadeFilters";
@@ -86,7 +87,39 @@ export function PainelValidadeWorkspace({
 
   // Ação de 1 clique: Enviar ou remover lote do encarte
   const handleToggleEncarte = useCallback((loteToToggle: ValidadeLoteCalculado) => {
-    if (loteToToggle.noEncarte) {
+    const isCurrentlyInEncarte = Boolean(loteToToggle.noEncarte);
+    const newNoEncarteState = !isCurrentlyInEncarte;
+
+    // 1. Atualização OTIMISTA e SÍNCRONA do estado do React imediatamente (sem esperar I/O)
+    setSnapshot((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        lotes: prev.lotes.map((l) => {
+          if (
+            l.codprod === loteToToggle.codprod ||
+            normalizeProductCode(l.codprod) === normalizeProductCode(loteToToggle.codprod)
+          ) {
+            return { ...l, noEncarte: newNoEncarteState };
+          }
+          return l;
+        }),
+      };
+    });
+
+    setSelectedLote((prev) => {
+      if (!prev) return prev;
+      if (
+        prev.codprod === loteToToggle.codprod ||
+        normalizeProductCode(prev.codprod) === normalizeProductCode(loteToToggle.codprod)
+      ) {
+        return { ...prev, noEncarte: newNoEncarteState };
+      }
+      return prev;
+    });
+
+    // 2. Persistência e sincronização de storage e segundo plano
+    if (isCurrentlyInEncarte) {
       removeLoteFromEncarte(loteToToggle.codprod);
       setToastNotice({
         show: true,
@@ -102,17 +135,7 @@ export function PainelValidadeWorkspace({
         encarteName: res.encarteName,
       });
     }
-
-    // Atualiza estado local imediatamente
-    const active = getActiveSnapshot();
-    if (active) {
-      setSnapshot(active);
-      if (selectedLote && selectedLote.id === loteToToggle.id) {
-        const updatedSelected = active.lotes.find((l) => l.id === loteToToggle.id);
-        if (updatedSelected) setSelectedLote(updatedSelected);
-      }
-    }
-  }, [selectedLote]);
+  }, []);
 
   // Carrega snapshot inicial e lista
   const reloadData = useCallback(() => {

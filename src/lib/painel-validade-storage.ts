@@ -31,7 +31,29 @@ import { deriveSaleUnit, getThumbnailFallbackUrl } from "./parse-product";
 export const SNAPSHOTS_STORAGE_KEY = "painel_validade_snapshots_v1";
 export const ACTIVE_SNAPSHOT_ID_KEY = "painel_validade_active_snapshot_id_v1";
 export const LAST_PROJECT_CACHE_KEY = "painel_validade_last_project_cache_v1";
+export const EXCLUDED_CODES_STORAGE_KEY = "painel_validade_excluded_codes_v1";
 export const MAX_SNAPSHOTS = 10;
+
+export function getExplicitlyExcludedCodes(): Set<string> {
+  const storage = getStorage();
+  if (!storage) return new Set();
+  try {
+    const raw = storage.getItem(EXCLUDED_CODES_STORAGE_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function saveExplicitlyExcludedCodes(set: Set<string>): void {
+  const storage = getStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(EXCLUDED_CODES_STORAGE_KEY, JSON.stringify(Array.from(set)));
+  } catch {}
+}
 
 export interface ActiveEncarteInfo {
   codes: Set<string>;
@@ -92,17 +114,24 @@ export function saveLastProjectEncarteCache(project: {
   const storage = getStorage();
   if (!storage || !project || !Array.isArray(project.products)) return;
 
+  const explicitExcluded = getExplicitlyExcludedCodes();
+
   try {
     const compact = {
       id: project.id,
       name: project.name || "Último Encarte",
       updatedAt: project.updatedAt || new Date().toISOString(),
-      products: project.products.map((p) => ({
-        code: String(p?.code ?? ""),
-        name: p?.name || "",
-        image: p?.image || "",
-        included: p?.included !== false,
-      })),
+      products: project.products.map((p) => {
+        const clean = String(p?.code ?? "").trim();
+        const norm = normalizeProductCode(clean);
+        const isExcluded = explicitExcluded.has(clean) || (norm ? explicitExcluded.has(norm) : false);
+        return {
+          code: clean,
+          name: p?.name || "",
+          image: p?.image || "",
+          included: isExcluded ? false : p?.included !== false,
+        };
+      }),
     };
     storage.setItem(LAST_PROJECT_CACHE_KEY, JSON.stringify(compact));
   } catch (err) {
@@ -127,6 +156,12 @@ export function getActiveEncarteInfo(): ActiveEncarteInfo {
 
   if (!storage) {
     return { codes, photoByCode, productNameByCode };
+  }
+
+  // Carrega códigos explicitamente excluídos pelo usuário
+  const explicitExcluded = getExplicitlyExcludedCodes();
+  for (const c of explicitExcluded) {
+    excludedCodes.add(c);
   }
 
   const registerProduct = (item: {
@@ -435,6 +470,12 @@ export function addLoteToEncarte(lote: ValidadeLoteCalculado): {
     };
   }
 
+  // 1. Remove do conjunto de exclusão explícita
+  const explicit = getExplicitlyExcludedCodes();
+  explicit.delete(cleanCode);
+  if (normalizedCode) explicit.delete(normalizedCode);
+  saveExplicitlyExcludedCodes(explicit);
+
   let products: any[] = [];
   try {
     const raw =
@@ -600,40 +641,62 @@ export function removeLoteFromEncarte(codprod: string): {
     return { ok: false, productCode: cleanCode };
   }
 
+  // 1. Grava no conjunto persistente de exclusões explícitas do painel
+  const explicit = getExplicitlyExcludedCodes();
+  explicit.add(cleanCode);
+  if (normalizedCode) explicit.add(normalizedCode);
+  saveExplicitlyExcludedCodes(explicit);
+
+  // 2. Atualiza encarte-products-v2 marcando included: false
   try {
     const raw =
       storage.getItem("encarte-products-v2") ||
       storage.getItem("encarte-products");
+    let items: any[] = [];
     if (raw) {
-      const items = JSON.parse(raw);
-      if (Array.isArray(items)) {
-        const updated = items.map((p) => {
-          if (!p || !p.code) return p;
-          const pCode = String(p.code).trim();
-          if (pCode === cleanCode || normalizeProductCode(pCode) === normalizedCode) {
-            return { ...p, included: false };
-          }
-          return p;
-        });
-        storage.setItem("encarte-products-v2", JSON.stringify(updated));
-      }
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) items = parsed;
     }
+
+    let found = false;
+    const updated = items.map((p) => {
+      if (!p || !p.code) return p;
+      const pCode = String(p.code).trim();
+      if (pCode === cleanCode || (normalizedCode && normalizeProductCode(pCode) === normalizedCode)) {
+        found = true;
+        return { ...p, included: false };
+      }
+      return p;
+    });
+
+    if (!found) {
+      updated.push({ code: cleanCode, included: false });
+    }
+
+    storage.setItem("encarte-products-v2", JSON.stringify(updated));
   } catch {}
 
-  // Também atualiza cache do último projeto se houver
+  // 3. Também atualiza cache do último projeto se houver
   try {
     const rawCache = storage.getItem(LAST_PROJECT_CACHE_KEY);
     if (rawCache) {
       const parsed = JSON.parse(rawCache);
       if (parsed && Array.isArray(parsed.products)) {
+        let foundCache = false;
         const cacheUpdated = parsed.products.map((p: any) => {
           if (!p || !p.code) return p;
           const pCode = String(p.code).trim();
-          if (pCode === cleanCode || normalizeProductCode(pCode) === normalizedCode) {
+          if (pCode === cleanCode || (normalizedCode && normalizeProductCode(pCode) === normalizedCode)) {
+            foundCache = true;
             return { ...p, included: false };
           }
           return p;
         });
+
+        if (!foundCache) {
+          cacheUpdated.push({ code: cleanCode, included: false });
+        }
+
         storage.setItem(
           LAST_PROJECT_CACHE_KEY,
           JSON.stringify({ ...parsed, products: cacheUpdated })
@@ -642,7 +705,37 @@ export function removeLoteFromEncarte(codprod: string): {
     }
   } catch {}
 
-  // Recalcula os pinos no snapshot ativo
+  // 4. Sincroniza em segundo plano com o projeto ativo no IndexedDB e Google Drive
+  if (typeof window !== "undefined") {
+    listAllProjectsUnified(false)
+      .then(async (unified) => {
+        const projectList = unified.items || [];
+        if (projectList.length > 0) {
+          const newest = projectList[0];
+          const fullRes = await loadProjectUnified(newest.id);
+          if (fullRes.ok && fullRes.project) {
+            const projectProducts = (fullRes.project.products || []).map((p) => {
+              const pCode = String(p.code).trim();
+              if (pCode === cleanCode || (normalizedCode && normalizeProductCode(pCode) === normalizedCode)) {
+                return { ...p, included: false };
+              }
+              return p;
+            });
+            await saveProjectUnified(
+              {
+                ...fullRes.project,
+                products: projectProducts,
+                updatedAt: new Date().toISOString(),
+              },
+              false
+            );
+          }
+        }
+      })
+      .catch(() => {});
+  }
+
+  // 5. Recalcula os pinos no snapshot ativo
   refreshEncartePinsOnActiveSnapshot();
 
   return { ok: true, productCode: cleanCode };
