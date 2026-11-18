@@ -1131,4 +1131,38 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
     const modalSemFotoHtml = renderToString(<PainelValidadeItemDetailContent lote={loteSemFoto} />);
     expect(modalSemFotoHtml).toContain("PRODUTO TESTE SEM FOTO");
   });
+
+  it("PainelValidade: exibe botão de ação 1-clique para enviar ao encarte tanto no card quanto no modal de detalhes", () => {
+    // 1. Lote fora do encarte: exibe botão '+ ENCARTE' no card e 'Enviar para o Encarte Agora' no modal
+    const rawFora: ValidadeLoteRaw = {
+      codprod: "11096",
+      descricao: "BEBIDA LACTEA PIRACANJUBA",
+      embalagem: "CX",
+      dtval: "10/12/2026",
+      qtdisp_wms: 227,
+      preco_venda: 2.5,
+    };
+    const loteFora = processarLote(rawFora, new Date("2026-11-17T00:00:00"));
+
+    const cardForaHtml = renderToString(<PainelValidadeCard lote={loteFora} />);
+    expect(cardForaHtml).toContain("+ ENCARTE");
+
+    const modalForaHtml = renderToString(<PainelValidadeItemDetailContent lote={loteFora} />);
+    expect(modalForaHtml).toContain("Enviar para o Encarte Agora");
+    expect(modalForaHtml).toContain("Ação Comercial Rápida");
+
+    // 2. Lote já no encarte: exibe 'NO ENCARTE' no card e opções de 'Abrir no Encarte' / 'Remover' no modal
+    const loteNoEncarte: ValidadeLoteCalculado = {
+      ...loteFora,
+      noEncarte: true,
+    };
+
+    const cardNoEncarteHtml = renderToString(<PainelValidadeCard lote={loteNoEncarte} />);
+    expect(cardNoEncarteHtml).toContain("NO ENCARTE");
+
+    const modalNoEncarteHtml = renderToString(<PainelValidadeItemDetailContent lote={loteNoEncarte} />);
+    expect(modalNoEncarteHtml).toContain("Abrir no Encarte");
+    expect(modalNoEncarteHtml).toContain("Remover");
+    expect(modalNoEncarteHtml).toContain("Produto no Encarte Mais Recente");
+  });
 });

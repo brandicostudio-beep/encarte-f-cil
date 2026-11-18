@@ -16,7 +16,12 @@ import {
   normalizeProductCode,
   resolverFotoProduto,
 } from "./painel-validade-analytics";
-import { listProjectsLocal, loadProjectLocal } from "./project-indexeddb";
+import {
+  listProjectsLocal,
+  loadProjectLocal,
+  saveProjectLocal,
+} from "./project-indexeddb";
+import { deriveSaleUnit, getThumbnailFallbackUrl } from "./parse-product";
 
 export const SNAPSHOTS_STORAGE_KEY = "painel_validade_snapshots_v1";
 export const ACTIVE_SNAPSHOT_ID_KEY = "painel_validade_active_snapshot_id_v1";
@@ -111,6 +116,7 @@ export function getActiveEncarteInfo(): ActiveEncarteInfo {
   const codes = new Set<string>();
   const photoByCode = new Map<string, string>();
   const productNameByCode = new Map<string, string>();
+  const excludedCodes = new Set<string>();
   let sourceEncarteName: string | undefined;
   let sourceUpdatedAt: string | undefined;
 
@@ -124,10 +130,24 @@ export function getActiveEncarteInfo(): ActiveEncarteInfo {
     image?: string;
     included?: boolean;
   }) => {
-    if (!item || item.included === false || !item.code) return;
+    if (!item || !item.code) return;
     const clean = String(item.code).trim();
     if (!clean) return;
     const normalized = normalizeProductCode(clean);
+
+    // Se o item estiver desmarcado do encarte (included: false), registra exclusão
+    if (item.included === false) {
+      excludedCodes.add(clean);
+      excludedCodes.add(clean.toLowerCase());
+      excludedCodes.add(clean.toUpperCase());
+      if (normalized) excludedCodes.add(normalized);
+      return;
+    }
+
+    // Se já foi explicitamente excluído no encarte ativo, não reativa por cache antigo
+    if (excludedCodes.has(clean) || (normalized && excludedCodes.has(normalized))) {
+      return;
+    }
 
     codes.add(clean);
     codes.add(clean.toLowerCase());
@@ -374,4 +394,240 @@ export function refreshEncartePinsOnActiveSnapshot(): ValidadeSnapshot | null {
 
   saveSnapshotsList(all);
   return updatedSnapshot;
+}
+
+/**
+ * Adiciona um lote com 1 clique ao encarte mais recente
+ */
+export function addLoteToEncarte(lote: ValidadeLoteCalculado): {
+  ok: boolean;
+  action: "added" | "updated";
+  productCode: string;
+  productName: string;
+  encarteName: string;
+} {
+  const storage = getStorage();
+  const cleanCode = (lote.codprod || "").trim();
+  const normalizedCode = normalizeProductCode(cleanCode);
+
+  if (!storage || !cleanCode) {
+    return {
+      ok: false,
+      action: "updated",
+      productCode: cleanCode,
+      productName: lote.descricao,
+      encarteName: "Encarte",
+    };
+  }
+
+  let products: any[] = [];
+  try {
+    const raw =
+      storage.getItem("encarte-products-v2") ||
+      storage.getItem("encarte-products");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) products = parsed;
+    }
+  } catch {}
+
+  // Se encarte-products-v2 estiver vazio, recupera do cache do último projeto
+  if (products.length === 0) {
+    try {
+      const rawCache = storage.getItem(LAST_PROJECT_CACHE_KEY);
+      if (rawCache) {
+        const parsed = JSON.parse(rawCache);
+        if (parsed && Array.isArray(parsed.products)) {
+          products = parsed.products;
+        }
+      }
+    } catch {}
+  }
+
+  // Verifica se o produto já existe no encarte
+  const existingIndex = products.findIndex((p) => {
+    if (!p || !p.code) return false;
+    const pCode = String(p.code).trim();
+    return pCode === cleanCode || normalizeProductCode(pCode) === normalizedCode;
+  });
+
+  let action: "added" | "updated" = "added";
+  const photoUrl =
+    lote.foto ||
+    getThumbnailFallbackUrl(cleanCode) ||
+    "";
+
+  const derivedUnit = deriveSaleUnit(
+    lote.embalagem,
+    undefined,
+    lote.descricao
+  ).unit;
+
+  const formattedPrice =
+    lote.precoVenda > 0
+      ? lote.precoVenda.toFixed(2).replace(".", ",")
+      : "";
+
+  if (existingIndex >= 0) {
+    // Atualiza produto existente para incluído
+    action = "updated";
+    const existing = products[existingIndex];
+    products[existingIndex] = {
+      ...existing,
+      included: true,
+      price: existing.price || formattedPrice,
+      validity: existing.validity || lote.dtval,
+      image: existing.image || photoUrl,
+      stock: existing.stock || (lote.estoque > 0 ? `${lote.estoque} ${lote.embalagem}` : ""),
+    };
+  } else {
+    // Cria novo produto no formato EncarteProduct
+    action = "added";
+    const newProduct = {
+      id: `p-${Date.now()}-${cleanCode}`,
+      code: cleanCode,
+      name: lote.descricao.toUpperCase(),
+      packaging: lote.embalagem,
+      validity: lote.dtval,
+      price: formattedPrice,
+      unit: derivedUnit,
+      unitConfirmed: false,
+      stock: lote.estoque > 0 ? `${lote.estoque} ${lote.embalagem}` : "",
+      badge: "",
+      image: photoUrl,
+      included: true,
+      source: "painel-validade",
+    };
+    products.push(newProduct);
+  }
+
+  // Salva no localStorage imediatamente
+  try {
+    storage.setItem("encarte-products-v2", JSON.stringify(products));
+  } catch (err) {
+    console.warn("Aviso ao salvar encarte-products-v2:", err);
+  }
+
+  // Atualiza cache do último projeto
+  try {
+    const rawCache = storage.getItem(LAST_PROJECT_CACHE_KEY);
+    const prevCache = rawCache ? JSON.parse(rawCache) : {};
+    storage.setItem(
+      LAST_PROJECT_CACHE_KEY,
+      JSON.stringify({
+        ...prevCache,
+        updatedAt: new Date().toISOString(),
+        products,
+      })
+    );
+  } catch {}
+
+  // Sincroniza de forma assíncrona com o IndexedDB caso exista projeto recente salvo
+  if (typeof window !== "undefined") {
+    listProjectsLocal(false)
+      .then(async (projectList) => {
+        if (projectList && projectList.length > 0) {
+          const newest = projectList[0];
+          const fullRes = await loadProjectLocal(newest.id);
+          if (fullRes.ok && fullRes.project) {
+            const projectProducts = [...(fullRes.project.products || [])];
+            const pIdx = projectProducts.findIndex(
+              (p) =>
+                String(p.code).trim() === cleanCode ||
+                normalizeProductCode(String(p.code)) === normalizedCode
+            );
+            if (pIdx >= 0) {
+              projectProducts[pIdx] = { ...projectProducts[pIdx], included: true };
+            } else {
+              projectProducts.push(products[products.length - 1]);
+            }
+            await saveProjectLocal(
+              {
+                ...fullRes.project,
+                products: projectProducts,
+                updatedAt: new Date().toISOString(),
+              },
+              false
+            );
+          }
+        }
+      })
+      .catch(() => {});
+  }
+
+  // Recalcula os pinos e atualiza o snapshot ativo
+  refreshEncartePinsOnActiveSnapshot();
+
+  const encarteInfo = getActiveEncarteInfo();
+
+  return {
+    ok: true,
+    action,
+    productCode: cleanCode,
+    productName: lote.descricao,
+    encarteName: encarteInfo.sourceEncarteName || "Encarte Mais Recente",
+  };
+}
+
+/**
+ * Remove um lote do encarte com 1 clique (desmarca included: false)
+ */
+export function removeLoteFromEncarte(codprod: string): {
+  ok: boolean;
+  productCode: string;
+} {
+  const storage = getStorage();
+  const cleanCode = (codprod || "").trim();
+  const normalizedCode = normalizeProductCode(cleanCode);
+
+  if (!storage || !cleanCode) {
+    return { ok: false, productCode: cleanCode };
+  }
+
+  try {
+    const raw =
+      storage.getItem("encarte-products-v2") ||
+      storage.getItem("encarte-products");
+    if (raw) {
+      const items = JSON.parse(raw);
+      if (Array.isArray(items)) {
+        const updated = items.map((p) => {
+          if (!p || !p.code) return p;
+          const pCode = String(p.code).trim();
+          if (pCode === cleanCode || normalizeProductCode(pCode) === normalizedCode) {
+            return { ...p, included: false };
+          }
+          return p;
+        });
+        storage.setItem("encarte-products-v2", JSON.stringify(updated));
+      }
+    }
+  } catch {}
+
+  // Também atualiza cache do último projeto se houver
+  try {
+    const rawCache = storage.getItem(LAST_PROJECT_CACHE_KEY);
+    if (rawCache) {
+      const parsed = JSON.parse(rawCache);
+      if (parsed && Array.isArray(parsed.products)) {
+        const cacheUpdated = parsed.products.map((p: any) => {
+          if (!p || !p.code) return p;
+          const pCode = String(p.code).trim();
+          if (pCode === cleanCode || normalizeProductCode(pCode) === normalizedCode) {
+            return { ...p, included: false };
+          }
+          return p;
+        });
+        storage.setItem(
+          LAST_PROJECT_CACHE_KEY,
+          JSON.stringify({ ...parsed, products: cacheUpdated })
+        );
+      }
+    }
+  } catch {}
+
+  // Recalcula os pinos no snapshot ativo
+  refreshEncartePinsOnActiveSnapshot();
+
+  return { ok: true, productCode: cleanCode };
 }

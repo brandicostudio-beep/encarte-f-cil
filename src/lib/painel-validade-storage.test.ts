@@ -10,6 +10,8 @@ import {
   getActiveEncartePhotoMap,
   saveLastProjectEncarteCache,
   syncLastEncarteData,
+  addLoteToEncarte,
+  removeLoteFromEncarte,
   getStorage,
   MAX_SNAPSHOTS,
   SNAPSHOTS_STORAGE_KEY,
@@ -193,5 +195,41 @@ describe("Painel de Validade - Gerenciador de Snapshots e Storage", () => {
     getStorage().clear();
     const foto = resolverFotoProduto("11782");
     expect(foto).toBe("https://cescom.agilecdn.com.br/11782_thumb_1.jpg");
+  });
+
+  it("adiciona lote ao encarte mais recente com 1 clique e atualiza pino e snapshot", () => {
+    // 1. Cria snapshot inicial onde o produto 101 não está no encarte
+    getStorage().clear();
+    const snap = createSnapshotFromRaw(mockRawLotes, "validade.csv");
+    const lote101 = snap.lotes.find((l) => l.codprod === "101")!;
+    expect(lote101.noEncarte).toBe(false);
+
+    // 2. Executa addLoteToEncarte
+    const res = addLoteToEncarte(lote101);
+    expect(res.ok).toBe(true);
+    expect(res.action).toBe("added");
+    expect(res.productCode).toBe("101");
+
+    // 3. Verifica se encarte-products-v2 foi populado corretamente
+    const rawEncarte = getStorage().getItem("encarte-products-v2");
+    expect(rawEncarte).toBeDefined();
+    const encarteProducts = JSON.parse(rawEncarte!);
+    expect(encarteProducts.length).toBe(1);
+    expect(encarteProducts[0].code).toBe("101");
+    expect(encarteProducts[0].name).toBe("BATATA PALHA");
+    expect(encarteProducts[0].price).toBe("4,50");
+    expect(encarteProducts[0].validity).toBe("20/11/2026");
+    expect(encarteProducts[0].included).toBe(true);
+
+    // 4. Snapshot ativo foi atualizado imediatamente para noEncarte = true
+    const active = getActiveSnapshot()!;
+    const updated101 = active.lotes.find((l) => l.codprod === "101")!;
+    expect(updated101.noEncarte).toBe(true);
+
+    // 5. Teste de remoção com removeLoteFromEncarte
+    removeLoteFromEncarte("101");
+    const activeAposRemover = getActiveSnapshot()!;
+    const removido101 = activeAposRemover.lotes.find((l) => l.codprod === "101")!;
+    expect(removido101.noEncarte).toBe(false);
   });
 });

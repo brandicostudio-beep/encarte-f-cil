@@ -33,10 +33,14 @@ import { PainelValidadeProductImage } from "./PainelValidadeProductImage";
 
 export interface PainelValidadeItemDetailContentProps {
   lote: ValidadeLoteCalculado;
+  onToggleEncarte?: (lote: ValidadeLoteCalculado) => void;
+  onOpenEncarteEditor?: () => void;
 }
 
 export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailContentProps> = ({
   lote,
+  onToggleEncarte,
+  onOpenEncarteEditor,
 }) => {
   const diagnostico = gerarDiagnosticoSobraCompleto(lote);
 
@@ -66,11 +70,20 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
                 <span className="font-mono font-bold text-sm bg-neutral-100 text-neutral-800 px-2 py-0.5 rounded border">
                   {lote.codprod}
                 </span>
-                {lote.noEncarte && (
+                {lote.noEncarte ? (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-black bg-yellow-400 text-yellow-950 uppercase">
                     <Sparkles className="h-3.5 w-3.5" />
                     NO ENCARTE
                   </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onToggleEncarte?.(lote)}
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-black bg-neutral-900 hover:bg-red-700 text-white uppercase shadow-xs transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Zap className="h-3 w-3 text-yellow-400" />
+                    + Adicionar ao Encarte
+                  </button>
                 )}
               </div>
 
@@ -98,6 +111,68 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
               Embalagem: <strong className="text-neutral-700">{lote.embalagem}</strong> • Data de Validade: <strong className="text-neutral-800 font-mono">{lote.dtval}</strong>
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* CARD DE AÇÃO 1-CLIQUE: ENVIAR PARA O ENCARTE MAIS RECENTE */}
+      <div className="p-4 rounded-2xl bg-neutral-100/90 border border-neutral-200/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div
+            className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${
+              lote.noEncarte ? "bg-yellow-400 text-yellow-950" : "bg-neutral-900 text-yellow-400"
+            }`}
+          >
+            {lote.noEncarte ? <Sparkles className="h-5 w-5" /> : <Zap className="h-5 w-5" />}
+          </div>
+          <div>
+            <div className="text-xs font-bold text-neutral-900 flex items-center gap-2">
+              <span>{lote.noEncarte ? "Produto no Encarte Mais Recente" : "Ação Comercial Rápida"}</span>
+              {lote.noEncarte && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-yellow-300 text-yellow-900 uppercase">
+                  Ativo
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-neutral-600 mt-0.5">
+              {lote.noEncarte
+                ? "Este produto já está incluído no editor de encartes ativo."
+                : "Adicione ao encarte com 1 clique para acelerar o giro e escoar a tempo."}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+          {lote.noEncarte ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onToggleEncarte?.(lote)}
+                className="text-xs font-semibold text-neutral-600 hover:text-red-700 hover:border-red-300"
+              >
+                Remover
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (onOpenEncarteEditor) onOpenEncarteEditor();
+                  else if (typeof window !== "undefined") window.location.href = "/";
+                }}
+                className="text-xs font-bold bg-yellow-400 hover:bg-yellow-500 text-yellow-950 shadow-2xs"
+              >
+                Abrir no Encarte
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="sm"
+              onClick={() => onToggleEncarte?.(lote)}
+              className="w-full sm:w-auto text-xs font-black bg-neutral-900 hover:bg-red-700 text-white shadow-xs cursor-pointer"
+            >
+              <Zap className="h-4 w-4 mr-1 text-yellow-400" />
+              Enviar para o Encarte Agora
+            </Button>
+          )}
         </div>
       </div>
 
@@ -606,6 +681,8 @@ export interface PainelValidadeItemDetailModalProps {
   open: boolean;
   onOpenChange?: (open: boolean) => void;
   onClose?: () => void;
+  onToggleEncarte?: (lote: ValidadeLoteCalculado) => void;
+  onOpenEncarteEditor?: () => void;
 }
 
 export const PainelValidadeItemDetailModal: React.FC<PainelValidadeItemDetailModalProps> = ({
@@ -613,6 +690,8 @@ export const PainelValidadeItemDetailModal: React.FC<PainelValidadeItemDetailMod
   open,
   onOpenChange,
   onClose,
+  onToggleEncarte,
+  onOpenEncarteEditor,
 }) => {
   if (!lote) return null;
 
@@ -624,7 +703,11 @@ export const PainelValidadeItemDetailModal: React.FC<PainelValidadeItemDetailMod
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-neutral-200 dark:border-slate-800">
-        <PainelValidadeItemDetailContent lote={lote} />
+        <PainelValidadeItemDetailContent
+          lote={lote}
+          onToggleEncarte={onToggleEncarte}
+          onOpenEncarteEditor={onOpenEncarteEditor}
+        />
       </DialogContent>
     </Dialog>
   );

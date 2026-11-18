@@ -6,6 +6,9 @@ import {
   Inbox,
   AlertTriangle,
   RefreshCw,
+  CheckCircle2,
+  X,
+  Zap,
 } from "lucide-react";
 import type {
   ValidadeFilterParams,
@@ -20,6 +23,8 @@ import {
   createSnapshotFromRaw,
   refreshEncartePinsOnActiveSnapshot,
   syncLastEncarteData,
+  addLoteToEncarte,
+  removeLoteFromEncarte,
 } from "@/lib/painel-validade-storage";
 import {
   filtrarLotes,
@@ -63,6 +68,51 @@ export function PainelValidadeWorkspace({
 
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [selectedLote, setSelectedLote] = useState<ValidadeLoteCalculado | null>(null);
+  const [toastNotice, setToastNotice] = useState<{
+    show: boolean;
+    message: string;
+    action: "added" | "removed";
+    encarteName?: string;
+  } | null>(null);
+
+  // Auto-dismiss do toast após 6 segundos
+  useEffect(() => {
+    if (!toastNotice?.show) return;
+    const timer = setTimeout(() => {
+      setToastNotice(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [toastNotice]);
+
+  // Ação de 1 clique: Enviar ou remover lote do encarte
+  const handleToggleEncarte = useCallback((loteToToggle: ValidadeLoteCalculado) => {
+    if (loteToToggle.noEncarte) {
+      removeLoteFromEncarte(loteToToggle.codprod);
+      setToastNotice({
+        show: true,
+        message: `Produto ${loteToToggle.codprod} removido do encarte.`,
+        action: "removed",
+      });
+    } else {
+      const res = addLoteToEncarte(loteToToggle);
+      setToastNotice({
+        show: true,
+        message: `⚡ ${loteToToggle.descricao} adicionado ao encarte com sucesso!`,
+        action: "added",
+        encarteName: res.encarteName,
+      });
+    }
+
+    // Atualiza estado local imediatamente
+    const active = getActiveSnapshot();
+    if (active) {
+      setSnapshot(active);
+      if (selectedLote && selectedLote.id === loteToToggle.id) {
+        const updatedSelected = active.lotes.find((l) => l.id === loteToToggle.id);
+        if (updatedSelected) setSelectedLote(updatedSelected);
+      }
+    }
+  }, [selectedLote]);
 
   // Carrega snapshot inicial e lista
   const reloadData = useCallback(() => {
@@ -408,6 +458,7 @@ export function PainelValidadeWorkspace({
                       key={lote.id}
                       lote={lote}
                       onClick={() => setSelectedLote(lote)}
+                      onToggleEncarte={handleToggleEncarte}
                     />
                   ))}
                 </div>
@@ -422,6 +473,10 @@ export function PainelValidadeWorkspace({
         lote={selectedLote}
         open={Boolean(selectedLote)}
         onClose={() => setSelectedLote(null)}
+        onToggleEncarte={handleToggleEncarte}
+        onOpenEncarteEditor={() => {
+          if (typeof window !== "undefined") window.location.href = "/";
+        }}
       />
 
       {/* Import Spreadsheet Modal */}
@@ -430,6 +485,46 @@ export function PainelValidadeWorkspace({
         onClose={() => setImportModalOpen(false)}
         onImportSuccess={handleImportSuccess}
       />
+
+      {/* Notificação Flutuante de 1-Clique */}
+      {toastNotice?.show && (
+        <aside
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-lg w-[92vw] sm:w-auto bg-neutral-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-neutral-700 flex items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-4 duration-200"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            {toastNotice.action === "added" ? (
+              <Sparkles className="h-5 w-5 text-yellow-400 shrink-0" />
+            ) : (
+              <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+            )}
+            <span className="text-xs sm:text-sm font-semibold truncate">
+              {toastNotice.message}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {toastNotice.action === "added" && (
+              <a
+                href="/"
+                className="px-3 py-1.5 rounded-lg text-xs font-black bg-yellow-400 hover:bg-yellow-500 text-yellow-950 transition-colors shadow-2xs"
+                title="Abrir editor de encartes com este produto incluído"
+              >
+                Ver no Encarte
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={() => setToastNotice(null)}
+              className="p-1.5 rounded-lg text-neutral-400 hover:text-white transition-colors cursor-pointer"
+              aria-label="Fechar notificação"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </aside>
+      )}
     </div>
   );
 }

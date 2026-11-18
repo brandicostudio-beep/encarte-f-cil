@@ -30,12 +30,14 @@ interface PainelValidadeCardProps {
   lote: ValidadeLoteCalculado;
   onOpenDetail?: (lote: ValidadeLoteCalculado) => void;
   onClick?: () => void;
+  onToggleEncarte?: (lote: ValidadeLoteCalculado) => void;
 }
 
 export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
   lote,
   onOpenDetail,
   onClick,
+  onToggleEncarte,
 }) => {
   const [isTooltipOpen, setIsTooltipOpen] = React.useState(false);
   const motivoLinha = gerarExplicacaoSobraLinha(lote);
@@ -185,15 +187,33 @@ export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
                   </span>
                 )}
 
-                {/* Selo Amarelo Grande NO ENCARTE (Conforme Especificação) */}
-                {lote.noEncarte && (
-                  <span
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs sm:text-sm font-black bg-yellow-400 text-yellow-950 border border-yellow-500 shadow-xs uppercase tracking-wider"
-                    title="Este produto está incluído e ativo no encarte do Geraencarte"
+                {/* Ação 1 Clique: NO ENCARTE / + ENCARTE */}
+                {lote.noEncarte ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleEncarte?.(lote);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs sm:text-sm font-black bg-yellow-400 hover:bg-yellow-500 text-yellow-950 border border-yellow-500 shadow-xs uppercase tracking-wider transition-all active:scale-95 cursor-pointer"
+                    title="Produto incluído no encarte mais recente. Clique para gerenciar ou remover"
                   >
                     <Sparkles className="h-4 w-4 text-yellow-900 shrink-0" />
                     NO ENCARTE
-                  </span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleEncarte?.(lote);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs sm:text-sm font-black bg-neutral-900 hover:bg-red-700 text-white border border-neutral-800 shadow-xs uppercase tracking-wider transition-all active:scale-95 cursor-pointer hover:shadow-md"
+                    title="Enviar lote para o encarte mais recente com 1 clique"
+                  >
+                    <Zap className="h-3.5 w-3.5 text-yellow-400 shrink-0" />
+                    + ENCARTE
+                  </button>
                 )}
 
                 {/* Lote novo no snapshot */}

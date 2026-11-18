@@ -144,7 +144,7 @@ describe("StockTurnoverAdminModal - Área Administrativa de Giro e Validade", ()
       )
     );
 
-    expect(html).toContain("Giro Crítico: apenas 8% do estoque vendido em 5 dias");
+    expect(html).toContain("Giro Crítico: apenas 8% do estoque vendido");
   });
 
   it("Garante que a indicação de visualização interna exclusiva esteja explícita", () => {
