@@ -398,8 +398,13 @@ export function PainelValidadeWorkspace({
                 Nenhuma planilha de validade carregada
               </h2>
               <p className="text-base text-slate-600 dark:text-slate-400 max-w-md mx-auto">
-                Importe a planilha exportada do Winthor/WMS (.csv delimitado por ponto e vírgula ou .xlsx) para visualizar o giro e validade por lote.
+                Importe a planilha exportada da Rotina 8230 do Winthor (.csv delimitado por ponto e vírgula ou .xlsx) para visualizar o giro e validade por lote.
               </p>
+              <div className="pt-1">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                  <FileSpreadsheet className="w-3.5 h-3.5" /> Sincronizado com Rotina 8230
+                </span>
+              </div>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
@@ -490,6 +495,47 @@ export function PainelValidadeWorkspace({
           </>
         )}
       </main>
+
+      {/* Rodapé Informativo: Sincronização com Rotina 8230 */}
+      <footer className="mt-12 border-t border-slate-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900/60 py-6 px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-neutral-500 dark:text-neutral-400">
+          <div className="flex items-center gap-2.5 flex-wrap justify-center md:justify-start">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+            <span className="font-bold text-neutral-800 dark:text-neutral-200">
+              Dados sincronizados com a Rotina 8230 (Winthor)
+            </span>
+            <span className="text-neutral-300 dark:text-neutral-700">•</span>
+            <span>
+              {snapshot ? (
+                <>
+                  Última atualização:{" "}
+                  <strong className="text-neutral-700 dark:text-neutral-200">
+                    {new Date(snapshot.criadoEm).toLocaleDateString("pt-BR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                    })}{" "}
+                    às{" "}
+                    {new Date(snapshot.criadoEm).toLocaleTimeString("pt-BR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </strong>
+                  {snapshot.nomeArquivo && (
+                    <span className="text-neutral-400 ml-1">({snapshot.nomeArquivo})</span>
+                  )}
+                </>
+              ) : (
+                "Aguardando importação da planilha da Rotina 8230"
+              )}
+            </span>
+          </div>
+
+          <div className="text-[11px] text-neutral-400 dark:text-neutral-500 text-center md:text-right">
+            Gestão Interna de Distribuição & Compras • Escoamento e Risco de Lotes • Confidencial
+          </div>
+        </div>
+      </footer>
 
       {/* Item Detail Modal */}
       <PainelValidadeItemDetailModal

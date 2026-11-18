@@ -42,14 +42,24 @@ export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
     (() => {
       if (typeof window !== "undefined") window.location.href = "/";
     });
-  const formattedUpdateDate = activeSnapshot
-    ? new Date(activeSnapshot.criadoEm).toLocaleString("pt-BR", {
-        day: "2-digit",
-        month: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : null;
+  const formatDateTime = (dateStr?: string | Date) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    const dia = d.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+    const hora = d.toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${dia} às ${hora}`;
+  };
+
+  const updateTimestamp = formatDateTime(activeSnapshot?.criadoEm);
+  const formattedUpdateDate = updateTimestamp;
 
   return (
     <header className="bg-neutral-900 text-white border-b border-neutral-800 shadow-md">
@@ -76,9 +86,16 @@ export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
                 <ShieldCheck className="h-3.5 w-3.5" />
                 Interno
               </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/40 uppercase tracking-wider">
+                Rotina 8230
+              </span>
             </div>
-            <p className="text-xs text-neutral-400 mt-0.5">
-              Gestão de Distribuição & Compras • Escoamento e Risco de Lotes
+            <p className="text-xs text-neutral-300 mt-1 flex items-center gap-1.5 flex-wrap">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
+              <span>
+                Dados sincronizados com a Rotina 8230 •{" "}
+                {updateTimestamp ? updateTimestamp : "Aguardando importação"}
+              </span>
             </p>
           </div>
         </div>
@@ -97,7 +114,7 @@ export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
                   <History className="h-4 w-4 mr-1.5 text-neutral-400" />
                   <div className="text-left">
                     <div className="text-[10px] text-neutral-400 leading-tight">
-                      Snapshot ativo:
+                      Rotina 8230 (Ativo):
                     </div>
                     <div className="font-bold text-white text-xs truncate max-w-[140px] sm:max-w-[200px]">
                       {activeSnapshot?.nomeArquivo || "Último importado"}
@@ -107,7 +124,7 @@ export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-80 bg-neutral-900 border-neutral-800 text-neutral-200">
                 <DropdownMenuLabel className="text-xs font-bold text-neutral-400">
-                  Histórico de Planilhas (Últimas {snapshotsList.length})
+                  Histórico Rotina 8230 (Últimas {snapshotsList.length})
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-neutral-800" />
                 {snapshotsList.map((s) => {
@@ -146,7 +163,7 @@ export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
             size="lg"
             onClick={handleOpenImport}
             className="min-h-[52px] px-5 text-sm sm:text-base font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg transition-transform active:scale-95"
-            title="Importar planilha exportada do Winthor/WMS (.csv ou .xlsx)"
+            title="Importar planilha exportada da Rotina 8230 do Winthor (.csv ou .xlsx)"
           >
             <Upload className="h-5 w-5 mr-2" />
             Importar Planilha de Validade
@@ -158,8 +175,8 @@ export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
       {formattedUpdateDate && (
         <div className="bg-neutral-950/70 border-t border-neutral-800/60 px-4 sm:px-6 py-1.5 text-[11px] text-neutral-400 flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <Calendar className="h-3 w-3 text-neutral-500" />
-            <span>Atualizado em {formattedUpdateDate}</span>
+            <Calendar className="h-3 w-3 text-emerald-400" />
+            <span>Rotina 8230 sincronizada em {formattedUpdateDate}</span>
             {activeSnapshot && (
               <span className="text-neutral-500">
                 • {activeSnapshot.totalLotes} lotes cadastrados ({activeSnapshot.totalProdutosUnicos} produtos)

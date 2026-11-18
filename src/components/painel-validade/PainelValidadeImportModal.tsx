@@ -154,11 +154,16 @@ export function PainelValidadeImportModal({
               <FileSpreadsheet className="w-6 h-6" />
             </div>
             <div>
-              <h2 id="modal-title" className="text-xl font-bold text-slate-900 dark:text-white">
-                Importar Planilha Winthor / WMS
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 id="modal-title" className="text-xl font-bold text-slate-900 dark:text-white">
+                  Importar Planilha • Rotina 8230
+                </h2>
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-700 uppercase">
+                  Winthor
+                </span>
+              </div>
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                Visualização interna de validade e giro por lote
+                Dados sincronizados com a Rotina 8230 • Giro e validade por lote
               </p>
             </div>
           </div>
@@ -173,6 +178,17 @@ export function PainelValidadeImportModal({
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Informational Banner Rotina 8230 */}
+          <div className="flex items-center gap-3 p-3.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-900 dark:text-blue-200">
+            <FileSpreadsheet className="w-5 h-5 shrink-0 text-blue-600 dark:text-blue-400" />
+            <div>
+              <span className="font-bold">Dados sincronizados com a Rotina 8230 (Winthor): </span>
+              <span>
+                Esta importação processa os lotes, estoque atual (QEST_WINTHOR / QTDISP_WMS), validade e histórico dos últimos 4 meses de vendas (QTVENDMES, M-1, M-2, M-3) diretamente da rotina de estoque.
+              </span>
+            </div>
+          </div>
+
           {/* Dropzone */}
           <div
             onDrop={handleDrop}
@@ -205,15 +221,20 @@ export function PainelValidadeImportModal({
                 <p className="text-lg font-semibold text-slate-800 dark:text-slate-200">
                   {selectedFile
                     ? selectedFile.name
-                    : "Arraste sua planilha ou clique para selecionar"}
+                    : "Arraste a planilha da Rotina 8230 ou clique para selecionar"}
                 </p>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Formatos aceitos: CSV delimitado por ponto e vírgula (;) ou pasta de trabalho Excel (.xlsx / .xls)
+                  Formatos aceitos: Planilha da Rotina 8230 em Excel (.xlsx / .xls) ou CSV delimitado por ponto e vírgula (;)
                 </p>
               </div>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                <FileText className="w-3.5 h-3.5" /> ISO-8859-1, Windows-1252 e UTF-8 com vírgula decimal
-              </span>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                  <FileSpreadsheet className="w-3.5 h-3.5" /> Rotina 8230 Winthor
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  <FileText className="w-3.5 h-3.5" /> ISO-8859-1, Windows-1252 e UTF-8 com vírgula decimal
+                </span>
+              </div>
             </div>
           </div>
 
@@ -278,7 +299,7 @@ export function PainelValidadeImportModal({
               {/* Required Columns Checklist */}
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 space-y-2">
                 <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
-                  Colunas Obrigatórias Verificadas
+                  Colunas Obrigatórias da Rotina 8230 Verificadas
                 </span>
                 <div className="flex flex-wrap gap-2 pt-1">
                   {OBRIGATORIAS.map((col) => {

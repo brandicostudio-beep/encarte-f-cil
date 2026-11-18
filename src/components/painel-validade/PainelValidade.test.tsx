@@ -8,6 +8,7 @@ import { PainelValidadeAlertsBar } from "./PainelValidadeAlertsBar";
 import { PainelValidadeFilters } from "./PainelValidadeFilters";
 import { PainelValidadeHeader } from "./PainelValidadeHeader";
 import { PainelValidadeItemDetailContent } from "./PainelValidadeItemDetailModal";
+import { PainelValidadeImportModal } from "./PainelValidadeImportModal";
 import {
   createSnapshotFromRaw,
   getStorage,
@@ -1164,5 +1165,56 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
     expect(modalNoEncarteHtml).toContain("Abrir no Encarte");
     expect(modalNoEncarteHtml).toContain("Remover");
     expect(modalNoEncarteHtml).toContain("Produto no Encarte Mais Recente");
+  });
+
+  it("PainelValidade: exibe sincronização com Rotina 8230 no Header, Modal de Importação e Rodapé com data e horário", () => {
+    // 1. Header com snapshot ativo contendo data e horário
+    const mockSnapshot: ValidadeSnapshot = {
+      id: "snap_test_8230",
+      criadoEm: "2026-11-18T10:04:00.000Z",
+      nomeArquivo: "rotina_8230_validade.xlsx",
+      totalLotes: 1,
+      totalCompradores: 1,
+      lotes: [],
+    };
+
+    const headerComSnapshotHtml = renderToString(
+      <PainelValidadeHeader
+        activeSnapshot={mockSnapshot}
+        snapshotsList={[mockSnapshot]}
+        onSelectSnapshot={() => {}}
+      />
+    );
+    expect(headerComSnapshotHtml).toContain("Dados sincronizados com a Rotina 8230");
+    expect(headerComSnapshotHtml).toContain("Rotina 8230");
+    // Verifica presença de horário e data formatada
+    expect(headerComSnapshotHtml).toMatch(/18\/11(\/2026)?/);
+
+    // 2. Header sem snapshot (estado inicial)
+    const headerSemSnapshotHtml = renderToString(
+      <PainelValidadeHeader
+        activeSnapshot={null}
+        snapshotsList={[]}
+        onSelectSnapshot={() => {}}
+      />
+    );
+    expect(headerSemSnapshotHtml).toContain("Dados sincronizados com a Rotina 8230");
+    expect(headerSemSnapshotHtml).toContain("Aguardando importação");
+
+    // 3. Modal de importação com identificação da Rotina 8230
+    const modalHtml = renderToString(
+      <PainelValidadeImportModal
+        open={true}
+        onClose={() => {}}
+        onImportSuccess={() => {}}
+      />
+    );
+    expect(modalHtml).toContain("Rotina 8230");
+    expect(modalHtml).toContain("Dados sincronizados com a Rotina 8230");
+
+    // 4. Rodapé no Workspace
+    const workspaceHtml = renderToString(<PainelValidadeWorkspace />);
+    expect(workspaceHtml).toContain("Dados sincronizados com a Rotina 8230 (Winthor)");
+    expect(workspaceHtml).toContain("<footer");
   });
 });
