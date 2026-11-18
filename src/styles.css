@@ -204,3 +204,34 @@
     6px 6px 0px #000000,
     8px 8px 12px rgba(0, 0, 0, 0.7);
 }
+
+/* ==========================================================================
+   OCULTAÇÃO COMPLETA DA MARCA D'ÁGUA / BADGE "EDIT WITH LOVABLE"
+   ========================================================================== */
+#lovable-badge,
+.lovable-badge,
+[id*="lovable-badge"],
+[class*="lovable-badge"],
+[data-lovable-badge],
+[data-lovable-watermark],
+[aria-label*="Lovable" i],
+[title*="Lovable" i],
+a[href*="lovable.dev"],
+a[href*="lovable.app"],
+div[data-lovable],
+button[data-lovable] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  max-width: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  position: absolute !important;
+  left: -99999px !important;
+  top: -99999px !important;
+  clip: rect(0, 0, 0, 0) !important;
+  z-index: -9999 !important;
+}

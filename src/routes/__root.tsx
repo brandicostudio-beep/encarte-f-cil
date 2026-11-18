@@ -108,11 +108,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Gerador de Encartes" },
-      { name: "author", content: "Lovable" },
+      { title: "Gerador de Encartes Promocionais" },
+      { name: "author", content: "Encarte Fácil" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
@@ -146,6 +145,44 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  // Purge any dynamically injected Lovable watermark badge
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const purgeWatermark = () => {
+      const selectors = [
+        "#lovable-badge",
+        ".lovable-badge",
+        '[id*="lovable-badge"]',
+        '[class*="lovable-badge"]',
+        '[data-lovable-badge]',
+        '[data-lovable-watermark]',
+        'a[href*="lovable.dev"]',
+        'a[href*="lovable.app"]',
+      ];
+      selectors.forEach((sel) => {
+        document.querySelectorAll(sel).forEach((el) => {
+          (el as HTMLElement).style.display = "none";
+          el.remove();
+        });
+      });
+
+      // Remove any element whose text content includes 'Edit with Lovable'
+      document.querySelectorAll("a, button, div, span").forEach((el) => {
+        const text = el.textContent?.trim().toLowerCase() || "";
+        if (text === "edit with lovable" || text.includes("edit with lovable")) {
+          (el as HTMLElement).style.display = "none";
+          el.remove();
+        }
+      });
+    };
+
+    purgeWatermark();
+    const observer = new MutationObserver(purgeWatermark);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

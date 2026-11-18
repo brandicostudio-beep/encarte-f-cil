@@ -78,7 +78,7 @@ export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
           </Button>
 
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white uppercase">
                 Painel de Validade
               </h1>
@@ -89,6 +89,21 @@ export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/40 uppercase tracking-wider">
                 Rotina 8230
               </span>
+
+              {/* Segmented Control: Dois Fluxos */}
+              <nav className="hidden md:flex items-center bg-neutral-950 border border-neutral-800 p-0.5 rounded-xl ml-2">
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all cursor-pointer"
+                  title="Ir para o Gerador de Encartes"
+                >
+                  🎨 Encartes
+                </button>
+                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-neutral-800 text-white shadow-2xs cursor-default">
+                  📦 Validade (8230)
+                </span>
+              </nav>
             </div>
             <p className="text-xs text-neutral-300 mt-1 flex items-center gap-1.5 flex-wrap">
               <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse" />

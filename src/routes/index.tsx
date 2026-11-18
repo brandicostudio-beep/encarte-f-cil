@@ -49,6 +49,8 @@ import {
 import { ProductEditModal } from "@/components/encarte/ProductEditModal";
 import { StoreSettingsModal } from "@/components/encarte/StoreSettingsModal";
 import { HowItWorksModal } from "@/components/encarte/HowItWorksModal";
+import { WelcomeHubModal } from "@/components/encarte/WelcomeHubModal";
+import { NavigationDrawer } from "@/components/encarte/NavigationDrawer";
 import { FinalEditor } from "@/components/encarte/FinalEditor";
 import { ProjectTopBar } from "@/components/encarte/projects/ProjectTopBar";
 import { ProjectManagerModal } from "@/components/encarte/projects/ProjectManagerModal";
@@ -113,6 +115,9 @@ import {
   ShieldAlert,
   TrendingDown,
   BarChart3,
+  MoreVertical,
+  CalendarClock,
+  LayoutGrid,
 } from "lucide-react";
 import { ColecoesWorkspace } from "@/components/colecoes/ColecoesWorkspace";
 
@@ -223,7 +228,19 @@ function EncarteApp() {
     (() => void) | null
   >(null);
   const [howItWorksOpen, setHowItWorksOpen] = useState(false);
+  const [welcomeHubOpen, setWelcomeHubOpen] = useState(false);
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
   const [lastImportBackup, setLastImportBackup] = useState<EncarteProduct[] | null>(null);
+
+  // Exibir a Tela de Boas-Vindas automaticamente na primeira vez se não tiver sido dispensada
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const isDismissed = localStorage.getItem("encarte_welcome_dismissed_v1") === "true";
+      if (!isDismissed) {
+        setWelcomeHubOpen(true);
+      }
+    }
+  }, []);
 
   // Estado e Gerenciamento de Projetos (IndexedDB + Google Drive)
   const [currentProject, setCurrentProject] = useState<ProjectData | null>(() => {
@@ -1655,129 +1672,94 @@ function EncarteApp() {
 
   return (
     <div className="min-h-screen bg-neutral-100/90 font-sans text-neutral-900 pb-20">
-      {/* 1. TOPO: Barra da Aplicação */}
-      <header className="bg-[#0D0D0D] text-white shadow-md sticky top-0 z-40 border-b-2 border-[#FFD400]">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2.5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-600 text-[#FFD400] font-display text-2xl font-black shadow-xs">
-              %
-            </div>
-            <div>
-              <h1 className="font-display text-lg uppercase tracking-wider text-[#FFD400] leading-none">
-                GERADOR DE ENCARTES
-              </h1>
-              <p className="text-[11px] text-neutral-400 font-medium">
-                Varejo Promocional A4 · Impressão Gráfica & Digital
-              </p>
-            </div>
-          </div>
-
-          {/* Seletor de Tipo de Encarte: Validade x Coleções */}
-          <div className="hidden md:flex items-center gap-1 bg-black/70 border border-neutral-700/80 p-1 rounded-xl">
+      {/* 1. TOPO: Barra da Aplicação Minimalista (Estilo Apple / Interface Clean) */}
+      <header className="bg-neutral-950/95 backdrop-blur-md text-white shadow-sm sticky top-0 z-40 border-b border-neutral-800">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2.5 gap-3">
+          {/* Marca / Identidade & Switcher dos Dois Fluxos */}
+          <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
-              onClick={() => setAppMode("validade")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                appMode === "validade"
-                  ? "bg-red-600 text-white shadow-xs"
-                  : "text-neutral-400 hover:text-white"
-              }`}
+              onClick={() => setWelcomeHubOpen(true)}
+              className="flex items-center gap-2.5 text-left group transition-transform active:scale-95 cursor-pointer"
+              title="Abrir Central de Boas-Vindas"
             >
-              <span>Encarte de Validade</span>
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-red-500 to-red-700 text-[#FFD400] font-black text-xl shadow-xs shrink-0 group-hover:scale-105 transition-transform">
+                %
+              </div>
+              <div className="hidden sm:block min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 className="font-display text-base tracking-wider text-white uppercase leading-none group-hover:text-amber-400 transition-colors truncate">
+                    Gerador de Encartes
+                  </h1>
+                </div>
+                <p className="text-[11px] text-neutral-400 font-medium truncate">
+                  Varejo Promocional A4 & Digital
+                </p>
+              </div>
             </button>
-            <button
-              type="button"
-              onClick={() => setAppMode("colecoes")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                appMode === "colecoes"
-                  ? "bg-red-600 text-white shadow-xs"
-                  : "text-neutral-400 hover:text-white"
-              }`}
-            >
-              <Layers className="h-3.5 w-3.5" />
-              <span>Coleções (Esquenta Black)</span>
-            </button>
+
+            {/* Segmented Control Minimalista (Estilo Apple): Os Dois Fluxos do Sistema */}
+            <nav className="flex items-center bg-neutral-900 border border-neutral-800 p-0.5 rounded-xl ml-1 sm:ml-3">
+              <span
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-neutral-800 text-white shadow-2xs flex items-center gap-1.5 cursor-default"
+                title="Você está no Gerador de Encartes"
+              >
+                <LayoutGrid className="w-3.5 h-3.5 text-red-400" />
+                <span className="hidden md:inline">Encartes</span>
+              </span>
+
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/painel-validade" as never })}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:text-white hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Ir para o Painel de Validade (Rotina 8230)"
+              >
+                <CalendarClock className="w-3.5 h-3.5 text-blue-400" />
+                <span className="hidden md:inline">Validade (Rotina 8230)</span>
+                <span className="md:hidden">Validade</span>
+              </button>
+            </nav>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Ações Rápidas & Menu Lateral de 3 Pontos */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Botão Boas-Vindas / Central */}
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setHowItWorksOpen(true)}
-              className="min-h-[44px] bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/40 text-xs font-bold shadow-xs transition-colors"
-              title="Guia visual em 4 passos: como criar seu encarte do zero"
-              data-testid="how-it-works-button"
+              onClick={() => setWelcomeHubOpen(true)}
+              className="h-9 px-3 text-xs font-semibold bg-neutral-900 border-neutral-700/80 text-neutral-200 hover:bg-neutral-800 hover:text-white transition-all hidden lg:flex items-center gap-1.5 cursor-pointer"
+              title="Abrir Central de Boas-Vindas com visão geral dos fluxos"
             >
-              <HelpCircle className="h-4 w-4 mr-1.5 text-amber-400" />
-              Como funciona
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Início</span>
             </Button>
 
+            {/* Botão Novo Encarte (Zerar Dados) */}
             <Button
               variant="outline"
               size="sm"
               onClick={() => setResetModalOpen(true)}
-              className="min-h-[44px] bg-red-600 hover:bg-red-700 text-white border-red-500 text-xs font-bold shadow-xs transition-colors"
+              className="h-9 px-3 text-xs font-bold bg-red-600/90 hover:bg-red-600 text-white border-red-500/60 shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               title="Zerar todos os dados e começar um novo encarte limpo"
             >
-              <RotateCcw className="h-4 w-4 mr-1.5" />
-              Novo Encarte (Zerar Dados)
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Novo Encarte</span>
             </Button>
 
+            {/* Botão de 3 Pontos para a Aba Lateral */}
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setStoreSettingsOpen(true)}
-              className="min-h-[44px] bg-neutral-900 text-white border-neutral-700 hover:bg-neutral-800 hover:text-[#FFD400] text-xs font-semibold"
+              onClick={() => setNavDrawerOpen(true)}
+              className="h-9 w-9 p-0 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 hover:text-white border-neutral-700/80 transition-all rounded-xl relative cursor-pointer"
+              title="Abrir menu lateral completo (Configurações, Auditoria, Como Funciona, Sair)"
+              aria-label="Menu de opções"
             >
-              <Store className="h-4 w-4 mr-1.5 text-[#FFD400]" />
-              Configurar Loja & Cores
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setStockTurnoverOpen(true)}
-              className="min-h-[44px] bg-neutral-900 text-neutral-100 border-neutral-700 hover:bg-neutral-800 text-xs font-semibold relative"
-              title="Acompanhamento administrativo interno de giro de estoque e controle de validade"
-              data-testid="admin-turnover-top-btn"
-            >
-              <ShieldAlert className="h-4 w-4 mr-1.5 text-amber-400" />
-              Área Administrativa: Giro & Validade
+              <MoreVertical className="w-4.5 h-4.5" />
               {turnoverSummary.criticalExpiryCount + turnoverSummary.stagnantCount > 0 && (
-                <span className="ml-1.5 px-1.5 py-0.2 bg-red-600 text-white rounded-full font-mono font-black text-[10px] animate-pulse">
-                  {turnoverSummary.criticalExpiryCount + turnoverSummary.stagnantCount}
-                </span>
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse border-2 border-neutral-950" />
               )}
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate({ to: "/colecoes" })}
-              className="min-h-[44px] bg-neutral-900 text-neutral-300 border-neutral-700 hover:bg-neutral-800 text-xs font-semibold"
-            >
-              Encarte de Coleções
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate({ to: "/painel-validade" as never })}
-              className="min-h-[44px] bg-blue-950/70 text-blue-300 border-blue-700 hover:bg-blue-900 hover:text-white text-xs font-bold"
-              title="Painel Interno de Validade e Giro (Distribuição / Comprador)"
-            >
-              <BarChart3 className="h-4 w-4 mr-1.5 text-blue-400" />
-              Painel de Validade (Interno)
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLogout}
-              className="min-h-[44px] bg-neutral-900 text-neutral-300 border-neutral-700 hover:bg-neutral-800 hover:text-red-400 text-xs font-semibold"
-              title="Encerrar sessão de acesso"
-              data-testid="logout-button"
-            >
-              <LogOut className="h-4 w-4 mr-1.5 text-neutral-400" />
-              Sair
             </Button>
           </div>
         </div>
@@ -3455,6 +3437,31 @@ function EncarteApp() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* CENTRAL DE BOAS-VINDAS: DOIS FLUXOS (ENCARTE OU VALIDADE) */}
+      <WelcomeHubModal
+        open={welcomeHubOpen}
+        onClose={() => setWelcomeHubOpen(false)}
+        onSelectFlow={(flow) => {
+          if (flow === "validade") {
+            navigate({ to: "/painel-validade" as never });
+          }
+        }}
+      />
+
+      {/* ABA LATERAL (DRAWER / MENU DE 3 PONTOS ESTILO APPLE) */}
+      <NavigationDrawer
+        open={navDrawerOpen}
+        onOpenChange={setNavDrawerOpen}
+        onOpenHowItWorks={() => setHowItWorksOpen(true)}
+        onOpenStoreSettings={() => setStoreSettingsOpen(true)}
+        onOpenStockTurnover={() => setStockTurnoverOpen(true)}
+        onOpenResetModal={() => setResetModalOpen(true)}
+        onOpenWelcomeHub={() => setWelcomeHubOpen(true)}
+        onNavigateToValidade={() => navigate({ to: "/painel-validade" as never })}
+        onLogout={handleLogout}
+        turnoverAlertCount={turnoverSummary.criticalExpiryCount + turnoverSummary.stagnantCount}
+      />
 
       {/* GUIA "COMO FUNCIONA": 4 PASSOS ILUSTRADOS E ANIMADOS */}
       <HowItWorksModal
