@@ -1712,9 +1712,6 @@ function EncarteApp() {
                   <h1 className="font-display text-base tracking-wider text-white uppercase leading-none group-hover:text-red-400 transition-colors truncate">
                     CONTROLE DE VALIDADE
                   </h1>
-                  <span className="text-[10px] font-black uppercase px-1.5 py-0.5 rounded bg-[#4A0D17] text-red-300 border border-red-700/60">
-                    {"\n"}
-                  </span>
                 </div>
                 <p className="text-[11px] text-neutral-400 font-medium truncate">
                   Acompanhamento e Marketing
