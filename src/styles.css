@@ -156,7 +156,7 @@
 
 @media print {
   @page {
-    size: A4 portrait;
+    size: portrait;
     margin: 0;
   }
   body {

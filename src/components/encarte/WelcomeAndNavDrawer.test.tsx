@@ -3,6 +3,7 @@ import React from "react";
 import { renderToString } from "react-dom/server";
 import { WelcomeHubModal } from "./WelcomeHubModal";
 import { NavigationDrawerContent } from "./NavigationDrawer";
+import { ProjectTopBar } from "./projects/ProjectTopBar";
 
 describe("UI/UX Redesign: WelcomeHubModal & NavigationDrawer (Estilo Apple)", () => {
   it("WelcomeHubModal: renderiza os dois fluxos centrais (Encartes e Validade Rotina 8230)", () => {
@@ -88,5 +89,54 @@ describe("UI/UX Redesign: WelcomeHubModal & NavigationDrawer (Estilo Apple)", ()
 
     // Garante que Coleções Esquenta Black foi omitido conforme solicitado
     expect(html).not.toContain("Esquenta Black");
+  });
+
+  it("NavigationDrawerContent: exibe Meus Projetos e Histórico quando fornecidos", () => {
+    const html = renderToString(
+      <NavigationDrawerContent
+        onClose={() => {}}
+        onOpenHowItWorks={() => {}}
+        onOpenStoreSettings={() => {}}
+        onOpenStockTurnover={() => {}}
+        onOpenResetModal={() => {}}
+        onOpenWelcomeHub={() => {}}
+        onNavigateToValidade={() => {}}
+        onLogout={() => {}}
+        onOpenProjects={() => {}}
+        onOpenVersionHistory={() => {}}
+      />
+    );
+
+    expect(html).toContain("Projetos &amp; Histórico");
+    expect(html).toContain("Meus Projetos");
+    expect(html).toContain("Histórico de Versões");
+  });
+
+  it("ProjectTopBar: elimina o botão duplicado de 3 pontos e exibe dropdown com ações do projeto e botão Versões", () => {
+    const html = renderToString(
+      <ProjectTopBar
+        projectName="Encarte Ofertas da Semana"
+        saveStatus="synced"
+        statusNotice="Sincronizado no Google Drive"
+        onSave={() => {}}
+        onSaveAs={() => {}}
+        onRename={() => {}}
+        onOpenProjects={() => {}}
+        onOpenVersionHistory={() => {}}
+        onOpenUpdateCheck={() => {}}
+        onNewProject={() => {}}
+      />
+    );
+
+    // Contém Meus Projetos e Salvar
+    expect(html).toContain("Meus Projetos");
+    expect(html).toContain("Salvar");
+    expect(html).toContain("Encarte Ofertas da Semana");
+    expect(html).toContain("Versões");
+
+    // NÃO contém MoreVertical (três pontos duplicados)
+    expect(html).not.toContain("lucide-more-vertical");
+    // Não contém texto A4
+    expect(html).not.toContain("A4");
   });
 });

@@ -10,6 +10,8 @@ import {
   RotateCcw,
   LogOut,
   ChevronRight,
+  Folder,
+  History,
 } from "lucide-react";
 
 export interface NavigationDrawerProps {
@@ -22,6 +24,8 @@ export interface NavigationDrawerProps {
   onOpenWelcomeHub: () => void;
   onNavigateToValidade: () => void;
   onLogout: () => void;
+  onOpenProjects?: () => void;
+  onOpenVersionHistory?: () => void;
   turnoverAlertCount?: number;
 }
 
@@ -34,6 +38,8 @@ export interface NavigationDrawerContentProps {
   onOpenWelcomeHub: () => void;
   onNavigateToValidade: () => void;
   onLogout: () => void;
+  onOpenProjects?: () => void;
+  onOpenVersionHistory?: () => void;
   turnoverAlertCount?: number;
 }
 
@@ -46,6 +52,8 @@ export const NavigationDrawerContent: React.FC<NavigationDrawerContentProps> = (
   onOpenWelcomeHub,
   onNavigateToValidade,
   onLogout,
+  onOpenProjects,
+  onOpenVersionHistory,
   turnoverAlertCount = 0,
 }) => {
   const handleItemClick = (action: () => void) => {
@@ -156,6 +164,63 @@ export const NavigationDrawerContent: React.FC<NavigationDrawerContentProps> = (
             </button>
           </div>
         </div>
+
+        {/* Seção: Projetos Salvos & Versões */}
+        {(onOpenProjects || onOpenVersionHistory) && (
+          <div className="space-y-1.5">
+            <span className="text-[10.5px] font-bold text-neutral-400 uppercase tracking-wider px-3">
+              Projetos &amp; Histórico
+            </span>
+
+            <div className="space-y-1">
+              {onOpenProjects && (
+                <button
+                  type="button"
+                  onClick={() => handleItemClick(onOpenProjects)}
+                  className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-neutral-800/60 text-neutral-200 border border-transparent hover:border-neutral-700/60 text-left transition-all group cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-[#FFD400] flex items-center justify-center shrink-0">
+                      <Folder className="w-4 h-4" />
+                    </div>
+                    <div className="truncate">
+                      <div className="text-sm font-semibold text-neutral-200 group-hover:text-white truncate">
+                        Meus Projetos
+                      </div>
+                      <div className="text-[11px] text-neutral-400 truncate">
+                        Gerenciar encartes salvos no Drive e localmente
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-neutral-500 group-hover:text-neutral-300 shrink-0" />
+                </button>
+              )}
+
+              {onOpenVersionHistory && (
+                <button
+                  type="button"
+                  onClick={() => handleItemClick(onOpenVersionHistory)}
+                  className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-neutral-800/60 text-neutral-200 border border-transparent hover:border-neutral-700/60 text-left transition-all group cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-300 flex items-center justify-center shrink-0">
+                      <History className="w-4 h-4" />
+                    </div>
+                    <div className="truncate">
+                      <div className="text-sm font-semibold text-neutral-200 group-hover:text-white truncate">
+                        Histórico de Versões
+                      </div>
+                      <div className="text-[11px] text-neutral-400 truncate">
+                        Restaurar alterações e versões anteriores
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-neutral-500 group-hover:text-neutral-300 shrink-0" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Seção 2: Configurações & Gestão */}
         <div className="space-y-1.5">

@@ -17,13 +17,12 @@ import {
   RefreshCw,
   Cloud,
   HardDrive,
-  CheckCircle2,
   AlertCircle,
   Clock,
-  MoreVertical,
   PlusCircle,
   Check,
   X,
+  ChevronDown,
 } from "lucide-react";
 import type { ProjectSyncStatus } from "@/types/project";
 import { validateProjectName } from "@/lib/project-serializer";
@@ -163,17 +162,63 @@ export const ProjectTopBar: React.FC<ProjectTopBarProps> = ({
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={handleStartRename}
-              className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-neutral-800/80 transition-colors text-left group max-w-[280px] sm:max-w-[360px] truncate"
-              title="Clique para renomear este projeto"
-            >
-              <span className="text-xs sm:text-sm font-bold text-neutral-100 truncate group-hover:text-[#FFD400] transition-colors">
-                {projectName || "Projeto Sem Título"}
-              </span>
-              <Edit3 className="h-3 w-3 text-neutral-500 group-hover:text-[#FFD400] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-neutral-800/90 transition-colors text-left group max-w-[280px] sm:max-w-[360px] truncate border border-transparent hover:border-neutral-700 cursor-pointer"
+                  title="Opções deste projeto: renomear, salvar como, histórico"
+                >
+                  <span className="text-xs sm:text-sm font-bold text-neutral-100 truncate group-hover:text-[#FFD400] transition-colors">
+                    {projectName || "Projeto Sem Título"}
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 text-neutral-400 group-hover:text-[#FFD400] transition-colors shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="w-56 bg-neutral-950 text-neutral-100 border-neutral-800 shadow-xl"
+              >
+                <DropdownMenuItem
+                  onClick={handleStartRename}
+                  className="hover:bg-neutral-800 focus:bg-neutral-800 cursor-pointer text-xs font-medium"
+                >
+                  <Edit3 className="h-3.5 w-3.5 mr-2 text-neutral-400" />
+                  Renomear Projeto
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={onSaveAs}
+                  className="hover:bg-neutral-800 focus:bg-neutral-800 cursor-pointer text-xs font-medium"
+                >
+                  <Copy className="h-3.5 w-3.5 mr-2 text-neutral-400" />
+                  Salvar Como...
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={onOpenVersionHistory}
+                  className="hover:bg-neutral-800 focus:bg-neutral-800 cursor-pointer text-xs font-medium"
+                >
+                  <History className="h-3.5 w-3.5 mr-2 text-[#FFD400]" />
+                  Histórico de Versões
+                </DropdownMenuItem>
+                {hasDataSource && (
+                  <DropdownMenuItem
+                    onClick={onOpenUpdateCheck}
+                    className="hover:bg-neutral-800 focus:bg-neutral-800 cursor-pointer text-xs font-medium text-sky-400 focus:text-sky-300"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5 mr-2 text-sky-400" />
+                    Verificar Atualizações
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator className="bg-neutral-800" />
+                <DropdownMenuItem
+                  onClick={onNewProject}
+                  className="hover:bg-neutral-800 focus:bg-neutral-800 cursor-pointer text-xs font-medium text-amber-300 focus:text-amber-200"
+                >
+                  <PlusCircle className="h-3.5 w-3.5 mr-2 text-amber-400" />
+                  Novo Encarte (Limpo)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
 
           {nameError && (
@@ -184,7 +229,7 @@ export const ProjectTopBar: React.FC<ProjectTopBarProps> = ({
         </div>
       </div>
 
-      {/* Direita: Status de Salvamento + Botões de Ação */}
+      {/* Direita: Status de Salvamento + Botões de Ação (SEM botão de 3 pontos!) */}
       <div className="flex items-center gap-2.5 shrink-0">
         {/* Status indicator */}
         <div className="flex items-center gap-1.5 text-[11px] font-medium text-neutral-300 bg-neutral-900/90 border border-neutral-800 px-2.5 py-1 rounded-md">
@@ -220,79 +265,31 @@ export const ProjectTopBar: React.FC<ProjectTopBarProps> = ({
           )}
         </div>
 
+        {/* Botão de Histórico de Versões direto na barra */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onOpenVersionHistory}
+          className="min-h-[34px] px-2.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 hover:text-white border-neutral-700 text-xs font-semibold shadow-xs transition-colors hidden md:flex items-center cursor-pointer"
+          title="Ver histórico de versões salvas deste projeto"
+        >
+          <History className="h-3.5 w-3.5 mr-1.5 text-[#FFD400]" />
+          Versões
+        </Button>
+
         {/* Botão Salvar (Ctrl+S) */}
         <Button
           type="button"
           size="sm"
           onClick={onSave}
           disabled={isSaving}
-          className="min-h-[34px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors"
+          className="min-h-[34px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
           title="Salvar projeto agora (Ctrl+S)"
         >
           <Save className="h-3.5 w-3.5 mr-1.5" />
           Salvar
         </Button>
-
-        {/* Menu de Ações Extras do Projeto */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-[34px] px-2 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border-neutral-700"
-              title="Mais opções do projeto"
-            >
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            className="w-56 bg-neutral-950 text-neutral-100 border-neutral-800"
-          >
-            <DropdownMenuItem
-              onClick={onSaveAs}
-              className="hover:bg-neutral-800 focus:bg-neutral-800 cursor-pointer text-xs font-medium"
-            >
-              <Copy className="h-3.5 w-3.5 mr-2 text-neutral-400" />
-              Salvar Como...
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={handleStartRename}
-              className="hover:bg-neutral-800 focus:bg-neutral-800 cursor-pointer text-xs font-medium"
-            >
-              <Edit3 className="h-3.5 w-3.5 mr-2 text-neutral-400" />
-              Renomear Projeto
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={onOpenVersionHistory}
-              className="hover:bg-neutral-800 focus:bg-neutral-800 cursor-pointer text-xs font-medium"
-            >
-              <History className="h-3.5 w-3.5 mr-2 text-[#FFD400]" />
-              Histórico de Versões
-            </DropdownMenuItem>
-
-            {hasDataSource && (
-              <DropdownMenuItem
-                onClick={onOpenUpdateCheck}
-                className="hover:bg-neutral-800 focus:bg-neutral-800 cursor-pointer text-xs font-medium text-sky-400 focus:text-sky-300"
-              >
-                <RefreshCw className="h-3.5 w-3.5 mr-2 text-sky-400" />
-                Verificar Atualizações
-              </DropdownMenuItem>
-            )}
-
-            <DropdownMenuSeparator className="bg-neutral-800" />
-
-            <DropdownMenuItem
-              onClick={onNewProject}
-              className="hover:bg-neutral-800 focus:bg-neutral-800 cursor-pointer text-xs font-medium text-amber-300 focus:text-amber-200"
-            >
-              <PlusCircle className="h-3.5 w-3.5 mr-2 text-amber-400" />
-              Novo Encarte (Limpo)
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
     </div>
   );

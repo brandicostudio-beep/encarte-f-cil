@@ -124,6 +124,7 @@ import {
   MoreVertical,
   CalendarClock,
   LayoutGrid,
+  Menu,
 } from "lucide-react";
 import { ColecoesWorkspace } from "@/components/colecoes/ColecoesWorkspace";
 
@@ -199,7 +200,7 @@ function EncarteApp() {
   const [store, setStore] = useState<StoreConfig>(DEFAULT_STORE);
   const [campaign, setCampaign] = useState<CampaignConfig>(DEFAULT_CAMPAIGN);
 
-  // Controles de Visualização A4
+  // Controles de Visualização e Páginas
   const [currentPage, setCurrentPage] = useState(1);
   const [previewZoom, setPreviewZoom] = useState(0.68);
   const [isRealScale, setIsRealScale] = useState(false);
@@ -1405,7 +1406,7 @@ function EncarteApp() {
     reader.readAsDataURL(file);
   };
 
-  // Exportar PDF 300 DPI (Modo A4)
+  // Exportar PDF 300 DPI
   const executeExportPdf = async () => {
     setExporting(true);
     try {
@@ -1561,7 +1562,7 @@ function EncarteApp() {
 
   const handleExportPdf = () => confirmOrExecuteExport(executeExportPdf);
 
-  // Exportar PNG em Resolução 1080 × 1920 ou 2160 × 3840 (ou A4)
+  // Exportar PNG em Resolução 1080 × 1920 ou 2160 × 3840
   const executeExportPngCurrentPage = async () => {
     const is916 = campaign.format === "story_9_16";
     const pageEl =
@@ -1692,16 +1693,11 @@ function EncarteApp() {
                 />
               </div>
               <div className="hidden sm:block min-w-0">
-                <div className="flex items-center gap-2">
-                  <h1 className="font-display text-base tracking-wider text-white uppercase leading-none group-hover:text-red-400 transition-colors truncate">
-                    CONTROLE DE VALIDADE
-                  </h1>
-                  <span className="text-[10px] font-black uppercase px-1.5 py-0.5 rounded bg-[#4A0D17] text-red-300 border border-red-700/60">
-                    {"\n"}
-                  </span>
-                </div>
-                <p className="text-[11px] text-neutral-400 font-medium truncate">
-                  Acompanhamento e Marketing
+                <h1 className="font-display text-sm sm:text-base font-bold tracking-wider text-white uppercase leading-none group-hover:text-red-400 transition-colors truncate">
+                  Controle de Validade &amp; Encartes
+                </h1>
+                <p className="text-[11px] text-neutral-400 font-medium truncate mt-1">
+                  Marketing Digital • Story 9:16
                 </p>
               </div>
             </button>
@@ -1729,7 +1725,7 @@ function EncarteApp() {
             </nav>
           </div>
 
-          {/* Ações Rápidas & Menu Lateral de 3 Pontos */}
+          {/* Ações Rápidas & Menu Lateral do Sistema */}
           <div className="flex items-center gap-2 shrink-0">
             {/* Botão Boas-Vindas / Central */}
             <Button
@@ -1755,18 +1751,19 @@ function EncarteApp() {
               <span className="hidden sm:inline">Novo Encarte</span>
             </Button>
 
-            {/* Botão de 3 Pontos para a Aba Lateral */}
+            {/* Botão de Menu para o Menu Lateral (sem duplicar 3 pontos) */}
             <Button
               variant="outline"
               size="sm"
               onClick={() => setNavDrawerOpen(true)}
-              className="h-9 w-9 p-0 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 hover:text-white border-neutral-700/80 transition-all rounded-xl relative cursor-pointer"
-              title="Abrir menu lateral completo (Configurações, Auditoria, Como Funciona, Sair)"
-              aria-label="Menu de opções"
+              className="h-9 px-3 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 hover:text-white border-neutral-700/80 transition-all rounded-xl relative cursor-pointer flex items-center gap-1.5"
+              title="Abrir menu do sistema (Configurações, Auditoria, Como Funciona, Sair)"
+              aria-label="Menu do sistema"
             >
-              <MoreVertical className="w-4.5 h-4.5" />
+              <Menu className="w-4 h-4 text-neutral-300" />
+              <span className="hidden sm:inline text-xs font-semibold">Menu</span>
               {turnoverSummary.criticalExpiryCount + turnoverSummary.stagnantCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse border-2 border-neutral-950" />
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
               )}
             </Button>
           </div>
@@ -1959,7 +1956,7 @@ function EncarteApp() {
               )}
             </div>
 
-            {/* ÁREA CENTRAL: TABELA DE REVISÃO OU PRÉ-VISUALIZAÇÃO A4 (9 COLUNAS) */}
+            {/* ÁREA CENTRAL: TABELA DE REVISÃO OU PRÉ-VISUALIZAÇÃO DO ENCARTE (9 COLUNAS) */}
             <div className="lg:col-span-9 space-y-6">
               {/* SE ETAPA FOR PREÇOS */}
               {currentStep === "precos" && (
@@ -2169,7 +2166,7 @@ function EncarteApp() {
                     </p>
                   </div>
 
-                  {/* 3. Configuração Específica do Formato (Template 9:16 ou Cabeçalho A4) */}
+                  {/* 3. Configuração do Template ou Cabeçalho */}
                   {campaign.format === "story_9_16" ? (
                     <div className="space-y-4 rounded-lg border p-4 bg-neutral-50/50">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -2241,10 +2238,10 @@ function EncarteApp() {
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                           <label className="text-sm font-bold text-neutral-800 block">
-                            3. Cabeçalho da Peça A4
+                            3. Cabeçalho do Encarte
                           </label>
                           <p className="text-[11px] text-neutral-500">
-                            Especificação: <strong>2480 × 875 px</strong> a 300 DPI (largura de A4 com cerca de 74 mm).
+                            Especificação: <strong>2480 × 875 px</strong> a 300 DPI (alta resolução).
                           </p>
                         </div>
 
@@ -3386,7 +3383,7 @@ function EncarteApp() {
         }}
       />
 
-      {/* ABA LATERAL (DRAWER / MENU DE 3 PONTOS ESTILO APPLE) */}
+      {/* ABA LATERAL (DRAWER / MENU DO SISTEMA) */}
       <NavigationDrawer
         open={navDrawerOpen}
         onOpenChange={setNavDrawerOpen}
@@ -3396,6 +3393,13 @@ function EncarteApp() {
         onOpenResetModal={() => setResetModalOpen(true)}
         onOpenWelcomeHub={() => setWelcomeHubOpen(true)}
         onNavigateToValidade={() => navigate({ to: "/painel-validade" as never })}
+        onOpenProjects={() => setProjectManagerOpen(true)}
+        onOpenVersionHistory={() => {
+          if (currentProject) {
+            setHistoryTargetProjectId(currentProject.id);
+            setVersionHistoryOpen(true);
+          }
+        }}
         onLogout={handleLogout}
         turnoverAlertCount={turnoverSummary.criticalExpiryCount + turnoverSummary.stagnantCount}
       />

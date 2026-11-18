@@ -1,6 +1,6 @@
 /**
  * DESIGN TOKENS - GERADOR DE ENCARTES DE VAREJO
- * Padrões de cores, tipografia, espaçamento e contrastes para uso no Editor e na Peça A4 Impressa.
+ * Padrões de cores, tipografia, espaçamento e contrastes para uso no Editor e Encartes.
  */
 
 export const DESIGN_TOKENS = {
@@ -51,7 +51,7 @@ export const DESIGN_TOKENS = {
     successGreenBorder: "#BBF7D0",
   },
 
-  // Escalas Tipográficas Estritas para Impressão A4 (Pontos / pt)
+  // Escalas Tipográficas Estritas para Impressão e Peças (Pontos / pt)
   // Regra de Varejo: Nada impresso abaixo de 8pt. Preço é o protagonista.
   typography: {
     print: {
@@ -94,7 +94,7 @@ export const DESIGN_TOKENS = {
     },
   },
 
-  // Grade e Geometria da Peça A4 (210 x 297 mm)
+  // Grade e Geometria da Peça (210 x 297 mm)
   geometry: {
     widthMm: 210,
     heightMm: 297,

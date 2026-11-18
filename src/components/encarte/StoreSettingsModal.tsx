@@ -215,7 +215,7 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Seção 2: Configuração de Template (Modo 9:16) ou Cabeçalho (Modo A4) */}
+          {/* Seção 2: Configuração de Template (Modo 9:16) ou Cabeçalho Personalizado */}
           {campForm.format === "story_9_16" ? (
             <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
               <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-primary">
@@ -292,7 +292,7 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
             <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
               <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-primary">
                 <ImageIcon className="h-4 w-4" />
-                2. Cabeçalho Personalizado da Peça A4
+                2. Cabeçalho Personalizado do Encarte
               </h3>
 
               <div className="space-y-2">
@@ -300,7 +300,7 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
                   Arte de Cabeçalho (PNG ou JPG)
                 </Label>
                 <p className="text-[11px] text-muted-foreground">
-                  Especificação recomendada: <strong>2480 × 875 px</strong> a 300 DPI (largura A4 com cerca de 74 mm de altura).
+                  Especificação recomendada: <strong>2480 × 875 px</strong> a 300 DPI (alta resolução com cerca de 74 mm de altura).
                   Para gráfica com sangria de 3 mm em cada lado: <strong>2551 × 910 px</strong>.
                 </p>
 
