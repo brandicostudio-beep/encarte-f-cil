@@ -10,7 +10,11 @@ import type {
   EncarteSemanalProduct,
   EncarteSemanalCellPosition,
 } from "@/types/encarte-semanal";
-import { calculateEncarteSemanalGridCells } from "./encarte-semanal-layout";
+import {
+  calculateEncarteSemanalGridCells,
+  resolveSemanalCellPhotos,
+} from "./encarte-semanal-layout";
+import { removeWhiteBackground } from "./colecoes-image-processor";
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -88,7 +92,7 @@ function roundRect(
  * Renderiza uma página de até 20 produtos sobre o modelo de arte em 1080x1920.
  */
 export async function renderEncarteSemanalPageToCanvas(
-  products: EncarteSemanalProduct[],
+  products: (EncarteSemanalProduct | null | undefined)[],
   config: EncarteSemanalConfig,
   targetCanvas?: HTMLCanvasElement
 ): Promise<HTMLCanvasElement> {
@@ -138,18 +142,56 @@ export async function renderEncarteSemanalPageToCanvas(
     const barY = cell.barY;
     const barH = cell.barHeight || 54;
 
-    // A. DESENHAR FOTO (na área de foto, podendo avançar sobre a barra)
-    if (product.image) {
-      try {
-        const photoImg = await loadImage(product.image);
-        const scale = (product.scale || 1.15) > 10 ? (product.scale || 115) / 100 : product.scale || 1.15;
-        const overlapY = product.overlapY ?? 8;
-        const offsetX = product.offsetX || 0;
-        const offsetY = product.offsetY || 0;
+    // A. DESENHAR FOTO(S) (com suporte a 2 fotos lado a lado e recorte de fundo branco)
+    const { photo1, photo2, hasTwoPhotos } = resolveSemanalCellPhotos(product);
+    const scale = (product.scale || 1.15) > 10 ? (product.scale || 115) / 100 : product.scale || 1.15;
+    const overlapY = product.overlapY ?? 8;
+    const offsetX = product.offsetX || 0;
+    const offsetY = product.offsetY || 0;
 
-        // Dimensões da foto mantendo proporção
+    if (hasTwoPhotos && photo1 && photo2) {
+      try {
+        const clean1 = await removeWhiteBackground(photo1);
+        const clean2 = await removeWhiteBackground(photo2);
+        const [img1, img2] = await Promise.all([
+          loadImage(clean1 || photo1),
+          loadImage(clean2 || photo2),
+        ]);
+
+        const itemW = cell.width * 0.68 * scale;
+        const itemH = cell.photoAreaHeight * 0.90 * scale;
+
+        // Foto 1 (Esquerda)
+        const x1 = cell.x + cell.width * 0.04 + offsetX;
+        const y1 = cell.y + cell.photoAreaHeight - itemH + overlapY + offsetY;
+
+        ctx.save();
+        ctx.shadowColor = "rgba(0, 0, 0, 0.65)";
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 6;
+        ctx.drawImage(img1, x1, y1, itemW, itemH);
+        ctx.restore();
+
+        // Foto 2 (Direita / Variação / Duplicata escalonada)
+        const x2 = cell.x + cell.width * 0.30 + offsetX;
+        const y2 = cell.y + cell.photoAreaHeight - itemH + overlapY + offsetY;
+
+        ctx.save();
+        ctx.shadowColor = "rgba(0, 0, 0, 0.70)";
+        ctx.shadowBlur = 16;
+        ctx.shadowOffsetY = 8;
+        ctx.drawImage(img2, x2, y2, itemW, itemH);
+        ctx.restore();
+      } catch (err) {
+        console.warn(`Aviso ao desenhar fotos do produto ${product.code}:`, err);
+      }
+    } else if (photo1) {
+      try {
+        const clean1 = await removeWhiteBackground(photo1);
+        const photoImg = await loadImage(clean1 || photo1);
+
         const aspect = photoImg.width / photoImg.height;
-        let drawW = (cell.width * 0.9) * scale;
+        let drawW = cell.width * 0.9 * scale;
         let drawH = drawW / aspect;
 
         const maxH = (cell.photoAreaHeight + overlapY) * scale;
@@ -159,11 +201,9 @@ export async function renderEncarteSemanalPageToCanvas(
         }
 
         const drawX = cell.x + (cell.width - drawW) / 2 + offsetX;
-        // Alinhada na base da área de foto + overlap sobre a barra
         const drawY = cell.y + cell.photoAreaHeight - drawH + overlapY + offsetY;
 
         ctx.save();
-        // Sombra de destaque para recorte de produto
         ctx.shadowColor = "rgba(0, 0, 0, 0.65)";
         ctx.shadowBlur = 14;
         ctx.shadowOffsetY = 6;
@@ -201,22 +241,27 @@ export async function renderEncarteSemanalPageToCanvas(
 
     // Textos da barra: COD (à esquerda) e DESCRIÇÃO (ao centro/direita)
     // Produtos classificados como Principal ficam SEM CÓDIGO na barra
-    const isPrincipal = Boolean(product.isPrincipal || !product.code);
-    const code = isPrincipal ? "" : (product.code ? product.code.trim() : "");
+    const isPrincipal = Boolean(product.isPrincipal || (!product.code && !product.secondaryCode));
+    const displayCode = isPrincipal
+      ? ""
+      : product.secondaryCode
+      ? `${product.code || ""} / ${product.secondaryCode}`.trim()
+      : (product.code ? product.code.trim() : "");
     const desc = product.description ? product.description.trim().toUpperCase() : "";
 
     let textStartX = barX + 8;
     let availableDescWidth = barW - 16;
 
-    if (code) {
-      ctx.font = "900 13px 'Inter', monospace, sans-serif";
-      const codeWidth = ctx.measureText(code).width;
-      const codeBoxW = Math.min(codeWidth + 10, barW * 0.38);
+    if (displayCode) {
+      const codeFontSize = displayCode.length > 10 ? 9 : displayCode.length > 6 ? 11 : 13;
+      ctx.font = `900 ${codeFontSize}px 'Inter', monospace, sans-serif`;
+      const codeWidth = ctx.measureText(displayCode).width;
+      const codeBoxW = Math.min(codeWidth + 10, barW * 0.42);
 
       ctx.fillStyle = gridConfig.barTextColor || "#7A0D12";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(code, barX + codeBoxW / 2, barY + barH / 2);
+      ctx.fillText(displayCode, barX + codeBoxW / 2, barY + barH / 2);
 
       // Linha divisória vertical suave
       ctx.strokeStyle = "rgba(122, 13, 18, 0.3)";
@@ -316,7 +361,7 @@ export function triggerFileDownload(blob: Blob, filename: string): void {
  * Exporta uma página única como PNG.
  */
 export async function exportEncarteSemanalPageAsPng(
-  products: EncarteSemanalProduct[],
+  products: (EncarteSemanalProduct | null | undefined)[],
   config: EncarteSemanalConfig,
   pageNumber = 1
 ): Promise<void> {

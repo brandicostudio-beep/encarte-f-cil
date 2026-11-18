@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import type { EncarteSemanalProduct, EncarteSemanalCellPosition } from "@/types/encarte-semanal";
 import { Edit2, ImageOff, Plus, Sparkles } from "lucide-react";
+import { resolveSemanalCellPhotos } from "@/lib/encarte-semanal-layout";
+import { removeWhiteBackground } from "@/lib/colecoes-image-processor";
 
 export interface EncarteSemanalCellProps {
   product?: EncarteSemanalProduct | null;
@@ -20,6 +22,48 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
   onClickSlot,
 }) => {
   const { width, height, photoAreaHeight, barHeight } = cell;
+
+  const [cleanPhoto1, setCleanPhoto1] = useState<string>("");
+  const [cleanPhoto2, setCleanPhoto2] = useState<string>("");
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!product) {
+      setCleanPhoto1("");
+      setCleanPhoto2("");
+      return;
+    }
+
+    const { photo1, photo2 } = resolveSemanalCellPhotos(product);
+
+    if (photo1) {
+      setCleanPhoto1(photo1);
+      removeWhiteBackground(photo1).then((res) => {
+        if (isMounted && res) setCleanPhoto1(res);
+      });
+    } else {
+      setCleanPhoto1("");
+    }
+
+    if (photo2) {
+      setCleanPhoto2(photo2);
+      removeWhiteBackground(photo2).then((res) => {
+        if (isMounted && res) setCleanPhoto2(res);
+      });
+    } else {
+      setCleanPhoto2("");
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    product?.image,
+    product?.secondaryImage,
+    product?.duplicatePhoto,
+    product?.isPrincipal,
+    product?.alternativePhotos,
+  ]);
 
   const handleClick = (e: React.MouseEvent) => {
     if (!interactive) return;
@@ -103,11 +147,16 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
   const offsetY = product.offsetY ?? 0;
   const overlapY = product.overlapY ?? 0;
 
-  // Dimensões proporcionais da foto contidas confortavelmente na área de foto
+  // Dimensões da foto contidas confortavelmente na área de foto
   const baseW = width * 0.92;
   const baseH = photoAreaHeight * 0.94;
   const imgW = baseW * scale;
   const imgH = baseH * scale;
+
+  const hasTwoPhotos = Boolean(cleanPhoto1 && cleanPhoto2);
+  const displayCode = product.secondaryCode
+    ? `${product.code} / ${product.secondaryCode}`
+    : product.code;
 
   return (
     <div
@@ -150,7 +199,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
               onEdit(product);
             }
           }}
-          className="absolute top-1 right-1 z-30 opacity-0 group-hover:opacity-100 transition-opacity bg-neutral-900/90 hover:bg-neutral-800 text-amber-300 p-1.5 rounded-md shadow-lg border border-amber-500/40"
+          className="absolute top-1 right-1 z-30 opacity-0 group-hover:opacity-100 transition-opacity bg-neutral-900/90 hover:bg-neutral-800 text-amber-300 p-1.5 rounded-md shadow-lg border border-amber-500/40 cursor-pointer"
           title="Editar produto (foto, código, descrição)"
           aria-label={`Editar produto ${product.code}`}
         >
@@ -158,14 +207,45 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
         </button>
       )}
 
-      {/* Área da foto (zIndex: 10, com contenção para não vazar nas linhas acima/abaixo) */}
+      {/* Área da foto (zIndex: 10, com contenção e suporte a 2 fotos lado a lado sem fundo branco) */}
       <div
         className="absolute left-0 right-0 top-0 overflow-hidden flex items-center justify-center"
         style={{ height: `${photoAreaHeight}px`, zIndex: 10 }}
       >
-        {product.image ? (
+        {hasTwoPhotos ? (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            {/* Foto 1 (Esquerda) */}
+            <img
+              src={cleanPhoto1}
+              alt={product.description}
+              draggable={false}
+              className="pointer-events-none absolute object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.65)]"
+              style={{
+                width: `${imgW * 0.68}px`,
+                height: `${imgH * 0.90}px`,
+                left: `${width * 0.04 + offsetX}px`,
+                top: `${photoAreaHeight - imgH * 0.90 + offsetY + overlapY}px`,
+                zIndex: 11,
+              }}
+            />
+            {/* Foto 2 (Direita / Variação / Duplicata escalonada) */}
+            <img
+              src={cleanPhoto2}
+              alt={product.description}
+              draggable={false}
+              className="pointer-events-none absolute object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.7)]"
+              style={{
+                width: `${imgW * 0.68}px`,
+                height: `${imgH * 0.90}px`,
+                left: `${width * 0.30 + offsetX}px`,
+                top: `${photoAreaHeight - imgH * 0.90 + offsetY + overlapY}px`,
+                zIndex: 12,
+              }}
+            />
+          </div>
+        ) : cleanPhoto1 ? (
           <img
-            src={product.image}
+            src={cleanPhoto1}
             alt={product.description}
             draggable={false}
             className="pointer-events-none absolute object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.65)]"
@@ -174,6 +254,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
               height: `${imgH}px`,
               left: `${(width - imgW) / 2 + offsetX}px`,
               top: `${(photoAreaHeight - imgH) / 2 + offsetY + overlapY}px`,
+              zIndex: 11,
             }}
           />
         ) : (
@@ -209,12 +290,15 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
           }`}
           style={{ height: `${barHeight}px` }}
         >
-          {!product.isPrincipal && product.code && (
+          {!product.isPrincipal && displayCode && (
             <span
-              className="shrink-0 text-[13px] font-black font-mono border-r border-[#7A0D12]/30 pr-1.5"
+              className="shrink-0 font-black font-mono border-r border-[#7A0D12]/30 pr-1.5 leading-tight"
+              style={{
+                fontSize: displayCode.length > 7 ? "10px" : "13px",
+              }}
               data-testid="semanal-cell-code"
             >
-              {product.code}
+              {displayCode}
             </span>
           )}
           <span

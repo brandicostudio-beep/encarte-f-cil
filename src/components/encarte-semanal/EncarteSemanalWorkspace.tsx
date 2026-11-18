@@ -411,14 +411,13 @@ export const EncarteSemanalWorkspace: React.FC = () => {
 
   // Exportação PNG da página atual
   const handleExportCurrentPng = async () => {
-    // Coleta produtos visíveis nesta página (incluindo os inseridos diretamente na arte)
-    const activePageProducts = gridCells
-      .map((_, idx) => getProductAtSlot(idx))
-      .filter((p): p is EncarteSemanalProduct => Boolean(p && p.code.trim() !== ""));
+    // Coleta produtos visíveis nesta página (mantendo exatamente os slots 0 a 19 e produtos principais)
+    const slotProducts = gridCells.map((_, idx) => getProductAtSlot(idx));
+    const hasAnyProduct = slotProducts.some((p) =>
+      Boolean(p && (p.code?.trim() || p.description?.trim() || p.isPrincipal))
+    );
 
-    const toExport = activePageProducts.length > 0 ? activePageProducts : currentProducts;
-
-    if (toExport.length === 0) {
+    if (!hasAnyProduct) {
       alert("Nenhum produto cadastrado nesta página para exportar.");
       return;
     }
@@ -434,7 +433,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
         exportScale: 1,
       };
 
-      await exportEncarteSemanalPageAsPng(toExport, config, currentPage);
+      await exportEncarteSemanalPageAsPng(slotProducts, config, currentPage);
       setExportMessage("✓ Imagem PNG baixada com sucesso!");
       setTimeout(() => setExportMessage(null), 3500);
     } catch (err: any) {
@@ -442,6 +441,17 @@ export const EncarteSemanalWorkspace: React.FC = () => {
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleClearAllSlots = () => {
+    if (products.length === 0) return;
+    const confirmClear = window.confirm(
+      "Deseja limpar todos os produtos da grade para começar com boxes vazios?"
+    );
+    if (!confirmClear) return;
+    setProducts([]);
+    saveEncarteSemanalProducts([]);
+    setSelectedSlotIndex(null);
   };
 
   // Exportação ZIP de todas as páginas
@@ -717,6 +727,20 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                 title="Restaura a arte original padrão"
               >
                 <RotateCcw className="h-3 w-3" />
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={handleClearAllSlots}
+                disabled={products.length === 0}
+                className="text-neutral-400 hover:text-red-300 hover:bg-red-500/10 text-xs h-7 px-2"
+                title="Limpar todos os boxes da tela para começar do zero"
+                data-testid="btn-clear-all-slots"
+              >
+                <Trash2 className="h-3 w-3 mr-1 text-red-400/80" />
+                Limpar Grade
               </Button>
             </div>
 

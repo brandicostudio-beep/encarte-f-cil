@@ -433,4 +433,66 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     expect(principalProd.code).toBe(""); // Fica sem código na arte!
     expect(principalProd.description).toBe("LIMPADOR SANITARIO Q BOA"); // Limpo de fragrância e 12x1 lt!
   });
+
+  // =========================================================================
+  // Teste 13: Resolução de 2 fotos no box (Duplicação e Variação)
+  // =========================================================================
+  it("Teste 13: resolveSemanalCellPhotos suporta 2 fotos lado a lado no box (duplicação e variações)", async () => {
+    const { resolveSemanalCellPhotos } = await import("./encarte-semanal-layout");
+
+    // Caso A: Produto normal não-principal sem foto secundária -> duplica a foto principal (padrão do encarte)
+    const normalProd: EncarteSemanalProduct = {
+      id: "p1",
+      code: "19396",
+      description: "AMEIXA EM CALDA PREDILECTA",
+      image: "data:image/png;base64,ameixa1",
+    };
+    const resA = resolveSemanalCellPhotos(normalProd);
+    expect(resA.hasTwoPhotos).toBe(true);
+    expect(resA.photo1).toBe("data:image/png;base64,ameixa1");
+    expect(resA.photo2).toBe("data:image/png;base64,ameixa1");
+
+    // Caso B: Produto Principal com foto alternativa de fragrância/sabor -> usa variação como foto 2
+    const principalProd: EncarteSemanalProduct = {
+      id: "p2",
+      code: "",
+      description: "REFRESCO TORNADO",
+      isPrincipal: true,
+      image: "data:image/png;base64,tornado_laranja",
+      alternativePhotos: [
+        { filename: "tornado_limao.png", dataUrl: "data:image/png;base64,tornado_limao" },
+      ],
+    };
+    const resB = resolveSemanalCellPhotos(principalProd);
+    expect(resB.hasTwoPhotos).toBe(true);
+    expect(resB.photo1).toBe("data:image/png;base64,tornado_laranja");
+    expect(resB.photo2).toBe("data:image/png;base64,tornado_limao");
+
+    // Caso C: Produto com secondaryImage explícita
+    const dualCodeProd: EncarteSemanalProduct = {
+      id: "p3",
+      code: "14352",
+      secondaryCode: "17585",
+      description: "LASANHA DIRETO AO FORNO E FERMENTO DONA BENTA",
+      image: "data:image/png;base64,lasanha",
+      secondaryImage: "data:image/png;base64,fermento",
+    };
+    const resC = resolveSemanalCellPhotos(dualCodeProd);
+    expect(resC.hasTwoPhotos).toBe(true);
+    expect(resC.photo1).toBe("data:image/png;base64,lasanha");
+    expect(resC.photo2).toBe("data:image/png;base64,fermento");
+
+    // Caso D: Usuário desativa duplicação (duplicatePhoto: false)
+    const singleProd: EncarteSemanalProduct = {
+      id: "p4",
+      code: "5522",
+      description: "GOIABADA",
+      image: "data:image/png;base64,goiabada",
+      duplicatePhoto: false,
+    };
+    const resD = resolveSemanalCellPhotos(singleProd);
+    expect(resD.hasTwoPhotos).toBe(false);
+    expect(resD.photo1).toBe("data:image/png;base64,goiabada");
+    expect(resD.photo2).toBe("");
+  });
 });

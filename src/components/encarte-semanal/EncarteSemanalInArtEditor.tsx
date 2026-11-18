@@ -8,6 +8,7 @@ import {
   type ProductSuggestion,
 } from "@/lib/encarte-semanal-catalog";
 import { findKnownPhotoForCode } from "@/lib/encarte-semanal-photos";
+import { removeWhiteBackground } from "@/lib/colecoes-image-processor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +26,8 @@ import {
   Loader2,
   Maximize2,
   Star,
+  Copy,
+  Layers,
 } from "lucide-react";
 
 export interface EncarteSemanalInArtEditorProps {
@@ -46,10 +49,19 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   onClose,
   onOpenAdvancedModal,
 }) => {
-  const [codeQuery, setCodeQuery] = useState(product?.code || "");
+  // Se houver secondaryCode, compõe o texto inicial (ex: "14352 / 17585")
+  const initialCode = product?.secondaryCode
+    ? `${product.code} / ${product.secondaryCode}`
+    : product?.code || "";
+
+  const [codeQuery, setCodeQuery] = useState(initialCode);
   const [description, setDescription] = useState(product?.description || "");
   const [limit, setLimit] = useState(product?.limit || "");
   const [image, setImage] = useState(product?.image || "");
+  const [secondaryImage, setSecondaryImage] = useState(product?.secondaryImage || "");
+  const [duplicatePhoto, setDuplicatePhoto] = useState<boolean>(
+    product?.duplicatePhoto !== false
+  );
   const [scale, setScale] = useState(product?.scale ?? 1.15);
   const [suggestions, setSuggestions] = useState<ProductSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -57,6 +69,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
 
   const codeInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const secFileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Foco automático no input de código ao abrir
@@ -67,8 +80,9 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
 
   // Atualiza sugestões conforme digitação
   useEffect(() => {
-    if (codeQuery.trim().length > 0) {
-      const results = searchProductSuggestions(codeQuery, 6);
+    const cleanTerm = codeQuery.split(/[/,]+/)[0]?.trim() || "";
+    if (cleanTerm.length > 0) {
+      const results = searchProductSuggestions(cleanTerm, 6);
       setSuggestions(results);
       setShowSuggestions(results.length > 0);
     } else {
@@ -95,6 +109,8 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       ...updated,
       limit: limit.trim() || undefined,
       scale,
+      duplicatePhoto,
+      secondaryImage: secondaryImage || undefined,
     });
   };
 
@@ -103,53 +119,116 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     if (!codeQuery.trim()) return;
 
     const trimmed = codeQuery.trim();
-    const lookedUp = lookupProductByCode(trimmed);
+    const parts = trimmed.split(/[/,]+/).map((p) => p.trim()).filter(Boolean);
 
-    const newDesc = description.trim() || lookedUp.description;
-    const newImage = image || lookedUp.image || findKnownPhotoForCode(trimmed);
+    let primaryCode = trimmed;
+    let secCode: string | undefined = undefined;
+    let photo1 = image;
+    let photo2 = secondaryImage;
+    let newDesc = description.trim();
+
+    if (parts.length >= 2) {
+      primaryCode = parts[0];
+      secCode = parts[1];
+
+      const lookedUp1 = lookupProductByCode(primaryCode);
+      const lookedUp2 = lookupProductByCode(secCode);
+
+      if (!photo1) {
+        photo1 = lookedUp1.image || findKnownPhotoForCode(primaryCode);
+      }
+      if (!photo2) {
+        photo2 = lookedUp2.image || findKnownPhotoForCode(secCode);
+      }
+      if (!newDesc) {
+        const d1 = lookedUp1.description;
+        const d2 = lookedUp2.description;
+        if (d1 && d2) {
+          newDesc = `${d1} E ${d2}`;
+        } else {
+          newDesc = d1 || d2;
+        }
+      }
+    } else {
+      const lookedUp = lookupProductByCode(trimmed);
+      if (!newDesc) newDesc = lookedUp.description;
+      if (!photo1) photo1 = lookedUp.image || findKnownPhotoForCode(trimmed);
+    }
 
     setDescription(newDesc);
-    if (newImage) setImage(newImage);
+    if (photo1) setImage(photo1);
+    if (photo2) setSecondaryImage(photo2);
     setShowSuggestions(false);
 
     const updated: EncarteSemanalProduct = {
       id: product?.id || `semanal-prod-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      code: trimmed,
+      code: primaryCode,
+      secondaryCode: secCode,
       description: newDesc,
-      image: newImage,
+      image: photo1,
+      secondaryImage: photo2 || undefined,
+      duplicatePhoto,
       limit: limit.trim() || undefined,
       scale,
       offsetX: product?.offsetX ?? 0,
       offsetY: product?.offsetY ?? 0,
       overlapY: product?.overlapY ?? 15,
       included: true,
-      originalCode: product?.originalCode || trimmed,
+      originalCode: product?.originalCode || primaryCode,
       originalDescription: product?.originalDescription || newDesc,
-      originalImage: product?.originalImage || newImage,
+      originalImage: product?.originalImage || photo1,
     };
 
     onSaveProduct(updated);
   };
 
-  // Upload manual de imagem direto para o box
+  // Upload manual de imagem 1 (recorta fundo branco automaticamente para PNG transparente)
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsLoadingPhoto(true);
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const dataUrl = ev.target?.result as string;
-      setImage(dataUrl);
+      const cleanUrl = await removeWhiteBackground(dataUrl);
+      const finalUrl = cleanUrl || dataUrl;
+
+      setImage(finalUrl);
       setIsLoadingPhoto(false);
 
       if (product) {
         onSaveProduct({
           ...product,
-          image: dataUrl,
+          image: finalUrl,
         });
       } else if (codeQuery.trim()) {
         handleApplyManualCode();
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Upload manual de imagem 2 / variação (recorta fundo branco para PNG transparente)
+  const handleSecondaryImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsLoadingPhoto(true);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target?.result as string;
+      const cleanUrl = await removeWhiteBackground(dataUrl);
+      const finalUrl = cleanUrl || dataUrl;
+
+      setSecondaryImage(finalUrl);
+      setIsLoadingPhoto(false);
+
+      if (product) {
+        onSaveProduct({
+          ...product,
+          secondaryImage: finalUrl,
+        });
       }
     };
     reader.readAsDataURL(file);
@@ -170,15 +249,15 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   // Posicionamento inteligente para não sair da tela (abaixo da célula ou acima se for última linha)
   const isBottomRow = cell.rowIndex >= 3;
   const popoverTop = isBottomRow
-    ? `${Math.max(10, cell.y - 320)}px`
+    ? `${Math.max(10, cell.y - 340)}px`
     : `${cell.y + cell.height + 10}px`;
 
   return (
     <div
       ref={containerRef}
-      className="absolute z-50 bg-[#161616] text-white rounded-xl border border-amber-500/60 shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-3.5 space-y-3 w-[330px] backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-auto"
+      className="absolute z-50 bg-[#161616] text-white rounded-xl border border-amber-500/60 shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-3.5 space-y-3 w-[340px] backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-auto"
       style={{
-        left: `${Math.max(10, Math.min(1080 - 340, cell.x - 30))}px`,
+        left: `${Math.max(10, Math.min(1080 - 350, cell.x - 30))}px`,
         top: popoverTop,
       }}
       onClick={(e) => e.stopPropagation()}
@@ -192,13 +271,13 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
             Editar Box {cellIndex + 1}
           </span>
           <span className="text-[10px] text-neutral-400">
-            (Linha {cell.rowIndex + 1}, Coluna {cell.colIndex + 1})
+            (L{cell.rowIndex + 1}, C{cell.colIndex + 1})
           </span>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="text-neutral-400 hover:text-white p-1 rounded-md hover:bg-neutral-800 transition-colors"
+          className="text-neutral-400 hover:text-white p-1 rounded-md hover:bg-neutral-800 transition-colors cursor-pointer"
           title="Fechar editor"
         >
           <X className="h-4 w-4" />
@@ -277,11 +356,11 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
         </button>
       </div>
 
-      {/* 1. CAMPO CÓDIGO COM PREDIÇÃO DE TEXTO (AUTOCOMPLETE) */}
+      {/* 1. CAMPO CÓDIGO COM PREDIÇÃO DE TEXTO (AUTOCOMPLETE / MULTI-CÓDIGO) */}
       <div className="space-y-1 relative">
         <Label htmlFor="inArtCode" className="text-[11px] font-bold text-neutral-300 flex items-center justify-between">
           <span>Código do Produto:</span>
-          <span className="text-[10px] text-amber-400/90 font-mono">Digitação Rápida</span>
+          <span className="text-[10px] text-amber-400/90 font-mono">Aceita 2 códigos (ex: 14352 / 17585)</span>
         </Label>
         <div className="relative">
           <Input
@@ -301,7 +380,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
                 setShowSuggestions(false);
               }
             }}
-            placeholder="Digite o código (ex: 19396)..."
+            placeholder="Digite o código (ex: 19396 ou 14352 / 17585)..."
             className="h-8 bg-neutral-900 border-neutral-700 text-amber-300 font-mono font-bold text-xs pr-8 focus:border-amber-400"
             data-testid="in-art-input-code"
           />
@@ -401,79 +480,167 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
         />
       </div>
 
-      {/* 4. CONTROLES RÁPIDOS DE FOTO ESTILO CANVA/FIGMA */}
-      <div className="bg-neutral-900/80 border border-neutral-800 p-2 rounded-lg space-y-1.5">
+      {/* 4. CONTROLES DE FOTOS E VARIAÇÕES (2 FOTOS NO BOX / FIGMA-CANVA) */}
+      <div className="bg-neutral-900/80 border border-neutral-800 p-2.5 rounded-lg space-y-2">
         <div className="flex items-center justify-between text-[11px] text-neutral-400 font-semibold">
-          <span>Ajuste da Foto:</span>
-          <span className="font-mono text-amber-300 text-[10px]">{Math.round(scale * 100)}%</span>
+          <span>Fotos do Box (2 Unidades):</span>
+          <span className="font-mono text-amber-300 text-[10px]">Zoom: {Math.round(scale * 100)}%</span>
         </div>
 
-        <div className="flex items-center justify-between gap-1.5">
-          {/* Zoom - */}
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => handleAdjustScale(-0.05)}
-            className="h-7 px-2 bg-neutral-800 border-neutral-700 text-neutral-300 hover:text-white text-xs"
-            title="Reduzir tamanho da foto"
-          >
-            <ZoomOut className="h-3 w-3 mr-1" />
-            -
-          </Button>
+        {/* Linha das Duas Fotos (Foto 1 + Foto 2/Variação) */}
+        <div className="grid grid-cols-2 gap-2">
+          {/* Card Foto 1 */}
+          <div className="bg-black/40 border border-neutral-800 rounded-md p-1.5 flex flex-col items-center">
+            <span className="text-[9px] font-bold uppercase text-neutral-400 mb-1">Foto 1 (Principal)</span>
+            <div className="h-12 w-full bg-[#200408] rounded flex items-center justify-center overflow-hidden mb-1 relative border border-neutral-700">
+              {image ? (
+                <img src={image} alt="Foto 1" className="max-h-full max-w-full object-contain" />
+              ) : (
+                <ImageIcon className="h-4 w-4 text-neutral-500" />
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageUpload}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoadingPhoto}
+              className="h-6 w-full px-1 bg-neutral-800 border-neutral-700 text-amber-300 hover:text-white text-[10px]"
+              title="Trocar Foto 1 (recorta fundo branco automaticamente)"
+            >
+              <Upload className="h-2.5 w-2.5 mr-1" />
+              Trocar
+            </Button>
+          </div>
 
-          {/* Zoom 100% */}
-          <Button
+          {/* Card Foto 2 (Variação / 2º Produto) */}
+          <div className="bg-black/40 border border-neutral-800 rounded-md p-1.5 flex flex-col items-center">
+            <span className="text-[9px] font-bold uppercase text-neutral-400 mb-1">Foto 2 (Variação)</span>
+            <div className="h-12 w-full bg-[#200408] rounded flex items-center justify-center overflow-hidden mb-1 relative border border-neutral-700">
+              {secondaryImage ? (
+                <img src={secondaryImage} alt="Foto 2" className="max-h-full max-w-full object-contain" />
+              ) : duplicatePhoto && image ? (
+                <div className="flex flex-col items-center justify-center opacity-60">
+                  <img src={image} alt="Duplicata" className="max-h-8 max-w-full object-contain" />
+                  <span className="text-[8px] text-amber-300 font-bold">Duplicata</span>
+                </div>
+              ) : (
+                <span className="text-[8px] text-neutral-500 text-center px-1">Sem 2ª foto</span>
+              )}
+            </div>
+            <input
+              ref={secFileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleSecondaryImageUpload}
+            />
+            <div className="w-full flex gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => secFileInputRef.current?.click()}
+                disabled={isLoadingPhoto}
+                className="h-6 flex-1 px-1 bg-neutral-800 border-neutral-700 text-amber-300 hover:text-white text-[10px]"
+                title="Subir Foto 2 de Variação ou Sabor diferente"
+              >
+                <Upload className="h-2.5 w-2.5 mr-0.5" />
+                Subir
+              </Button>
+              {secondaryImage && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setSecondaryImage("");
+                    if (product) {
+                      onSaveProduct({
+                        ...product,
+                        secondaryImage: undefined,
+                      });
+                    }
+                  }}
+                  className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                  title="Remover Foto 2"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Alternador de Duplicação e Controles de Zoom */}
+        <div className="flex items-center justify-between pt-1 border-t border-neutral-800 gap-1.5">
+          {/* Toggle Duplicar Foto quando só tem 1 */}
+          <button
             type="button"
-            size="sm"
-            variant="ghost"
             onClick={() => {
-              setScale(1.15);
-              if (product) onSaveProduct({ ...product, scale: 1.15 });
+              const nextVal = !duplicatePhoto;
+              setDuplicatePhoto(nextVal);
+              if (product) {
+                onSaveProduct({
+                  ...product,
+                  duplicatePhoto: nextVal,
+                });
+              }
             }}
-            className="h-7 px-2 text-[10px] text-neutral-400 hover:text-white"
-            title="Restaurar tamanho padrão (115%)"
+            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold transition-all cursor-pointer ${
+              duplicatePhoto
+                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                : "bg-neutral-800 text-neutral-400 border border-neutral-700"
+            }`}
+            title="Quando ativo, repete a mesma foto lado a lado se não houver 2ª foto cadastrada"
           >
-            115%
-          </Button>
+            <Copy className="h-3 w-3" />
+            <span>{duplicatePhoto ? "2 Unidades (Ativo)" : "1 Foto Única"}</span>
+          </button>
 
-          {/* Zoom + */}
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => handleAdjustScale(0.05)}
-            className="h-7 px-2 bg-neutral-800 border-neutral-700 text-neutral-300 hover:text-white text-xs"
-            title="Aumentar tamanho da foto"
-          >
-            <ZoomIn className="h-3 w-3 mr-1" />
-            +
-          </Button>
-
-          {/* Upload de Imagem */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleImageUpload}
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isLoadingPhoto}
-            className="h-7 px-2 bg-neutral-800 border-neutral-700 text-amber-300 hover:text-white text-xs"
-            title="Subir nova foto para este produto"
-          >
-            {isLoadingPhoto ? (
-              <Loader2 className="h-3 w-3 animate-spin mr-1" />
-            ) : (
-              <Upload className="h-3 w-3 mr-1" />
-            )}
-            Foto
-          </Button>
+          {/* Zoom - / 115% / + */}
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => handleAdjustScale(-0.05)}
+              className="h-6 w-6 p-0 bg-neutral-800 border-neutral-700 text-neutral-300 hover:text-white text-xs"
+              title="Reduzir tamanho da foto"
+            >
+              <ZoomOut className="h-3 w-3" />
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setScale(1.15);
+                if (product) onSaveProduct({ ...product, scale: 1.15 });
+              }}
+              className="h-6 px-1.5 text-[10px] text-neutral-400 hover:text-white"
+              title="Restaurar tamanho padrão (115%)"
+            >
+              115%
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => handleAdjustScale(0.05)}
+              className="h-6 w-6 p-0 bg-neutral-800 border-neutral-700 text-neutral-300 hover:text-white text-xs"
+              title="Aumentar tamanho da foto"
+            >
+              <ZoomIn className="h-3 w-3" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -488,7 +655,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
               onClearProduct();
               onClose();
             }}
-            className="h-8 px-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs"
+            className="h-8 px-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs cursor-pointer"
             title="Limpar este box (remove produto)"
             data-testid="in-art-btn-clear"
           >
@@ -509,7 +676,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
                 onClose();
                 onOpenAdvancedModal(product);
               }}
-              className="h-8 px-2.5 bg-neutral-800 border-neutral-700 text-neutral-300 hover:text-white text-xs"
+              className="h-8 px-2.5 bg-neutral-800 border-neutral-700 text-neutral-300 hover:text-white text-xs cursor-pointer"
               title="Ajustes avançados (recortar fundo, sobreposição)"
             >
               <Sliders className="h-3.5 w-3.5 mr-1 text-purple-400" />
@@ -524,7 +691,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
               handleApplyManualCode();
               onClose();
             }}
-            className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-xs"
+            className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-xs cursor-pointer"
             data-testid="in-art-btn-done"
           >
             <Check className="h-3.5 w-3.5 mr-1" />

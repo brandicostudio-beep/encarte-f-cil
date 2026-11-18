@@ -129,7 +129,8 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
       const reader = new FileReader();
       reader.onload = async () => {
         const dataUrl = reader.result as string;
-        setForm((prev) => (prev ? { ...prev, image: dataUrl } : prev));
+        const cleaned = await removeWhiteBackground(dataUrl);
+        setForm((prev) => (prev ? { ...prev, image: cleaned || dataUrl } : prev));
         setIsProcessingImg(false);
       };
       reader.readAsDataURL(file);

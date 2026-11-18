@@ -80,6 +80,45 @@ export function calculateEncarteSemanalGridCells(
   return cells;
 }
 
+export interface SemanalPhotosResolution {
+  photo1: string;
+  photo2: string;
+  hasTwoPhotos: boolean;
+}
+
+/**
+ * Resolve as fotos a serem exibidas no box do Encarte Semanal (1 ou 2 fotos lado a lado).
+ * Regras:
+ * - Se houver secondaryImage explícita, usa como foto 2.
+ * - Se for Principal e houver foto alternativa com variação/fragrância/sabor diferente, usa como foto 2.
+ * - Caso padrão (duplicatePhoto !== false): duplica a foto principal no box para o padrão visual clássico.
+ */
+export function resolveSemanalCellPhotos(product: EncarteSemanalProduct): SemanalPhotosResolution {
+  const photo1 = product.image ? product.image.trim() : "";
+  const photo2Custom = product.secondaryImage ? product.secondaryImage.trim() : "";
+  const altPhoto =
+    product.alternativePhotos && product.alternativePhotos.length > 0
+      ? product.alternativePhotos[0].dataUrl
+      : "";
+
+  let photo2 = "";
+  if (photo2Custom) {
+    photo2 = photo2Custom;
+  } else if (product.isPrincipal && altPhoto && altPhoto !== photo1) {
+    photo2 = altPhoto;
+  } else if (product.duplicatePhoto !== false && photo1) {
+    photo2 = photo1;
+  }
+
+  const hasTwoPhotos = Boolean(photo1 && photo2);
+
+  return {
+    photo1,
+    photo2,
+    hasTwoPhotos,
+  };
+}
+
 export interface EncarteSemanalPaginationResult {
   pages: EncarteSemanalProduct[][];
   pendingProducts: EncarteSemanalProduct[];

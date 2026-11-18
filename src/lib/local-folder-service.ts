@@ -210,7 +210,15 @@ export async function fileToDataUrl(file: File | Blob): Promise<string> {
     }
     base64 = btoa(binary);
   }
-  const type = file.type || "image/jpeg";
+  let type = file.type;
+  if (!type && (file as any).name) {
+    const ext = (file as any).name.split(".").pop()?.toLowerCase();
+    if (ext === "png") type = "image/png";
+    else if (ext === "webp") type = "image/webp";
+    else if (ext === "svg") type = "image/svg+xml";
+    else if (ext === "jpg" || ext === "jpeg") type = "image/jpeg";
+  }
+  type = type || "image/png";
   return `data:${type};base64,${base64}`;
 }
 
