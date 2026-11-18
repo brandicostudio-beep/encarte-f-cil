@@ -27,6 +27,12 @@ import {
 import { formatPrice, deriveSaleUnit, evaluateStockExpression } from "@/lib/parse-product";
 import { DESIGN_TOKENS } from "@/lib/design-tokens";
 import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
+import {
+  formatExportDate,
+  getEncarteFileBaseSlug,
+  buildEncartePageFilename,
+  buildEncarteZipFilename,
+} from "@/lib/encarte-export-naming";
 
 // Componentes da Interface de Alta Experiência (UX/UI)
 import { EditorStepper, type EditorStep } from "@/components/encarte/EditorStepper";
@@ -1361,16 +1367,9 @@ function EncarteApp() {
     });
   }, [products, searchQuery, activeIssueFilter, sortBy]);
 
-  // Slug da campanha para nomenclatura de arquivos (ex: "encarte-validade-curta-01.png")
+  // Slug base da campanha para nomenclatura de arquivos (ex: "validade_curta")
   const campaignSlug = useMemo(() => {
-    return (
-      String(campaign?.title || "encarte")
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "") || "detona-precos"
-    );
+    return getEncarteFileBaseSlug(campaign?.title);
   }, [campaign?.title]);
 
   // Upload de Template 9:16 direto na etapa de campanha
@@ -1440,7 +1439,8 @@ function EncarteApp() {
         pdf.addImage(dataUrl, "JPEG", 0, 0, 210, 297, undefined, "FAST");
       }
 
-      const filename = `encarte-${campaignSlug}.pdf`;
+      const dateStr = formatExportDate();
+      const filename = `${campaignSlug}_${dateStr}.pdf`;
       pdf.save(filename);
       setCompletedSteps((prev) => new Set([...prev, "exportar"]));
     } catch (err) {
@@ -1584,8 +1584,8 @@ function EncarteApp() {
         style: { transform: "none" },
       });
 
-      const pageStr = String(currentPage).padStart(2, "0");
-      const filename = `encarte-${campaignSlug}-${pageStr}.png`;
+      const dateStr = formatExportDate();
+      const filename = buildEncartePageFilename(campaignSlug, dateStr, currentPage);
       const a = document.createElement("a");
       a.href = dataUrl;
       a.download = filename;
@@ -1613,6 +1613,7 @@ function EncarteApp() {
       const is916 = campaign.format === "story_9_16";
       const isHighRes = campaign.exportResolution916 === "2160x3840";
       const pixelRatio = is916 ? (isHighRes ? 2 : 1) : 3.125;
+      const dateStr = formatExportDate();
 
       for (let pIdx = 1; pIdx <= totalPages; pIdx++) {
         const pageEl =
@@ -1630,8 +1631,7 @@ function EncarteApp() {
         });
 
         const base64Data = dataUrl.replace(/^data:image\/png;base64,/, "");
-        const pageStr = String(pIdx).padStart(2, "0");
-        const filename = `encarte-${campaignSlug}-${pageStr}.png`;
+        const filename = buildEncartePageFilename(campaignSlug, dateStr, pIdx);
         zip.file(filename, base64Data, { base64: true });
       }
 
@@ -1639,7 +1639,7 @@ function EncarteApp() {
       const url = URL.createObjectURL(zipBlob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `encarte-${campaignSlug}.zip`;
+      a.download = buildEncarteZipFilename(campaignSlug, dateStr);
       a.click();
       URL.revokeObjectURL(url);
       setCompletedSteps((prev) => new Set([...prev, "exportar"]));
