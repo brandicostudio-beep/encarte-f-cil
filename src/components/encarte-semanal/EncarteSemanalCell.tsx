@@ -1,21 +1,100 @@
 import React from "react";
 import type { EncarteSemanalProduct, EncarteSemanalCellPosition } from "@/types/encarte-semanal";
-import { Edit2, ImageOff } from "lucide-react";
+import { Edit2, ImageOff, Plus, Sparkles } from "lucide-react";
 
 export interface EncarteSemanalCellProps {
-  product: EncarteSemanalProduct;
+  product?: EncarteSemanalProduct | null;
   cell: EncarteSemanalCellPosition;
   interactive?: boolean;
+  isSelected?: boolean;
   onEdit?: (product: EncarteSemanalProduct) => void;
+  onClickSlot?: () => void;
 }
 
 export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
   product,
   cell,
   interactive = true,
+  isSelected = false,
   onEdit,
+  onClickSlot,
 }) => {
   const { width, height, photoAreaHeight, barHeight } = cell;
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (!interactive) return;
+    e.stopPropagation();
+    if (onClickSlot) {
+      onClickSlot();
+    } else if (product && onEdit) {
+      onEdit(product);
+    }
+  };
+
+  // Se for um slot vazio pronto para digitação na arte
+  if (!product) {
+    return (
+      <div
+        className={`absolute select-none group transition-all ${
+          interactive ? "cursor-pointer" : ""
+        } ${
+          isSelected
+            ? "ring-2 ring-amber-400 ring-offset-2 ring-offset-black rounded-lg z-30"
+            : "hover:ring-1 hover:ring-amber-400/70"
+        }`}
+        style={{
+          left: `${cell.x}px`,
+          top: `${cell.y}px`,
+          width: `${width}px`,
+          height: `${height}px`,
+        }}
+        data-testid="semanal-cell-empty"
+        data-cell-index={cell.index}
+        onClick={handleClick}
+      >
+        {/* Figma Handles quando selecionado */}
+        {isSelected && (
+          <>
+            <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-amber-400 border border-black rounded-xs z-40" />
+            <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-amber-400 border border-black rounded-xs z-40" />
+            <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-amber-400 border border-black rounded-xs z-40" />
+            <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-amber-400 border border-black rounded-xs z-40" />
+          </>
+        )}
+
+        {/* Área de Foto Vazia com convite de clique */}
+        <div
+          className="absolute left-0 right-0 top-0 flex flex-col items-center justify-center p-2 rounded-t-md border border-dashed border-amber-500/30 group-hover:border-amber-400/80 bg-black/20 group-hover:bg-amber-500/10 transition-all"
+          style={{ height: `${photoAreaHeight}px`, zIndex: 10 }}
+        >
+          <div className="h-9 w-9 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-400 mb-1.5 group-hover:scale-110 group-hover:bg-amber-500/30 transition-transform">
+            <Plus className="h-5 w-5" />
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 drop-shadow-md">
+            Box {cell.index + 1}
+          </span>
+          <span className="text-[9px] font-bold text-amber-200/90 tracking-wide mt-0.5">
+            Clique p/ Digitar Código
+          </span>
+        </div>
+
+        {/* Barra Inferior Bege vazia com guia interativo */}
+        <div
+          className="absolute bottom-0 left-0 right-0 flex flex-col items-center justify-end"
+          style={{ zIndex: 5 }}
+        >
+          <div
+            className="w-full flex items-center justify-center gap-1.5 bg-[#F6E0A6] px-2 text-center font-extrabold uppercase leading-tight text-[#7A0D12] shadow-sm rounded-md group-hover:bg-[#FFF3CC] transition-colors"
+            style={{ height: `${barHeight}px` }}
+          >
+            <span className="text-[11px] font-black font-mono tracking-wider text-[#7A0D12]">
+              + DIGITAR CÓDIGO
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Escala: se for > 10 trata como porcentagem (ex: 115 => 1.15)
   const rawScale = product.scale ?? 1.15;
@@ -29,8 +108,12 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
 
   return (
     <div
-      className={`absolute select-none group ${
+      className={`absolute select-none group transition-all ${
         interactive ? "cursor-pointer" : ""
+      } ${
+        isSelected
+          ? "ring-2 ring-amber-400 ring-offset-2 ring-offset-black rounded-lg z-30"
+          : "hover:ring-1 hover:ring-amber-400/60"
       }`}
       style={{
         left: `${cell.x}px`,
@@ -40,17 +123,31 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
       }}
       data-testid="semanal-cell"
       data-product-code={product.code}
-      onClick={() => interactive && onEdit?.(product)}
+      onClick={handleClick}
     >
-      {/* Botão de edição em hover */}
+      {/* Figma Handles quando selecionado */}
+      {isSelected && (
+        <>
+          <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-amber-400 border border-black rounded-xs z-40" />
+          <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-amber-400 border border-black rounded-xs z-40" />
+          <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-amber-400 border border-black rounded-xs z-40" />
+          <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-amber-400 border border-black rounded-xs z-40" />
+        </>
+      )}
+
+      {/* Botão de edição rápida em hover */}
       {interactive && (
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onEdit?.(product);
+            if (onClickSlot) {
+              onClickSlot();
+            } else if (onEdit) {
+              onEdit(product);
+            }
           }}
-          className="absolute top-1 right-1 z-30 opacity-0 group-hover:opacity-100 transition-opacity bg-neutral-900/90 hover:bg-neutral-800 text-amber-300 p-1.5 rounded-md shadow-lg border border-amber-500/30"
+          className="absolute top-1 right-1 z-30 opacity-0 group-hover:opacity-100 transition-opacity bg-neutral-900/90 hover:bg-neutral-800 text-amber-300 p-1.5 rounded-md shadow-lg border border-amber-500/40"
           title="Editar produto (foto, código, descrição)"
           aria-label={`Editar produto ${product.code}`}
         >

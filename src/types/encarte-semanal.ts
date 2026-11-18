@@ -21,6 +21,7 @@ export interface EncarteSemanalProduct {
   overlapY?: number;              // Sobreposição sobre a barra inferior em px
   included?: boolean;            // Se está ativo no encarte
   pageIndex?: number;            // Índice da página em que está posicionado
+  slotIndex?: number;            // Posição na grade (0 a 19 por página)
 
   // Histórico para desfazer alterações de código
   originalCode?: string;

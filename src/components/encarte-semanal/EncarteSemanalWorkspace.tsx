@@ -36,6 +36,7 @@ import { EncarteSemanalCell } from "./EncarteSemanalCell";
 import { EncarteSemanalProductModal } from "./EncarteSemanalProductModal";
 import { EncarteSemanalGridConfigModal } from "./EncarteSemanalGridConfigModal";
 import { EncarteSemanalSourceModal } from "./EncarteSemanalSourceModal";
+import { EncarteSemanalInArtEditor } from "./EncarteSemanalInArtEditor";
 import { NavigationDrawer } from "@/components/encarte/NavigationDrawer";
 import { useNavigate } from "@tanstack/react-router";
 import { clearClientSession } from "@/lib/auth-constants";
@@ -90,6 +91,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   const [previewZoom, setPreviewZoom] = useState<number>(0.38); // 38% para caber em telas 1080p
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
 
   // Modais
   const [sourceModalOpen, setSourceModalOpen] = useState<boolean>(false);
@@ -261,6 +263,69 @@ export const EncarteSemanalWorkspace: React.FC = () => {
     return calculateEncarteSemanalGridCells(gridConfig);
   }, [gridConfig]);
 
+  // Obtém o produto atribuído ao box (slot 0 a 19) na tela atual
+  const getProductAtSlot = (slotIdx: number): EncarteSemanalProduct | null => {
+    const targetGlobalIndex = (currentPage - 1) * (gridConfig.itemsPerPage || 20) + slotIdx;
+
+    // 1. Primeiro verifica por slotIndex explícito
+    const byExplicitSlot = products.find((p) => p.slotIndex === targetGlobalIndex);
+    if (byExplicitSlot) return byExplicitSlot;
+
+    // 2. Depois por sequência nos produtos paginados da página
+    if (currentProducts[slotIdx]) {
+      return currentProducts[slotIdx];
+    }
+
+    // 3. Fallback: índice global no array de produtos
+    return products[targetGlobalIndex] || null;
+  };
+
+  // Salva ou atualiza um produto digitado diretamente dentro da arte (Figma/Canva)
+  const handleSaveSlotProduct = (slotIdx: number, updated: EncarteSemanalProduct) => {
+    const targetGlobalIndex = (currentPage - 1) * (gridConfig.itemsPerPage || 20) + slotIdx;
+    const productWithSlot: EncarteSemanalProduct = {
+      ...updated,
+      slotIndex: targetGlobalIndex,
+      pageIndex: currentPage,
+    };
+
+    setProducts((prev) => {
+      const copy = [...prev];
+      const existingIdx = copy.findIndex(
+        (p, i) =>
+          (p.slotIndex !== undefined ? p.slotIndex === targetGlobalIndex : i === targetGlobalIndex) ||
+          p.id === updated.id
+      );
+
+      if (existingIdx >= 0) {
+        copy[existingIdx] = productWithSlot;
+      } else {
+        copy.push(productWithSlot);
+      }
+
+      saveEncarteSemanalProducts(copy);
+      return copy;
+    });
+  };
+
+  // Limpa o produto do box selecionado (volta a ser slot vazio)
+  const handleClearSlotProduct = (slotIdx: number) => {
+    const targetGlobalIndex = (currentPage - 1) * (gridConfig.itemsPerPage || 20) + slotIdx;
+    const currentProd = getProductAtSlot(slotIdx);
+
+    setProducts((prev) => {
+      const filtered = prev.filter((p) => {
+        if (currentProd && p.id === currentProd.id) return false;
+        if (p.slotIndex !== undefined && p.slotIndex === targetGlobalIndex) return false;
+        return true;
+      });
+      saveEncarteSemanalProducts(filtered);
+      return filtered;
+    });
+
+    setSelectedSlotIndex(null);
+  };
+
   // Edição de um produto
   const handleEditProduct = (product: EncarteSemanalProduct) => {
     setEditingProduct(product);
@@ -319,8 +384,15 @@ export const EncarteSemanalWorkspace: React.FC = () => {
 
   // Exportação PNG da página atual
   const handleExportCurrentPng = async () => {
-    if (currentProducts.length === 0) {
-      alert("Nenhum produto com foto nesta página para exportar.");
+    // Coleta produtos visíveis nesta página (incluindo os inseridos diretamente na arte)
+    const activePageProducts = gridCells
+      .map((_, idx) => getProductAtSlot(idx))
+      .filter((p): p is EncarteSemanalProduct => Boolean(p && p.code.trim() !== ""));
+
+    const toExport = activePageProducts.length > 0 ? activePageProducts : currentProducts;
+
+    if (toExport.length === 0) {
+      alert("Nenhum produto cadastrado nesta página para exportar.");
       return;
     }
 
@@ -335,7 +407,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
         exportScale: 1,
       };
 
-      await exportEncarteSemanalPageAsPng(currentProducts, config, currentPage);
+      await exportEncarteSemanalPageAsPng(toExport, config, currentPage);
       setExportMessage("✓ Imagem PNG baixada com sucesso!");
       setTimeout(() => setExportMessage(null), 3500);
     } catch (err: any) {
@@ -596,7 +668,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                 type="button"
                 size="sm"
                 onClick={handleExportCurrentPng}
-                disabled={isExporting || currentProducts.length === 0}
+                disabled={isExporting || (currentProducts.length === 0 && products.length === 0)}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 shadow-md"
                 data-testid="btn-export-png"
               >
@@ -715,15 +787,20 @@ export const EncarteSemanalWorkspace: React.FC = () => {
           <div className="bg-[#141414] border border-neutral-800 rounded-2xl p-4 space-y-3 shadow-md">
             {/* Banner Orientador caso não haja produtos carregados */}
             {products.length === 0 && (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
-                    <FileSpreadsheet className="h-5 w-5" />
+                  <div className="h-9 w-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                    <Sparkles className="h-4 w-4" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-white">Nenhum produto carregado na grade</h4>
-                    <p className="text-xs text-neutral-400">
-                      Visualizando o modelo de fundo permanente e as guias. Carregue a planilha semanal com os códigos ou teste com 20 itens de exemplo.
+                    <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                      Edição Direta na Arte (Estilo Canva/Figma) Habilitada
+                      <span className="bg-amber-400 text-neutral-950 text-[10px] px-1.5 py-0.2 rounded-full font-black">
+                        Clique em qualquer box
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-neutral-400">
+                      Clique em qualquer um dos 20 boxes abaixo na arte para digitar o código com predição de texto e puxar a foto automaticamente. Você também pode carregar uma planilha ou testar com o exemplo.
                     </p>
                   </div>
                 </div>
@@ -852,19 +929,44 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                   }}
                 />
 
-                {/* Células dos Produtos da Grade */}
-                {currentProducts.map((product, idx) => {
-                  const cell = gridCells[idx];
-                  if (!cell) return null;
+                {/* Células dos Produtos da Grade (20 boxes interativos estilo Canva/Figma) */}
+                {gridCells.map((cell, idx) => {
+                  const product = getProductAtSlot(idx);
+                  const isSelected = selectedSlotIndex === idx;
 
                   return (
-                    <div key={product.id || `${product.code}-${idx}`} style={{ zIndex: 10 }}>
+                    <div
+                      key={product?.id || `slot-${currentPage}-${idx}`}
+                      style={{ zIndex: isSelected ? 40 : 10 }}
+                    >
                       <EncarteSemanalCell
                         product={product}
                         cell={cell}
                         interactive={true}
-                        onEdit={handleEditProduct}
+                        isSelected={isSelected}
+                        onClickSlot={() => {
+                          setSelectedSlotIndex(selectedSlotIndex === idx ? null : idx);
+                        }}
+                        onEdit={() => {
+                          setSelectedSlotIndex(idx);
+                        }}
                       />
+
+                      {/* Editor Flutuante Dentro da Arte (Estilo Canva/Figma com Predição de Texto) */}
+                      {isSelected && (
+                        <EncarteSemanalInArtEditor
+                          cell={cell}
+                          product={product}
+                          cellIndex={idx}
+                          onSaveProduct={(updated) => handleSaveSlotProduct(idx, updated)}
+                          onClearProduct={() => handleClearSlotProduct(idx)}
+                          onClose={() => setSelectedSlotIndex(null)}
+                          onOpenAdvancedModal={(p) => {
+                            setEditingProduct(p);
+                            setProductModalOpen(true);
+                          }}
+                        />
+                      )}
                     </div>
                   );
                 })}

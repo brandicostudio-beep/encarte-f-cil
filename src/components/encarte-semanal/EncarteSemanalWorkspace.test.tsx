@@ -27,7 +27,7 @@ describe("EncarteSemanalWorkspace: Navegação e Desbloqueio de Abas", () => {
     expect(html).toContain("Semanal");
   });
 
-  it("renderiza a aba de preview com o modelo de fundo mesmo sem produtos, sem travar o usuário", () => {
+  it("renderiza a aba de preview com o modelo de fundo e 20 boxes interativos estilo Canva/Figma mesmo sem produtos", () => {
     clearEncarteSemanalStorage();
     const html = renderToString(<EncarteSemanalWorkspace />);
 
@@ -36,12 +36,38 @@ describe("EncarteSemanalWorkspace: Navegação e Desbloqueio de Abas", () => {
     expect(html).toContain("Lista de Produtos");
     expect(html).toContain("Pendências / Sem Foto");
 
-    // Deve conter o banner explicativo não-bloqueante
-    expect(html).toContain("Nenhum produto carregado na grade");
-    expect(html).toContain("Carregar Planilha &amp; Fotos");
+    // Deve conter o banner explicativo de edição direta estilo Canva/Figma
+    expect(html).toContain("Edição Direta na Arte (Estilo Canva/Figma)");
+    expect(html).toContain("Clique em qualquer box");
 
-    // E deve renderizar o canvas com o modelo de fundo
+    // E deve renderizar os boxes vazios com os botões de digitar código na arte
+    expect(html).toContain('data-testid="semanal-cell-empty"');
+    expect(html).toContain("+ DIGITAR CÓDIGO");
+    expect(html).toContain("Clique p/ Digitar Código");
+
+    // E deve renderizar o canvas com o modelo de fundo e o rodapé
     expect(html).toContain('alt="Modelo Encarte Semanal"');
-    expect(html).toContain("data-testid=\"semanal-rendered-footer\"");
+    expect(html).toContain('data-testid="semanal-rendered-footer"');
+  });
+
+  it("busca produtos com predição de texto por código ou descrição", async () => {
+    const { searchProductSuggestions, lookupProductByCode } = await import(
+      "@/lib/encarte-semanal-catalog"
+    );
+
+    // 1. Busca por código "19" deve sugerir 19396 (Ameixa Predilecta) e 19124 (Batata Palha Yoki)
+    const suggestions19 = searchProductSuggestions("19");
+    expect(suggestions19.some((s) => s.code === "19396")).toBe(true);
+    expect(suggestions19.some((s) => s.code === "19124")).toBe(true);
+
+    // 2. Busca por palavra-chave da descrição (ex: "predilecta")
+    const suggestionsPredilecta = searchProductSuggestions("predilecta");
+    expect(suggestionsPredilecta.length).toBeGreaterThan(0);
+    expect(suggestionsPredilecta.some((s) => s.description.includes("PREDILECTA"))).toBe(true);
+
+    // 3. lookupProductByCode com código 19396
+    const lookedUp = lookupProductByCode("19396");
+    expect(lookedUp.code).toBe("19396");
+    expect(lookedUp.description).toContain("AMEIXA");
   });
 });
