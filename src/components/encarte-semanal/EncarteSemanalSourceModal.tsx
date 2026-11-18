@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import type { EncarteSemanalProduct } from "@/types/encarte-semanal";
 import type { EncarteProduct } from "@/types/encarte";
 import {
@@ -10,6 +10,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   FileSpreadsheet,
@@ -23,8 +24,14 @@ import {
   Loader2,
   Sparkles,
   Zap,
+  Trash2,
+  Edit2,
+  Star,
+  X,
+  Search,
 } from "lucide-react";
 import { parseEncarteSemanalSpreadsheet } from "@/lib/encarte-semanal-parser";
+import { cleanPrincipalDescription } from "@/lib/encarte-semanal-catalog";
 import {
   matchPhotosWithSemanalProducts,
   findKnownPhotoForCode,
@@ -39,16 +46,21 @@ import {
   loadCampaignPhotosFromFolder,
 } from "@/lib/local-folder-service";
 
-interface EncarteSemanalSourceModalProps {
+export interface EncarteSemanalSourceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   existingProducts: EncarteSemanalProduct[];
   onApply: (products: EncarteSemanalProduct[]) => void;
 }
 
-export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps> = ({
-  open,
-  onOpenChange,
+export interface EncarteSemanalSourceModalContentProps {
+  onClose: () => void;
+  existingProducts: EncarteSemanalProduct[];
+  onApply: (products: EncarteSemanalProduct[]) => void;
+}
+
+export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModalContentProps> = ({
+  onClose,
   existingProducts,
   onApply,
 }) => {
@@ -60,9 +72,87 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
   const [isMatchingPhotos, setIsMatchingPhotos] = useState(false);
   const [photoMatchMessage, setPhotoMatchMessage] = useState<string | null>(null);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{
+    code: string;
+    description: string;
+    isPrincipal: boolean;
+  }>({ code: "", description: "", isPrincipal: false });
+  const [filterQuery, setFilterQuery] = useState("");
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const zipInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setStagedProducts(existingProducts);
+    setEditingId(null);
+    setFilterQuery("");
+  }, [existingProducts]);
+
+  // Classificar / desmarcar como Principal
+  const handleTogglePrincipal = (productId: string) => {
+    setStagedProducts((prev) =>
+      prev.map((p) => {
+        if (p.id !== productId) return p;
+        if (p.isPrincipal) {
+          // Desmarcar Principal: restaura código e descrição original
+          return {
+            ...p,
+            isPrincipal: false,
+            code: p.originalCode || "",
+            description: p.originalDescription || p.description,
+          };
+        }
+        // Marcar Principal: fica sem código e com descrição genérica sem fragrância/sabor/variação/embalagem
+        return {
+          ...p,
+          isPrincipal: true,
+          originalCode: p.originalCode || p.code,
+          code: "",
+          originalDescription: p.originalDescription || p.description,
+          description: cleanPrincipalDescription(p.description),
+        };
+      })
+    );
+  };
+
+  // Excluir / Remover da lista carregada
+  const handleDeleteProduct = (productId: string) => {
+    setStagedProducts((prev) => prev.filter((p) => p.id !== productId));
+    if (editingId === productId) {
+      setEditingId(null);
+    }
+  };
+
+  // Iniciar edição
+  const handleStartEdit = (p: EncarteSemanalProduct) => {
+    setEditingId(p.id);
+    setEditForm({
+      code: p.code,
+      description: p.description,
+      isPrincipal: Boolean(p.isPrincipal),
+    });
+  };
+
+  // Salvar edição
+  const handleSaveEdit = (productId: string) => {
+    setStagedProducts((prev) =>
+      prev.map((p) => {
+        if (p.id !== productId) return p;
+        const newCode = editForm.isPrincipal ? "" : editForm.code.trim();
+        const newDesc = editForm.description.trim().toUpperCase();
+        return {
+          ...p,
+          code: newCode,
+          description: newDesc,
+          isPrincipal: editForm.isPrincipal,
+          image: p.image || (newCode ? findKnownPhotoForCode(newCode) : p.image),
+        };
+      })
+    );
+    setEditingId(null);
+  };
 
   // Subir e processar planilha
   const handleSpreadsheetUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -251,24 +341,23 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
 
   const handleApply = () => {
     onApply(stagedProducts);
-    onOpenChange(false);
+    onClose();
   };
 
   const withPhotoCount = stagedProducts.filter((p) => Boolean(p.image)).length;
   const withoutPhotoCount = stagedProducts.length - withPhotoCount;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl bg-neutral-900 border border-neutral-800 text-white p-6 shadow-2xl">
-        <DialogHeader>
-          <DialogTitle className="text-lg font-bold text-amber-300 flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5 text-amber-400" />
-            Carregar Planilha & Fotos do Encarte Semanal
-          </DialogTitle>
-          <DialogDescription className="text-neutral-400 text-xs">
-            Suba uma planilha (.xlsx ou .csv) contendo os códigos e descrições dos produtos. As fotos são puxadas automaticamente com a mesma tecnologia do acompanhamento de validade.
-          </DialogDescription>
-        </DialogHeader>
+    <div className="space-y-4">
+      <DialogHeader>
+        <DialogTitle className="text-lg font-bold text-amber-300 flex items-center gap-2">
+          <FileSpreadsheet className="h-5 w-5 text-amber-400" />
+          Carregar Planilha & Fotos do Encarte Semanal
+        </DialogTitle>
+        <DialogDescription className="text-neutral-400 text-xs">
+          Suba uma planilha (.xlsx ou .csv) contendo os códigos e descrições dos produtos. As fotos são puxadas automaticamente com a mesma tecnologia do acompanhamento de validade.
+        </DialogDescription>
+      </DialogHeader>
 
         {/* Inputs ocultos para arquivos e pastas */}
         <input
@@ -362,36 +451,249 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
               </div>
             )}
 
-            {/* Lista Prévia dos Produtos Importados */}
-            {stagedProducts.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-neutral-300">
-                    Produtos Carregados ({stagedProducts.length})
-                  </span>
-                  <span className="text-neutral-500 text-[11px]">
-                    {Math.ceil(stagedProducts.length / 20)} tela(s) estimada(s) de 20 produtos
-                  </span>
-                </div>
-                <div className="max-h-48 overflow-y-auto border border-neutral-800 rounded-lg bg-neutral-950 divide-y divide-neutral-900 text-xs">
-                  {stagedProducts.map((p, idx) => (
-                    <div key={idx} className="flex items-center justify-between px-3 py-1.5">
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <span className="font-mono text-amber-400 font-bold text-[11px] shrink-0">
-                          {p.code}
-                        </span>
-                        <span className="truncate text-neutral-300 text-[11px]">
-                          {p.description}
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-neutral-500 shrink-0">
-                        {p.image ? "✓ Com foto" : "⚠ Sem foto"}
+            {/* Lista Prévia dos Produtos Importados com Edição, Exclusão e Classificação Principal */}
+            {stagedProducts.length > 0 && (() => {
+              const q = filterQuery.trim().toLowerCase();
+              const filteredList = q
+                ? stagedProducts.filter(
+                    (p) =>
+                      (p.code && p.code.toLowerCase().includes(q)) ||
+                      (p.description && p.description.toLowerCase().includes(q))
+                  )
+                : stagedProducts;
+              const principaisCount = stagedProducts.filter((p) => p.isPrincipal).length;
+
+              return (
+                <div className="space-y-2 pt-2 border-t border-neutral-800">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-neutral-200">
+                        Produtos Carregados ({stagedProducts.length})
                       </span>
+                      {principaisCount > 0 && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40 flex items-center gap-1">
+                          <Star className="h-2.5 w-2.5 fill-amber-300" />
+                          {principaisCount} Principal(is)
+                        </span>
+                      )}
                     </div>
-                  ))}
+                    <span className="text-neutral-400 text-[11px]">
+                      {Math.ceil(stagedProducts.length / 20)} tela(s) estimada(s) de 20 produtos
+                    </span>
+                  </div>
+
+                  {/* Barra de Busca rápida dentro dos produtos carregados */}
+                  <div className="relative">
+                    <Search className="h-3.5 w-3.5 text-neutral-500 absolute left-2.5 top-2.5 pointer-events-none" />
+                    <Input
+                      value={filterQuery}
+                      onChange={(e) => setFilterQuery(e.target.value)}
+                      placeholder="Filtrar por código ou descrição..."
+                      className="h-8 pl-8 bg-neutral-950 border-neutral-800 text-xs text-neutral-200 placeholder:text-neutral-500 focus:border-amber-400"
+                    />
+                    {filterQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setFilterQuery("")}
+                        className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-white"
+                        title="Limpar busca"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Tabela dos Produtos Carregados com Ações */}
+                  <div className="max-h-56 overflow-y-auto border border-neutral-800 rounded-lg bg-neutral-950 divide-y divide-neutral-900 text-xs">
+                    {/* Cabeçalho */}
+                    <div className="grid grid-cols-12 gap-2 px-3 py-1.5 bg-neutral-900/90 text-neutral-400 font-bold text-[10px] uppercase tracking-wider sticky top-0 z-10 border-b border-neutral-800">
+                      <div className="col-span-3">Codprod</div>
+                      <div className="col-span-5">Produto / Descrição</div>
+                      <div className="col-span-2">Foto</div>
+                      <div className="col-span-2 text-right">Ações</div>
+                    </div>
+
+                    {filteredList.map((p) => {
+                      const isEditing = editingId === p.id;
+
+                      if (isEditing) {
+                        return (
+                          <div
+                            key={p.id}
+                            className="p-2.5 bg-neutral-900/90 border-l-2 border-amber-400 space-y-2"
+                          >
+                            <div className="grid grid-cols-12 gap-2">
+                              <div className="col-span-4">
+                                <label className="text-[10px] text-neutral-400 font-bold block mb-1">
+                                  Código:
+                                </label>
+                                <Input
+                                  value={editForm.code}
+                                  disabled={editForm.isPrincipal}
+                                  onChange={(e) =>
+                                    setEditForm((prev) => ({ ...prev, code: e.target.value }))
+                                  }
+                                  placeholder={editForm.isPrincipal ? "Sem cód (Principal)" : "Código"}
+                                  className="h-7 text-xs bg-black border-neutral-700 font-mono text-amber-300 disabled:opacity-50"
+                                />
+                              </div>
+                              <div className="col-span-8">
+                                <label className="text-[10px] text-neutral-400 font-bold block mb-1">
+                                  Descrição:
+                                </label>
+                                <Input
+                                  value={editForm.description}
+                                  onChange={(e) =>
+                                    setEditForm((prev) => ({ ...prev, description: e.target.value }))
+                                  }
+                                  placeholder="Descrição do produto"
+                                  className="h-7 text-xs bg-black border-neutral-700 text-neutral-100 uppercase"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-1">
+                              <label className="flex items-center gap-1.5 text-[11px] text-neutral-300 font-semibold cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={editForm.isPrincipal}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    setEditForm((prev) => ({
+                                      ...prev,
+                                      isPrincipal: checked,
+                                      code: checked ? "" : p.originalCode || prev.code,
+                                      description: checked
+                                        ? cleanPrincipalDescription(prev.description)
+                                        : p.originalDescription || prev.description,
+                                    }));
+                                  }}
+                                  className="rounded border-neutral-700 text-amber-500 focus:ring-amber-400 h-3.5 w-3.5"
+                                />
+                                <span className={editForm.isPrincipal ? "text-amber-300 font-bold" : ""}>
+                                  ⭐ Classificar como Principal (sem código / sem variação)
+                                </span>
+                              </label>
+
+                              <div className="flex items-center gap-1.5">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => handleSaveEdit(p.id)}
+                                  className="h-6 px-2.5 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                                >
+                                  <Check className="h-3 w-3 mr-1" />
+                                  Salvar
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setEditingId(null)}
+                                  className="h-6 px-2 text-[10px] text-neutral-400 hover:text-white"
+                                >
+                                  Cancelar
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={p.id}
+                          className={`grid grid-cols-12 gap-2 px-3 py-1.5 items-center transition-colors ${
+                            p.isPrincipal
+                              ? "bg-amber-500/10 hover:bg-amber-500/15"
+                              : "hover:bg-neutral-900/60"
+                          }`}
+                        >
+                          {/* Codprod */}
+                          <div className="col-span-3 flex items-center gap-1.5 overflow-hidden">
+                            {p.isPrincipal ? (
+                              <span
+                                className="text-[9px] font-black text-amber-300 bg-amber-500/25 px-1.5 py-0.5 rounded border border-amber-500/40 shrink-0"
+                                title="Produto Principal (Sem código na arte)"
+                              >
+                                ⭐ PRINCIPAL
+                              </span>
+                            ) : (
+                              <span className="font-mono text-amber-400 font-bold text-[11px] truncate">
+                                {p.code || "—"}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Produto / Descrição */}
+                          <div className="col-span-5 min-w-0">
+                            <span
+                              className="truncate block text-neutral-200 text-[11px] uppercase font-medium"
+                              title={p.description}
+                            >
+                              {p.description}
+                            </span>
+                          </div>
+
+                          {/* Foto status */}
+                          <div className="col-span-2 text-[10px] truncate">
+                            {p.image ? (
+                              <span className="text-emerald-400 font-medium">✓ Com foto</span>
+                            ) : (
+                              <span className="text-amber-400/90 font-medium">⚠ Sem foto</span>
+                            )}
+                          </div>
+
+                          {/* Ações Rápidas: Principal / Editar / Excluir */}
+                          <div className="col-span-2 flex items-center justify-end gap-1">
+                            {/* Botão Classificar como Principal */}
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePrincipal(p.id)}
+                              className={`p-1 rounded transition-colors ${
+                                p.isPrincipal
+                                  ? "text-amber-400 bg-amber-500/20 hover:bg-amber-500/30"
+                                  : "text-neutral-500 hover:text-amber-400 hover:bg-neutral-800"
+                              }`}
+                              title={
+                                p.isPrincipal
+                                  ? "Desmarcar Principal (restaurar código e variação)"
+                                  : "Classificar como Principal (remover código e simplificar descrição)"
+                              }
+                              data-testid={`btn-toggle-principal-${p.id}`}
+                            >
+                              <Star className={`h-3.5 w-3.5 ${p.isPrincipal ? "fill-amber-400" : ""}`} />
+                            </button>
+
+                            {/* Botão Editar */}
+                            <button
+                              type="button"
+                              onClick={() => handleStartEdit(p)}
+                              className="p-1 rounded text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+                              title="Editar código e descrição"
+                              data-testid={`btn-edit-product-${p.id}`}
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+
+                            {/* Botão Excluir / Remover */}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteProduct(p.id)}
+                              className="p-1 rounded text-neutral-500 hover:text-red-400 hover:bg-neutral-800 transition-colors"
+                              title="Remover produto da lista"
+                              data-testid={`btn-delete-product-${p.id}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </TabsContent>
 
           {/* ABA 2: FOTOS */}
@@ -538,7 +840,7 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
           <Button
             type="button"
             variant="ghost"
-            onClick={() => onOpenChange(false)}
+            onClick={onClose}
             className="text-neutral-400 hover:text-white"
           >
             Cancelar
@@ -554,6 +856,24 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
             Aplicar ao Encarte Semanal ({stagedProducts.length} itens)
           </Button>
         </DialogFooter>
+    </div>
+  );
+};
+
+export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps> = ({
+  open,
+  onOpenChange,
+  existingProducts,
+  onApply,
+}) => {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl bg-neutral-900 border border-neutral-800 text-white p-6 shadow-2xl">
+        <EncarteSemanalSourceModalContent
+          onClose={() => onOpenChange(false)}
+          existingProducts={existingProducts}
+          onApply={onApply}
+        />
       </DialogContent>
     </Dialog>
   );

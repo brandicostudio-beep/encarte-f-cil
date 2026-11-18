@@ -12,6 +12,24 @@ import type {
 } from "@/types/encarte-semanal";
 import { normalizeHeader } from "./spreadsheet-parser";
 import { getActiveSnapshot } from "./painel-validade-storage";
+import { cleanPrincipalDescription } from "./encarte-semanal-catalog";
+
+export function parseBooleanFlag(val: any): boolean {
+  if (typeof val === "boolean") return val;
+  if (typeof val === "number") return val === 1;
+  if (!val) return false;
+  const s = String(val).trim().toLowerCase();
+  return (
+    s === "sim" ||
+    s === "s" ||
+    s === "true" ||
+    s === "1" ||
+    s === "x" ||
+    s === "principal" ||
+    s === "yes" ||
+    s === "y"
+  );
+}
 
 /**
  * Normaliza código de produto (remove espaços, pontos e zeros à esquerda desnecessários)
@@ -167,6 +185,17 @@ export async function parseEncarteSemanalSpreadsheet(
     return n.includes("limit") || n.includes("faixa");
   });
 
+  // 4. Identificar coluna de Principal opcional (ex: "Principal", "Destaque", "Flag")
+  const principalKey = headerKeys.find((k) => {
+    const n = normalizeHeader(k);
+    return (
+      n.includes("principal") ||
+      n.includes("destaque") ||
+      n.includes("master") ||
+      n === "flag"
+    );
+  });
+
   const warnings: string[] = [];
   const errors: string[] = [];
   const products: EncarteSemanalProduct[] = [];
@@ -175,11 +204,14 @@ export async function parseEncarteSemanalSpreadsheet(
   rows.forEach((row, index) => {
     const rowNumber = index + 2; // Linha humana considerando cabeçalho na linha 1
     const rawCode = row[codeKey];
-    const code = normalizeProductCode(rawCode);
+    let code = normalizeProductCode(rawCode);
+    let description = String(row[descKey] || "").trim();
+    const isPrincipalFlag = principalKey ? parseBooleanFlag(row[principalKey]) : false;
+    const limit = limitKey && row[limitKey] ? String(row[limitKey]).trim() : undefined;
 
-    // Validação 1: Código vazio
-    if (!code) {
-      warnings.push(`Linha ${rowNumber} ignorada: Código de produto vazio ou não informado.`);
+    // Se ambos estão vazios, ignora
+    if (!code && !description) {
+      warnings.push(`Linha ${rowNumber} ignorada: Código de produto e descrição vazios.`);
       return;
     }
 
@@ -201,7 +233,36 @@ export async function parseEncarteSemanalSpreadsheet(
       return;
     }
 
-    // Validação 2: Código duplicado
+    // Se for linha explicitamente marcada como Principal pelo cabeçalho
+    if (isPrincipalFlag) {
+      const originalCode = code;
+      const originalDescription = description;
+      const cleanDesc = description ? cleanPrincipalDescription(description) : "";
+
+      products.push({
+        id: `semanal_${originalCode || "principal"}_${index}`,
+        code: "",
+        description: cleanDesc,
+        isPrincipal: true,
+        limit,
+        scale: 1.15,
+        offsetX: 0,
+        offsetY: 0,
+        overlapY: 8,
+        included: true,
+        originalCode,
+        originalDescription,
+      });
+      return;
+    }
+
+    // Validação 1: Código vazio para linhas normais
+    if (!code) {
+      warnings.push(`Linha ${rowNumber} ignorada: Código de produto vazio ou não informado.`);
+      return;
+    }
+
+    // Validação 2: Código duplicado (apenas para itens normais com código preenchido)
     if (seenCodes.has(code.toLowerCase())) {
       warnings.push(
         `Código duplicado "${code}" detectado na linha ${rowNumber}. Apenas a primeira ocorrência foi incluída.`
@@ -210,8 +271,9 @@ export async function parseEncarteSemanalSpreadsheet(
     }
     seenCodes.add(code.toLowerCase());
 
-    // Obter ou resolver descrição
-    let description = String(row[descKey] || "").trim();
+    const originalCode = code;
+    const originalDescription = description;
+
     if (!description) {
       const fallbackDesc = findKnownDescriptionFromAcompanhamento(code);
       if (fallbackDesc) {
@@ -224,20 +286,19 @@ export async function parseEncarteSemanalSpreadsheet(
       }
     }
 
-    const limit = limitKey && row[limitKey] ? String(row[limitKey]).trim() : undefined;
-
     products.push({
-      id: `semanal_${code}_${index}`,
+      id: `semanal_${originalCode}_${index}`,
       code,
       description,
+      isPrincipal: false,
       limit,
       scale: 1.15,
       offsetX: 0,
       offsetY: 0,
       overlapY: 8,
       included: true,
-      originalCode: code,
-      originalDescription: description,
+      originalCode,
+      originalDescription,
     });
   });
 

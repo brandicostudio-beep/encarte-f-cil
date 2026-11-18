@@ -22,6 +22,7 @@ import {
   calculateEncarteSemanalGridCells,
   paginateEncarteSemanalProducts,
 } from "@/lib/encarte-semanal-layout";
+import { cleanPrincipalDescription } from "@/lib/encarte-semanal-catalog";
 import {
   exportEncarteSemanalPageAsPng,
   exportAllEncarteSemanalPagesAsZip,
@@ -69,6 +70,7 @@ import {
   LayoutGrid,
   CalendarClock,
   Layers,
+  Star,
 } from "lucide-react";
 
 export const EncarteSemanalWorkspace: React.FC = () => {
@@ -341,6 +343,30 @@ export const EncarteSemanalWorkspace: React.FC = () => {
 
   const handleDeleteProduct = (productId: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== productId));
+  };
+
+  const handleTogglePrincipal = (productId: string) => {
+    setProducts((prev) =>
+      prev.map((p) => {
+        if (p.id !== productId) return p;
+        if (p.isPrincipal) {
+          return {
+            ...p,
+            isPrincipal: false,
+            code: p.originalCode || "",
+            description: p.originalDescription || p.description,
+          };
+        }
+        return {
+          ...p,
+          isPrincipal: true,
+          originalCode: p.originalCode || p.code,
+          code: "",
+          originalDescription: p.originalDescription || p.description,
+          description: cleanPrincipalDescription(p.description),
+        };
+      })
+    );
   };
 
   const handleMoveProduct = (fromIndex: number, direction: "up" | "down") => {
@@ -1140,8 +1166,21 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                         </td>
 
                         {/* Código */}
-                        <td className="py-2 px-3 font-mono font-bold text-amber-400">
-                          {p.code}
+                        <td className="py-2 px-3">
+                          {p.isPrincipal ? (
+                            <div className="space-y-0.5">
+                              <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/40">
+                                ⭐ PRINCIPAL
+                              </span>
+                              <span className="block text-[9px] text-neutral-500">
+                                (Sem código na arte)
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="font-mono font-bold text-amber-400">
+                              {p.code || "—"}
+                            </span>
+                          )}
                         </td>
 
                         {/* Descrição */}
@@ -1167,6 +1206,25 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                         {/* Ações */}
                         <td className="py-2 px-3 text-center">
                           <div className="flex items-center justify-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleTogglePrincipal(p.id)}
+                              className={`h-7 w-7 p-0 ${
+                                p.isPrincipal
+                                  ? "text-amber-400 hover:text-amber-300 bg-amber-500/20"
+                                  : "text-neutral-400 hover:text-amber-400"
+                              }`}
+                              title={
+                                p.isPrincipal
+                                  ? "Desmarcar Principal (restaurar código e variação)"
+                                  : "Classificar como Principal (remover código e simplificar descrição)"
+                              }
+                              data-testid={`btn-workspace-toggle-principal-${p.id}`}
+                            >
+                              <Star className={`h-3.5 w-3.5 ${p.isPrincipal ? "fill-amber-400" : ""}`} />
+                            </Button>
                             <Button
                               type="button"
                               variant="ghost"

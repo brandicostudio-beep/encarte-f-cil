@@ -396,4 +396,41 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     expect(result.products[0].description).toBe("ALVEJANTE Q BOA FLORAL - 12X1 LT");
     expect(result.products[1].code).toBe("18689");
   });
+
+  // =========================================================================
+  // Teste 12: Classificação como Produto Principal (sem código e sem fragrância/sabor/variação)
+  // =========================================================================
+  it("Teste 12: Classificar como Principal remove código e limpa fragrância, sabor e fardo da descrição", async () => {
+    const { cleanPrincipalDescription } = await import("./encarte-semanal-catalog");
+
+    // 1. Limpeza de descrição para produto principal
+    expect(cleanPrincipalDescription("ALVEJANTE Q BOA FLORAL - 12X1 LT")).toBe("ALVEJANTE Q BOA");
+    expect(cleanPrincipalDescription("DESENGORDURANTE Q BOA COZINHA - 1X500 ML")).toBe("DESENGORDURANTE Q BOA");
+    expect(cleanPrincipalDescription("LIMPADOR SANITARIO Q BOA FLORAL - 12X1 LT")).toBe("LIMPADOR SANITARIO Q BOA");
+    expect(cleanPrincipalDescription("CLORO GEL Q BOA - 12X1 LT")).toBe("CLORO GEL Q BOA");
+    expect(cleanPrincipalDescription("BEBIDA DE AMENDOAS ALMOND BREEZE 1L BAUNILHA")).toBe("BEBIDA DE AMENDOAS ALMOND BREEZE");
+
+    // 2. Importação de planilha com coluna Principal (como no anexo do usuário)
+    const rows = [
+      ["Codprod", "PRODUTO", "Principal"],
+      ["2110", "ALVEJANTE Q BOA FLORAL - 12X1 LT", "NÃO"],
+      ["1001", "LIMPADOR SANITARIO Q BOA FLORAL - 12X1 LT", "SIM"], // Linha marcada como Principal
+      ["19386", "CLORO GEL Q BOA - 12X1 LT", ""],
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Dados");
+    const buffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+
+    const result = await parseEncarteSemanalSpreadsheet(buffer, "teste_principal.xlsx");
+    expect(result.success).toBe(true);
+    expect(result.products.length).toBe(3);
+
+    // O produto da linha 2 foi classificado como Principal
+    const principalProd = result.products[1];
+    expect(principalProd.isPrincipal).toBe(true);
+    expect(principalProd.code).toBe(""); // Fica sem código na arte!
+    expect(principalProd.description).toBe("LIMPADOR SANITARIO Q BOA"); // Limpo de fragrância e 12x1 lt!
+  });
 });

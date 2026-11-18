@@ -20,11 +20,13 @@ import {
   Check,
   Image as ImageIcon,
   Search,
+  Star,
 } from "lucide-react";
 import { removeWhiteBackground } from "@/lib/colecoes-image-processor";
 import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
 import { findKnownPhotoForCode } from "@/lib/encarte-semanal-photos";
 import { getActiveSnapshot } from "@/lib/painel-validade-storage";
+import { cleanPrincipalDescription } from "@/lib/encarte-semanal-catalog";
 
 interface EncarteSemanalProductModalProps {
   product: EncarteSemanalProduct | null;
@@ -367,6 +369,80 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
 
           {/* Coluna 2: Dados do Produto */}
           <div className="space-y-4">
+            {/* Bloco Classificar como Principal */}
+            <div
+              className={`p-3 rounded-xl border transition-all ${
+                form.isPrincipal
+                  ? "bg-amber-500/15 border-amber-500/50"
+                  : "bg-neutral-950/70 border-neutral-800"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div
+                    className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      form.isPrincipal
+                        ? "bg-amber-500/30 text-amber-300"
+                        : "bg-neutral-800 text-neutral-400"
+                    }`}
+                  >
+                    <Star className={`h-4 w-4 ${form.isPrincipal ? "fill-amber-400 text-amber-400" : ""}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold text-white block">
+                      {form.isPrincipal ? "⭐ Produto Principal Ativo" : "Classificar como Principal"}
+                    </span>
+                    <span className="text-[11px] text-neutral-400 block truncate">
+                      {form.isPrincipal
+                        ? "Fica sem código e com descrição genérica na arte."
+                        : "Exibe código e descrição na arte."}
+                    </span>
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={form.isPrincipal ? "default" : "outline"}
+                  onClick={() => {
+                    if (form.isPrincipal) {
+                      setForm((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              isPrincipal: false,
+                              code: prev.originalCode || prev.code,
+                              description: prev.originalDescription || prev.description,
+                            }
+                          : prev
+                      );
+                    } else {
+                      setForm((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              isPrincipal: true,
+                              originalCode: prev.originalCode || prev.code,
+                              code: "",
+                              originalDescription: prev.originalDescription || prev.description,
+                              description: cleanPrincipalDescription(prev.description),
+                            }
+                          : prev
+                      );
+                    }
+                  }}
+                  className={`h-8 text-xs font-bold shrink-0 ${
+                    form.isPrincipal
+                      ? "bg-amber-500 hover:bg-amber-600 text-neutral-950"
+                      : "bg-neutral-800 border-neutral-700 text-neutral-300 hover:text-white"
+                  }`}
+                  data-testid="btn-modal-toggle-principal"
+                >
+                  {form.isPrincipal ? "Desmarcar" : "Tornar Principal"}
+                </Button>
+              </div>
+            </div>
+
             {/* Campo Código */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">

@@ -105,4 +105,76 @@ describe("EncarteSemanalWorkspace: Navegação e Desbloqueio de Abas", () => {
     expect(lookedUp.code).toBe("19396");
     expect(lookedUp.description).toContain("AMEIXA");
   });
+
+  it("renderiza célula de produto Principal SEM código e com descrição genérica", async () => {
+    const { EncarteSemanalCell } = await import("./EncarteSemanalCell");
+    const { DEFAULT_ENCARTE_SEMANAL_GRID } = await import("@/types/encarte-semanal");
+    const { calculateEncarteSemanalGridCells } = await import("@/lib/encarte-semanal-layout");
+
+    const cells = calculateEncarteSemanalGridCells(DEFAULT_ENCARTE_SEMANAL_GRID);
+    const mockPrincipal = {
+      id: "prod-principal-1",
+      code: "",
+      description: "LIMPADOR SANITARIO Q BOA",
+      isPrincipal: true,
+      image: "https://example.com/qboa.png",
+    };
+
+    const html = renderToString(
+      <EncarteSemanalCell
+        product={mockPrincipal}
+        cell={cells[0]}
+        interactive={true}
+        isSelected={false}
+      />
+    );
+
+    // Não deve exibir bloco de código no card principal
+    expect(html).not.toContain('data-testid="semanal-cell-code"');
+    // Deve exibir a descrição genérica
+    expect(html).toContain("LIMPADOR SANITARIO Q BOA");
+  });
+
+  it("renderiza o modal de Carregar Planilha com ações de Editar, Excluir e Classificar como Principal nos produtos carregados", async () => {
+    const { EncarteSemanalSourceModalContent } = await import("./EncarteSemanalSourceModal");
+    const { Dialog } = await import("@/components/ui/dialog");
+    const mockProducts = [
+      {
+        id: "prod-1",
+        code: "2110",
+        description: "ALVEJANTE Q BOA FLORAL - 12X1 LT",
+        image: "https://example.com/img1.png",
+      },
+      {
+        id: "prod-2",
+        code: "",
+        description: "LIMPADOR SANITARIO Q BOA",
+        isPrincipal: true,
+        image: "https://example.com/img2.png",
+      },
+    ];
+
+    const html = renderToString(
+      <Dialog open={true}>
+        <EncarteSemanalSourceModalContent
+          onClose={() => {}}
+          existingProducts={mockProducts}
+          onApply={() => {}}
+        />
+      </Dialog>
+    );
+
+    // Deve listar os produtos carregados
+    expect(html).toContain("Produtos Carregados");
+    expect(html).toContain("ALVEJANTE Q BOA FLORAL - 12X1 LT");
+    expect(html).toContain("LIMPADOR SANITARIO Q BOA");
+
+    // Produto principal exibe tag ⭐ PRINCIPAL
+    expect(html).toContain("⭐ PRINCIPAL");
+
+    // Deve conter botões de ação para classificar como principal, editar e excluir
+    expect(html).toContain('data-testid="btn-toggle-principal-prod-1"');
+    expect(html).toContain('data-testid="btn-edit-product-prod-1"');
+    expect(html).toContain('data-testid="btn-delete-product-prod-1"');
+  });
 });

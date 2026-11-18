@@ -6,8 +6,9 @@
 
 export interface EncarteSemanalProduct {
   id: string;
-  code: string;                  // Código do produto (ex: "19396" ou "14352 / 17585")
+  code: string;                  // Código do produto (ex: "19396" ou vazio quando for item Principal)
   description: string;           // Descrição (ex: "AMEIXA EM CALDA LATA PREDILECTA")
+  isPrincipal?: boolean;         // Se é item Principal (sem código na arte, descrição genérica sem variação/fragrância)
   image?: string;                 // URL ou DataURL da foto principal (com transparência)
   alternativePhotos?: Array<{
     filename: string;

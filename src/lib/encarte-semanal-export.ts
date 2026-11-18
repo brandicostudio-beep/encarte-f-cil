@@ -200,7 +200,9 @@ export async function renderEncarteSemanalPageToCanvas(
     }
 
     // Textos da barra: COD (à esquerda) e DESCRIÇÃO (ao centro/direita)
-    const code = product.code ? product.code.trim() : "";
+    // Produtos classificados como Principal ficam SEM CÓDIGO na barra
+    const isPrincipal = Boolean(product.isPrincipal || !product.code);
+    const code = isPrincipal ? "" : (product.code ? product.code.trim() : "");
     const desc = product.description ? product.description.trim().toUpperCase() : "";
 
     let textStartX = barX + 8;

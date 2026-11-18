@@ -209,7 +209,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
           }`}
           style={{ height: `${barHeight}px` }}
         >
-          {product.code && (
+          {!product.isPrincipal && product.code && (
             <span
               className="shrink-0 text-[13px] font-black font-mono border-r border-[#7A0D12]/30 pr-1.5"
               data-testid="semanal-cell-code"

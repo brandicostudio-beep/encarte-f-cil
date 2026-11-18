@@ -11,6 +11,7 @@
 
 import { getActiveSnapshot } from "./painel-validade-storage";
 import { findKnownPhotoForCode } from "./encarte-semanal-photos";
+import { extractGenericBaseName } from "./colecoes-similarity";
 import type { EncarteSemanalProduct } from "@/types/encarte-semanal";
 
 export interface ProductSuggestion {
@@ -257,4 +258,39 @@ export function createSemanalProductFromSuggestion(
     originalDescription: existingProduct?.originalDescription || suggestion.description,
     originalImage: existingProduct?.originalImage || image,
   };
+}
+
+/**
+ * Limpa a descrição para produtos classificados como PRINCIPAL no Encarte Semanal.
+ * Remove embalagem/fardos (ex: - 12X1 LT, 1X500 ML, 6X2 LT), gramaturas redundantes,
+ * fragrâncias, sabores, aromas e variações, deixando apenas a descrição genérica pura.
+ * Exemplo:
+ * - "ALVEJANTE Q BOA FLORAL - 12X1 LT" -> "ALVEJANTE Q BOA"
+ * - "LIMPADOR SANITARIO Q BOA FLORAL - 12X1 LT" -> "LIMPADOR SANITARIO Q BOA"
+ * - "DESENGORDURANTE Q BOA COZINHA - 1X500 ML" -> "DESENGORDURANTE Q BOA"
+ */
+export function cleanPrincipalDescription(raw: string): string {
+  if (!raw) return "";
+  let s = raw.trim();
+
+  // Remove multiplicadores e formatos de caixa / fardo / embalagem como:
+  // - 12X1 LT, 1X500 ML, 6X2 LT, 24X100G, 12X1L, CX, FD, UNID
+  s = s.replace(/[-–—/]?\s*\b\d+\s*X\s*\d+[\d.,]*\s*(?:LT|L|ML|KG|G|GR|UNID|UN|CX|FD)?\b/gi, " ");
+  s = s.replace(/[-–—/]?\s*\b\d+[\d.,]*\s*(?:LT|L|ML|KG|G|GR)\b/gi, " ");
+
+  // Extrai o nome-base removendo fragrâncias, sabores e recheios
+  s = extractGenericBaseName(s);
+
+  // Variações específicas comuns de limpeza e sub-linhas
+  s = s.replace(/\b(cozinha|banheiro)\b/gi, " ");
+
+  // Remove sobras de traços, barras e espaços repetidos
+  s = s
+    .replace(/[-–—/]\s*[-–—/]/g, " ")
+    .replace(/\s*[-–—/]\s*$/g, "")
+    .replace(/^\s*[-–—/]\s*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return s.toUpperCase();
 }

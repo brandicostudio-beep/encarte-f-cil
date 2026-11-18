@@ -4,6 +4,7 @@ import {
   searchProductSuggestions,
   lookupProductByCode,
   createSemanalProductFromSuggestion,
+  cleanPrincipalDescription,
   type ProductSuggestion,
 } from "@/lib/encarte-semanal-catalog";
 import { findKnownPhotoForCode } from "@/lib/encarte-semanal-photos";
@@ -23,6 +24,7 @@ import {
   Image as ImageIcon,
   Loader2,
   Maximize2,
+  Star,
 } from "lucide-react";
 
 export interface EncarteSemanalInArtEditorProps {
@@ -200,6 +202,78 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
           title="Fechar editor"
         >
           <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Botão de Classificação como Principal */}
+      <div
+        className={`p-2 rounded-lg border transition-all flex items-center justify-between gap-2 ${
+          product?.isPrincipal
+            ? "bg-amber-500/15 border-amber-500/50"
+            : "bg-neutral-900 border-neutral-800"
+        }`}
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Star
+            className={`h-3.5 w-3.5 shrink-0 ${
+              product?.isPrincipal ? "fill-amber-400 text-amber-400" : "text-neutral-400"
+            }`}
+          />
+          <div className="min-w-0">
+            <span className="text-[11px] font-bold text-white block">
+              {product?.isPrincipal ? "⭐ Item Principal Ativo" : "Classificar como Principal"}
+            </span>
+            <span className="text-[9px] text-neutral-400 block truncate">
+              {product?.isPrincipal
+                ? "Sem código e descrição genérica na arte"
+                : "Exibe código e descrição na barra"}
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            if (product?.isPrincipal) {
+              const restoredCode = product.originalCode || "";
+              const restoredDesc = product.originalDescription || description;
+              setCodeQuery(restoredCode);
+              setDescription(restoredDesc);
+              onSaveProduct({
+                ...product,
+                isPrincipal: false,
+                code: restoredCode,
+                description: restoredDesc,
+              });
+            } else {
+              const origCode = product?.originalCode || codeQuery;
+              const origDesc = product?.originalDescription || description;
+              const cleanDesc = cleanPrincipalDescription(description);
+              setCodeQuery("");
+              setDescription(cleanDesc);
+              onSaveProduct({
+                ...(product || {
+                  id: `semanal-prod-${Date.now()}`,
+                  image,
+                  limit,
+                  scale,
+                  included: true,
+                }),
+                isPrincipal: true,
+                originalCode: origCode,
+                code: "",
+                originalDescription: origDesc,
+                description: cleanDesc,
+              });
+            }
+          }}
+          className={`px-2 py-1 rounded text-[10px] font-black uppercase transition-all shrink-0 cursor-pointer ${
+            product?.isPrincipal
+              ? "bg-amber-400 hover:bg-amber-500 text-neutral-950 shadow-xs"
+              : "bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-700"
+          }`}
+          data-testid="in-art-toggle-principal"
+        >
+          {product?.isPrincipal ? "Desmarcar" : "Tornar Principal"}
         </button>
       </div>
 
