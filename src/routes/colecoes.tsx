@@ -18,6 +18,7 @@ export const Route = createFileRoute("/colecoes")({
         content: "Encarte de coleções com grade configurável e exportação em alta resolução.",
       },
       { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: ColecoesRoutePage,

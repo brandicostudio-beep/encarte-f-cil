@@ -176,6 +176,7 @@ export function PainelValidadeWorkspace({
         window.removeEventListener("storage", handleSync);
       };
     }
+    return undefined;
   }, [reloadData]);
 
   // Atualização periódica a cada 4 minutos para checar alterações de encarte

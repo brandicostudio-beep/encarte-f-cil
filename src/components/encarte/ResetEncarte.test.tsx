@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import React from "react";
 import { renderToString } from "react-dom/server";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { EditorStepper } from "./EditorStepper";
 import { SourceSelector } from "./SourceSelector";
 import { DEFAULT_CAMPAIGN } from "@/types/encarte";
@@ -96,8 +98,6 @@ describe("Novo Encarte e Zerar Dados (ResetEncarte)", () => {
   });
 
   it("Componentes Checkbox e Label renderizam sem erros de referência na etapa de campanha", () => {
-    const { Checkbox } = require("@/components/ui/checkbox");
-    const { Label } = require("@/components/ui/label");
 
     expect(() => {
       renderToString(

@@ -32,13 +32,17 @@ import {
 
 export const Route = createFileRoute("/acesso")({
   validateSearch: (search: Record<string, unknown>) => ({
-    redirect: typeof search?.redirect === "string" ? search.redirect : undefined,
+    redirect: typeof search?.["redirect"] === "string" ? search["redirect"] : undefined,
   }),
   head: () => ({
     meta: [
       { title: "Acesso Restrito - Gerador de Encartes" },
       { name: "description", content: "Acesso exclusivo interno da equipe." },
       { name: "robots", content: "noindex, nofollow" },
+      { property: "og:title", content: "Acesso Restrito - Gerador de Encartes" },
+      { property: "og:description", content: "Acesso exclusivo interno da equipe." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: AcessoPage,

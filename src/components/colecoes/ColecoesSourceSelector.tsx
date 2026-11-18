@@ -519,6 +519,7 @@ export const ColecoesSourceSelector: React.FC<ColecoesSourceSelectorProps> = ({
               setCachedPhoto({
                 code: p.code,
                 fileId: p.fileId,
+                modifiedTime: p.modifiedTime,
                 filename: p.filename,
                 dataUrl: optUrl,
                 cachedAt: Date.now(),

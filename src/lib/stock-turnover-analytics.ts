@@ -718,7 +718,7 @@ export function calculateStockAnalytics(
     isExpiringIn5DaysOrLess ||
     hasZeroSales5Days ||
     expiryUrgency.level === "vermelho_sobra" ||
-    expiryUrgency.level === "vermelho_urgente"
+    expiryUrgency.level === "vermelho"
   ) {
     criticality = "critico";
   } else if (hasLowTurnover10Percent || (daysToExpiry !== null && daysToExpiry <= 10)) {

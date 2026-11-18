@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach } from "vitest";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { PainelValidadeWorkspace } from "./PainelValidadeWorkspace";
@@ -22,7 +22,7 @@ import {
   gerarExplicacaoSobraLinha,
   gerarDiagnosticoSobraCompleto,
 } from "@/lib/painel-validade-analytics";
-import type { ValidadeLoteCalculado, ValidadeSnapshot } from "@/types/painel-validade";
+import type { ValidadeLoteCalculado, ValidadeLoteRaw, ValidadeSnapshot } from "@/types/painel-validade";
 
 describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", () => {
   beforeEach(() => {
@@ -53,6 +53,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
       dtvalDate: new Date(),
       diasParaVencer: 20,
       isVencido: false,
+      isSemEstoque: false,
       estoque: 36,
       precoVenda: 4.9,
       valorEmRisco: 137.2,
@@ -110,6 +111,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
       de31a60d: 46,
       de61a90d: 61,
       acima90d: 10,
+      semValidade: 0,
       total: 154,
     };
 
@@ -237,6 +239,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
       dtvalDate: new Date(),
       diasParaVencer: 20,
       isVencido: false,
+      isSemEstoque: false,
       estoque: 36,
       precoVenda: 4.9,
       valorEmRisco: 137.2,
@@ -288,6 +291,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
       dtvalDate: new Date("2026-12-10"),
       diasParaVencer: 23,
       isVencido: false,
+      isSemEstoque: false,
       estoque: 227,
       precoVenda: 15.0,
       valorEmRisco: 3225.0,
@@ -337,6 +341,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
       dtvalDate: new Date("2026-12-10"),
       diasParaVencer: 23,
       isVencido: false,
+      isSemEstoque: false,
       estoque: 227,
       precoVenda: 15.0,
       valorEmRisco: 3225.0,
@@ -410,6 +415,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
       dtvalDate: new Date(),
       diasParaVencer: 20,
       isVencido: false,
+      isSemEstoque: false,
       estoque: 40,
       precoVenda: 5.0,
       valorEmRisco: 0,
@@ -459,6 +465,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
       dtvalDate: new Date(),
       diasParaVencer: 30,
       isVencido: false,
+      isSemEstoque: false,
       estoque: 30,
       precoVenda: 10.0,
       valorEmRisco: 200.0,
@@ -517,6 +524,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         dtvalDate: new Date("2026-01-01"),
         diasParaVencer: -5,
         isVencido: true,
+        isSemEstoque: false,
         estoque: 10,
         precoVenda: 1,
         valorEmRisco: 10,
@@ -541,6 +549,8 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         faixaGiroMes: "baixo",
         faixaCobertura: "sem_venda",
         noEncarte: false,
+        codcomprador: "",
+        nomeComprador: "",
       },
       {
         id: "2",
@@ -551,6 +561,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         dtvalDate: new Date("2026-11-20"),
         diasParaVencer: 3,
         isVencido: false,
+        isSemEstoque: false,
         estoque: 10,
         precoVenda: 1,
         valorEmRisco: 10,
@@ -575,6 +586,8 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         faixaGiroMes: "baixo",
         faixaCobertura: "acima_6_meses",
         noEncarte: false,
+        codcomprador: "",
+        nomeComprador: "",
       },
       {
         id: "3",
@@ -585,6 +598,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         dtvalDate: new Date("2026-12-05"),
         diasParaVencer: 18,
         isVencido: false,
+        isSemEstoque: false,
         estoque: 10,
         precoVenda: 1,
         valorEmRisco: 10,
@@ -609,6 +623,8 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         faixaGiroMes: "baixo",
         faixaCobertura: "acima_6_meses",
         noEncarte: false,
+        codcomprador: "",
+        nomeComprador: "",
       },
       {
         id: "4",
@@ -619,6 +635,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         dtvalDate: new Date("2027-01-05"),
         diasParaVencer: 49,
         isVencido: false,
+        isSemEstoque: false,
         estoque: 10,
         precoVenda: 1,
         valorEmRisco: 10,
@@ -643,6 +660,8 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         faixaGiroMes: "baixo",
         faixaCobertura: "acima_6_meses",
         noEncarte: false,
+        codcomprador: "",
+        nomeComprador: "",
       },
       {
         id: "5",
@@ -653,6 +672,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         dtvalDate: new Date("2027-02-05"),
         diasParaVencer: 80,
         isVencido: false,
+        isSemEstoque: false,
         estoque: 10,
         precoVenda: 1,
         valorEmRisco: 10,
@@ -677,6 +697,8 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         faixaGiroMes: "baixo",
         faixaCobertura: "acima_6_meses",
         noEncarte: false,
+        codcomprador: "",
+        nomeComprador: "",
       },
       {
         id: "6",
@@ -687,6 +709,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         dtvalDate: new Date("2027-06-05"),
         diasParaVencer: 200,
         isVencido: false,
+        isSemEstoque: false,
         estoque: 10,
         precoVenda: 1,
         valorEmRisco: 10,
@@ -711,6 +734,8 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         faixaGiroMes: "baixo",
         faixaCobertura: "acima_6_meses",
         noEncarte: false,
+        codcomprador: "",
+        nomeComprador: "",
       },
       {
         id: "7",
@@ -721,6 +746,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         dtvalDate: null,
         diasParaVencer: 9999,
         isVencido: false,
+        isSemEstoque: false,
         estoque: 10,
         precoVenda: 1,
         valorEmRisco: 10,
@@ -745,6 +771,8 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         faixaGiroMes: "baixo",
         faixaCobertura: "acima_6_meses",
         noEncarte: false,
+        codcomprador: "",
+        nomeComprador: "",
       },
     ];
 
@@ -773,6 +801,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         dtvalDate: new Date(),
         diasParaVencer: 25,
         isVencido: false,
+        isSemEstoque: false,
         estoque: 50,
         precoVenda: 5,
         valorEmRisco: 250,
@@ -790,13 +819,15 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         sobraPrevistaUnidades: 50,
         coberturaMeses: 999,
         giroMesPercent: 0,
-        ritmoMesStatus: "parado",
+        ritmoMesStatus: "sem_base",
         vendaIrregular: false,
         faixaVencimento: "8_a_30d",
         faixaEscoaTempo: "vai_sobrar",
         faixaGiroMes: "baixo",
         faixaCobertura: "sem_venda",
         noEncarte: false,
+        codcomprador: "",
+        nomeComprador: "",
       },
       {
         id: "2",
@@ -807,6 +838,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         dtvalDate: new Date(),
         diasParaVencer: 25,
         isVencido: false,
+        isSemEstoque: false,
         estoque: 50,
         precoVenda: 5,
         valorEmRisco: 250,
@@ -831,6 +863,8 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
         faixaGiroMes: "medio",
         faixaCobertura: "2_a_6_meses",
         noEncarte: false,
+        codcomprador: "",
+        nomeComprador: "",
       },
     ];
 
@@ -1174,7 +1208,9 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
       criadoEm: "2026-11-18T10:04:00.000Z",
       nomeArquivo: "rotina_8230_validade.xlsx",
       totalLotes: 1,
-      totalCompradores: 1,
+      importadoPor: "test",
+      totalProdutosUnicos: 1,
+      referenceDate: "2026-11-18T00:00:00.000Z",
       lotes: [],
     };
 

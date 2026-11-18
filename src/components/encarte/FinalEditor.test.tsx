@@ -1,10 +1,14 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import React from "react";
 import { renderToString } from "react-dom/server";
+import { TransformBoundingBox } from "./editor/TransformBoundingBox";
+import { PreflightModalContent } from "./editor/PreflightModal";
+import { PropertiesPanel } from "./editor/PropertiesPanel";
 import { FinalEditor } from "./FinalEditor";
 import { ProductCard916 } from "./ProductCard916";
 import { StoryPage916 } from "./StoryPage916";
 import type { EncarteProduct, StoreConfig, CampaignConfig } from "@/types/encarte";
+import type { PreflightIssue } from "@/types/editor";
 import { DEFAULT_STORE, DEFAULT_CAMPAIGN } from "@/types/encarte";
 
 // Helper para criar mock de produtos
@@ -385,7 +389,6 @@ describe("Editor Visual Estilo Illustrator - 10 Testes Obrigatórios", () => {
 
   // 3. Arrastar a alça de canto redimensiona o elemento com proporção e feedback visual
   it("Teste Obrigatório 3: Caixa de transformação exibe 8 alças (cantos e laterais) com indicador de dimensões", () => {
-    const { TransformBoundingBox } = require("./editor/TransformBoundingBox");
     const box = { x: 100, y: 200, width: 300, height: 150 };
 
     const html = renderToString(
@@ -412,7 +415,6 @@ describe("Editor Visual Estilo Illustrator - 10 Testes Obrigatórios", () => {
 
   // 4. Arrastar a alça de rotação gira o elemento em graus
   it("Teste Obrigatório 4: Alça de rotação permite rotação com alça rot e indicador de graus", () => {
-    const { TransformBoundingBox } = require("./editor/TransformBoundingBox");
     const box = { x: 100, y: 200, width: 200, height: 200, rotation: 45 };
 
     const html = renderToString(
@@ -430,7 +432,6 @@ describe("Editor Visual Estilo Illustrator - 10 Testes Obrigatórios", () => {
 
   // 5. Smart guides aparecem quando o elemento se aproxima do centro ou de outro elemento
   it("Teste Obrigatório 5: Smart guides (guias magnéticas inteligentes) renderizam linhas e rótulos de alinhamento", () => {
-    const { TransformBoundingBox } = require("./editor/TransformBoundingBox");
     const smartGuides = [
       {
         orientation: "vertical" as const,
@@ -561,14 +562,16 @@ describe("Editor Visual Estilo Illustrator - 10 Testes Obrigatórios", () => {
 
     // Desfaz 3 ações
     for (let i = 0; i < 3; i++) {
-      const popped = historyStack.pop()!;
+      const popped = historyStack.pop();
+      if (!popped) throw new Error("Missing undo state");
       futureStack.unshift(popped);
     }
     expect(historyStack[historyStack.length - 1].angle).toBe(105);
 
     // Refaz 2 ações
     for (let i = 0; i < 2; i++) {
-      const redone = futureStack.shift()!;
+      const redone = futureStack.shift();
+      if (!redone) throw new Error("Missing redo state");
       historyStack.push(redone);
     }
     expect(historyStack[historyStack.length - 1].angle).toBe(135);
@@ -576,8 +579,7 @@ describe("Editor Visual Estilo Illustrator - 10 Testes Obrigatórios", () => {
 
   // 10. Checagem pré-exportação lista problemas e bloqueia até confirmação
   it("Teste Obrigatório 10: Modal pré-exportação lista problemas e só libera avanço após confirmação", () => {
-    const { PreflightModalContent } = require("./editor/PreflightModal");
-    const issues = [
+    const issues: PreflightIssue[] = [
       {
         id: "issue-1",
         type: "missing_photo",
@@ -670,7 +672,6 @@ describe("Correções de Edição Visual e Recursos Novos (Figma/Canva/Illustrat
 
   // 2. Slider e campo numérico de escala de foto no painel de propriedades
   it("Problema 3: Painel de propriedades possui slider de escala e input numérico em porcentagem sincronizados", () => {
-    const { PropertiesPanel } = require("./editor/PropertiesPanel");
     const product: EncarteProduct = {
       id: "prod-photo-ctrl",
       code: "9988",
@@ -714,7 +715,6 @@ describe("Correções de Edição Visual e Recursos Novos (Figma/Canva/Illustrat
 
   // 3. Aplicação em massa com 4 escopos distintos
   it("Problema 2: Painel suporta os 4 escopos de aplicação em massa", () => {
-    const { PropertiesPanel } = require("./editor/PropertiesPanel");
     const product: EncarteProduct = {
       id: "prod-scope-1",
       code: "5544",
@@ -752,7 +752,6 @@ describe("Correções de Edição Visual e Recursos Novos (Figma/Canva/Illustrat
 
   // 4. Sistema de Predefinições de Estilo (Presets)
   it("Problema 2 (Presets): Painel disponibiliza predefinições e opção de salvar novo preset", () => {
-    const { PropertiesPanel } = require("./editor/PropertiesPanel");
     const product: EncarteProduct = {
       id: "prod-preset-1",
       code: "7766",
@@ -789,7 +788,6 @@ describe("Correções de Edição Visual e Recursos Novos (Figma/Canva/Illustrat
 
   // 5. Ações rápidas no painel: Duplicar, Copiar, Excluir
   it("Recursos Novos: Botões de ação rápida de Duplicar, Copiar e Excluir presentes no painel", () => {
-    const { PropertiesPanel } = require("./editor/PropertiesPanel");
     const product: EncarteProduct = {
       id: "prod-actions-1",
       code: "1122",

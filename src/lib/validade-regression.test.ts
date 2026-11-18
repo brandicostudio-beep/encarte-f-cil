@@ -55,6 +55,7 @@ describe("Testes de Regressão Obrigatórios - Encarte de Validade", () => {
       React.createElement(ProductCard916, {
         product: mockValidityProduct,
         store: DEFAULT_STORE,
+        index: 0,
       })
     );
 

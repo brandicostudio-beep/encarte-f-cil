@@ -353,7 +353,7 @@ export function parseQuantityAndStatusCell(rawCell: string): {
     }
   } else {
     // Um único número: é a quantidade
-    const rawQty = numberMatches[0];
+    const rawQty = numberMatches[0] ?? "";
     quantity = parseBrazilianQty(rawQty);
     if (quantity <= 0 && rawQty !== "0" && rawQty !== "0,00") {
       needsReview = true;
@@ -833,7 +833,7 @@ export function scannedProductToEncarteProduct(
  * Extrai texto, detecta tabelas estruturadas ou realiza OCR.
  */
 export async function parseScannedPdfReport(
-  fileOrBuffer: File | ArrayBuffer | string,
+  fileOrBuffer: File | ArrayBuffer | ArrayBufferView | string,
   previousProducts: EncarteProduct[] = []
 ): Promise<ScannedPdfParseResult> {
   const errors: string[] = [];
@@ -861,18 +861,15 @@ export async function parseScannedPdfReport(
           : "/pdf.worker.min.mjs";
       }
 
-      let buffer: ArrayBuffer;
-      if (typeof (fileOrBuffer as File).arrayBuffer === "function") {
-        buffer = await (fileOrBuffer as File).arrayBuffer();
-      } else if (fileOrBuffer instanceof ArrayBuffer) {
-        buffer = fileOrBuffer;
+      let uint8: Uint8Array;
+      if (fileOrBuffer instanceof ArrayBuffer) {
+        uint8 = new Uint8Array(fileOrBuffer);
       } else if (ArrayBuffer.isView(fileOrBuffer)) {
-        buffer = (fileOrBuffer as Uint8Array).buffer as ArrayBuffer;
+        uint8 = new Uint8Array(fileOrBuffer.buffer, fileOrBuffer.byteOffset, fileOrBuffer.byteLength).slice();
       } else {
-        buffer = fileOrBuffer as ArrayBuffer;
+        uint8 = new Uint8Array(await fileOrBuffer.arrayBuffer());
       }
 
-      const uint8 = new Uint8Array(buffer);
       const loadingTask = pdfjs.getDocument({ data: uint8 });
       const pdfDoc = await loadingTask.promise;
       totalPages = pdfDoc.numPages;
@@ -931,7 +928,7 @@ export async function parseScannedPdfReport(
               canvas.height = Math.round(viewport.height);
               const ctx = canvas.getContext("2d");
               if (ctx) {
-                await page.render({ canvasContext: ctx, viewport }).promise;
+                await page.render({ canvas, canvasContext: ctx, viewport }).promise;
                 canvasTarget = canvas;
               }
             }

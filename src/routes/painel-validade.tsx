@@ -14,44 +14,44 @@ import type {
 export const Route = createFileRoute("/painel-validade")({
   validateSearch: (search: Record<string, unknown>): Partial<ValidadeFilterParams> => {
     return {
-      busca: typeof search?.busca === "string" ? search.busca : undefined,
+      busca: typeof search?.["busca"] === "string" ? search["busca"] : undefined,
       filtroRapido:
-        search?.filtroRapido === "critico" ||
-        search?.filtroRapido === "vence_7d" ||
-        search?.filtroRapido === "vai_sobrar" ||
-        search?.filtroRapido === "parado" ||
-        search?.filtroRapido === "sem_vendas_3m" ||
-        search?.filtroRapido === "todos"
-          ? (search.filtroRapido as ValidadeFilterParams["filtroRapido"])
+        search?.["filtroRapido"] === "critico" ||
+        search?.["filtroRapido"] === "vence_7d" ||
+        search?.["filtroRapido"] === "vai_sobrar" ||
+        search?.["filtroRapido"] === "parado" ||
+        search?.["filtroRapido"] === "sem_vendas_3m" ||
+        search?.["filtroRapido"] === "todos"
+          ? (search["filtroRapido"] as ValidadeFilterParams["filtroRapido"])
           : undefined,
       faixaVencimento:
-        typeof search?.faixaVencimento === "string"
-          ? (search.faixaVencimento as FaixaVencimento | "todas")
+        typeof search?.["faixaVencimento"] === "string"
+          ? (search["faixaVencimento"] as FaixaVencimento | "todas")
           : undefined,
       faixaEscoaTempo:
-        typeof search?.faixaEscoaTempo === "string"
-          ? (search.faixaEscoaTempo as FaixaEscoaTempo | "todas")
+        typeof search?.["faixaEscoaTempo"] === "string"
+          ? (search["faixaEscoaTempo"] as FaixaEscoaTempo | "todas")
           : undefined,
       faixaGiroMes:
-        typeof search?.faixaGiroMes === "string"
-          ? (search.faixaGiroMes as FaixaGiroMes | "todas")
+        typeof search?.["faixaGiroMes"] === "string"
+          ? (search["faixaGiroMes"] as FaixaGiroMes | "todas")
           : undefined,
       faixaCobertura:
-        typeof search?.faixaCobertura === "string"
-          ? (search.faixaCobertura as FaixaCobertura | "todas")
+        typeof search?.["faixaCobertura"] === "string"
+          ? (search["faixaCobertura"] as FaixaCobertura | "todas")
           : undefined,
       ritmoMes:
-        typeof search?.ritmoMes === "string"
-          ? (search.ritmoMes as RitmoMesStatus | "todas")
+        typeof search?.["ritmoMes"] === "string"
+          ? (search["ritmoMes"] as RitmoMesStatus | "todas")
           : undefined,
       noEncarte:
-        search?.noEncarte === "sim" || search?.noEncarte === "nao" || search?.noEncarte === "todos"
-          ? (search.noEncarte as "todos" | "sim" | "nao")
+        search?.["noEncarte"] === "sim" || search?.["noEncarte"] === "nao" || search?.["noEncarte"] === "todos"
+          ? (search["noEncarte"] as "todos" | "sim" | "nao")
           : undefined,
-      comprador: typeof search?.comprador === "string" ? search.comprador : undefined,
+      comprador: typeof search?.["comprador"] === "string" ? search["comprador"] : undefined,
       ordenacao:
-        typeof search?.ordenacao === "string"
-          ? (search.ordenacao as ValidadeFilterParams["ordenacao"])
+        typeof search?.["ordenacao"] === "string"
+          ? (search["ordenacao"] as ValidadeFilterParams["ordenacao"])
           : undefined,
     };
   },
@@ -63,6 +63,10 @@ export const Route = createFileRoute("/painel-validade")({
         content: "Painel de controle visual interno de validade e giro por lote.",
       },
       { name: "robots", content: "noindex, nofollow" },
+      { property: "og:title", content: "Painel de Validade e Giro (Interno) - Geraencarte" },
+      { property: "og:description", content: "Painel de controle visual interno de validade e giro por lote." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: PainelValidadeRoutePage,

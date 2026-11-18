@@ -470,6 +470,7 @@ export const HowItWorksModal: React.FC<HowItWorksModalProps> = ({
       mediaQuery.addEventListener("change", handler);
       return () => mediaQuery.removeEventListener("change", handler);
     }
+    return undefined;
   }, []);
 
   // Reinicia para o primeiro passo sempre que abrir

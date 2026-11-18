@@ -355,7 +355,7 @@ export function zIndexFor(col: number, s: ColecaoGridSettings): number {
 export function toColecaoElement(
   productId: string,
   rect: Rect,
-  custom?: Partial<ColecaoElement> | Partial<{
+  custom?: Partial<ColecaoElement & {
     width?: number;
     height?: number;
     zIndex?: number;
@@ -365,15 +365,15 @@ export function toColecaoElement(
   }>,
   defaultZ: number = 1
 ): ColecaoElement {
-  const isManual = custom?.manual ?? (custom as any)?.manuallyMoved ?? false;
-  const w = isManual ? (custom?.w ?? (custom as any)?.width ?? rect.w) : rect.w;
-  const h = isManual ? (custom?.h ?? (custom as any)?.height ?? rect.h) : rect.h;
+  const isManual = custom?.manual ?? custom?.manuallyMoved ?? false;
+  const w = isManual ? (custom?.w ?? custom?.width ?? rect.w) : rect.w;
+  const h = isManual ? (custom?.h ?? custom?.height ?? rect.h) : rect.h;
   const x = isManual ? (custom?.x ?? rect.x) : rect.x;
   const y = isManual ? (custom?.y ?? rect.y) : rect.y;
   const rotation = custom?.rotation ?? 0;
-  const z = custom?.z ?? (custom as any)?.zIndex ?? defaultZ;
-  const locked = custom?.locked ?? (custom as any)?.isLocked ?? false;
-  const hidden = custom?.hidden ?? (custom as any)?.isHidden ?? false;
+  const z = custom?.z ?? custom?.zIndex ?? defaultZ;
+  const locked = custom?.locked ?? custom?.isLocked ?? false;
+  const hidden = custom?.hidden ?? custom?.isHidden ?? false;
 
   return {
     id: custom?.id || `elem-${productId}`,

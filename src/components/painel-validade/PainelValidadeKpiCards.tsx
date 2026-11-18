@@ -26,6 +26,7 @@ export const PainelValidadeKpiCards: React.FC<PainelValidadeKpiCardsProps> = ({
     de31a60d: 0,
     de61a90d: 0,
     acima90d: 0,
+    semValidade: 0,
     total: 0,
   };
 
