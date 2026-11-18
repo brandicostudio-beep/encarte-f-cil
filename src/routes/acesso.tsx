@@ -229,29 +229,33 @@ function AcessoPage() {
   const isBlocked = lockoutSeconds > 0;
 
   return (
-    <div className="min-h-screen bg-[#0D0D0D] flex flex-col items-center justify-center p-4 relative overflow-hidden select-none">
-      {/* Background Decorativo com as cores do sistema (Preto, Vermelho e Amarelo) */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#E30613]/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-[#FFD400]/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-[#0D0709] flex flex-col items-center justify-center p-4 relative overflow-hidden select-none">
+      {/* Background Decorativo Cescom (Bordô e Vermelho) */}
+      <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#5B0E1E]/25 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-[#C91E2A]/20 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Cartão de Acesso Responsivo */}
-      <div className="w-full max-w-sm sm:max-w-md bg-[#171717] border border-neutral-800 rounded-2xl p-6 sm:p-8 shadow-2xl relative z-10">
-        {/* Cabeçalho do Cartão */}
+      {/* Cartão de Acesso Responsivo com Borda Sutil Bordô */}
+      <div className="w-full max-w-sm sm:max-w-md bg-[#160A0E] border border-[#5B0E1E]/60 rounded-2xl p-6 sm:p-8 shadow-2xl relative z-10">
+        {/* Cabeçalho do Cartão com a Logo Oficial da Cescom */}
         <div className="text-center space-y-3 mb-6">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-[#E30613] to-red-800 text-white shadow-lg mx-auto border border-red-500/30">
-            <Lock className="h-7 w-7 text-white stroke-[2.2]" />
+          <div className="inline-flex items-center justify-center px-4 py-2 rounded-2xl bg-gradient-to-r from-[#3D0A14] via-[#5B0E1E] to-[#780D21] border border-red-500/30 shadow-lg mx-auto">
+            <img
+              src="/logo-cescom-trimmed.png"
+              alt="Cescom Distribuidor"
+              className="h-8 w-auto object-contain"
+            />
           </div>
 
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FFD400]/15 border border-[#FFD400]/30 text-[#FFE600] text-[11px] font-bold uppercase tracking-wider mb-2">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-500/15 border border-red-500/30 text-red-300 text-[11px] font-bold uppercase tracking-wider mb-2">
               <ShieldAlert className="h-3.5 w-3.5" />
-              Acesso Restrito
+              Acesso Restrito Cescom
             </div>
             <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
               Gerador de Encartes
             </h1>
             <p className="text-xs sm:text-sm text-neutral-400 mt-1">
-              Digite a senha interna para acessar o sistema.
+              Digite a senha interna para acessar a plataforma.
             </p>
           </div>
         </div>
@@ -344,11 +348,11 @@ function AcessoPage() {
             </div>
           )}
 
-          {/* Botão Entrar */}
+          {/* Botão Entrar com Gradiente Bordô & Vermelho Cescom */}
           <Button
             type="submit"
             disabled={isBlocked || loading || password.length === 0}
-            className="w-full h-11 bg-[#E30613] hover:bg-red-700 disabled:bg-neutral-800 disabled:text-neutral-600 text-white font-bold text-sm shadow-md transition-all active:scale-[0.99] rounded-lg mt-2"
+            className="w-full h-11 bg-gradient-to-r from-[#6B1124] to-[#C91E2A] hover:from-[#570E1D] hover:to-[#B31A25] disabled:bg-neutral-800 disabled:text-neutral-600 text-white font-bold text-sm shadow-md transition-all active:scale-[0.99] rounded-lg mt-2 cursor-pointer"
             data-testid="submit-access-button"
           >
             {loading ? (

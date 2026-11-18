@@ -62,20 +62,29 @@ export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
   const formattedUpdateDate = updateTimestamp;
 
   return (
-    <header className="bg-neutral-900 text-white border-b border-neutral-800 shadow-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        {/* Título & Identidade Interna */}
+    <header className="bg-neutral-950 text-white border-b border-neutral-800 shadow-md">
+      <div className="h-0.5 w-full bg-gradient-to-r from-[#3D0A14] via-[#C91E2A] to-[#3D0A14]" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        {/* Título & Identidade Interna Cescom */}
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
             size="sm"
             onClick={handleBack}
-            className="min-h-[48px] px-3 font-bold text-neutral-200 bg-neutral-800/80 border-neutral-700 hover:bg-neutral-700 hover:text-white transition-colors"
+            className="min-h-[44px] px-3 font-bold text-neutral-200 bg-neutral-900 border-neutral-700 hover:bg-[#5B0E1E] hover:text-white transition-colors"
             title="Voltar ao Editor de Encartes"
           >
             <ChevronLeft className="h-5 w-5 mr-1" />
             <span className="text-sm">Encartes</span>
           </Button>
+
+          <div className="hidden sm:flex h-9 px-2.5 items-center justify-center rounded-xl bg-gradient-to-r from-[#3D0A14] via-[#5B0E1E] to-[#780D21] border border-red-500/30 shadow-xs shrink-0">
+            <img
+              src="/logo-cescom-trimmed.png"
+              alt="Cescom Distribuidor"
+              className="h-5 w-auto object-contain"
+            />
+          </div>
 
           <div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -100,7 +109,7 @@ export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
                 >
                   🎨 Encartes
                 </button>
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-neutral-800 text-white shadow-2xs cursor-default">
+                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-gradient-to-r from-[#6B1124] to-[#C91E2A] text-white shadow-2xs cursor-default">
                   📦 Validade (8230)
                 </span>
               </nav>

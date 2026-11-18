@@ -1187,6 +1187,7 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
     );
     expect(headerComSnapshotHtml).toContain("Dados sincronizados com a Rotina 8230");
     expect(headerComSnapshotHtml).toContain("Rotina 8230");
+    expect(headerComSnapshotHtml).toContain("logo-cescom-trimmed.png");
     // Verifica presença de horário e data formatada
     expect(headerComSnapshotHtml).toMatch(/18\/11(\/2026)?/);
 

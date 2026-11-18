@@ -1672,28 +1672,36 @@ function EncarteApp() {
 
   return (
     <div className="min-h-screen bg-neutral-100/90 font-sans text-neutral-900 pb-20">
-      {/* 1. TOPO: Barra da Aplicação Minimalista (Estilo Apple / Interface Clean) */}
+      {/* 1. TOPO: Barra da Aplicação Minimalista com Identidade Cescom (Bordô & Vermelho) */}
       <header className="bg-neutral-950/95 backdrop-blur-md text-white shadow-sm sticky top-0 z-40 border-b border-neutral-800">
+        <div className="h-0.5 w-full bg-gradient-to-r from-[#3D0A14] via-[#C91E2A] to-[#3D0A14]" />
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2.5 gap-3">
-          {/* Marca / Identidade & Switcher dos Dois Fluxos */}
+          {/* Marca / Identidade Cescom & Switcher dos Dois Fluxos */}
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               onClick={() => setWelcomeHubOpen(true)}
               className="flex items-center gap-2.5 text-left group transition-transform active:scale-95 cursor-pointer"
-              title="Abrir Central de Boas-Vindas"
+              title="Abrir Central de Boas-Vindas Cescom"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-red-500 to-red-700 text-[#FFD400] font-black text-xl shadow-xs shrink-0 group-hover:scale-105 transition-transform">
-                %
+              <div className="flex h-9 px-2.5 items-center justify-center rounded-xl bg-gradient-to-r from-[#3D0A14] via-[#5B0E1E] to-[#780D21] border border-red-500/30 shadow-xs shrink-0 group-hover:scale-105 transition-transform">
+                <img
+                  src="/logo-cescom-trimmed.png"
+                  alt="Cescom Distribuidor"
+                  className="h-5 w-auto object-contain"
+                />
               </div>
               <div className="hidden sm:block min-w-0">
                 <div className="flex items-center gap-2">
-                  <h1 className="font-display text-base tracking-wider text-white uppercase leading-none group-hover:text-amber-400 transition-colors truncate">
+                  <h1 className="font-display text-base tracking-wider text-white uppercase leading-none group-hover:text-red-400 transition-colors truncate">
                     Gerador de Encartes
                   </h1>
+                  <span className="text-[10px] font-black uppercase px-1.5 py-0.5 rounded bg-[#4A0D17] text-red-300 border border-red-700/60">
+                    Cescom
+                  </span>
                 </div>
                 <p className="text-[11px] text-neutral-400 font-medium truncate">
-                  Varejo Promocional A4 & Digital
+                  Varejo Promocional A4 &amp; Digital
                 </p>
               </div>
             </button>
@@ -1701,10 +1709,10 @@ function EncarteApp() {
             {/* Segmented Control Minimalista (Estilo Apple): Os Dois Fluxos do Sistema */}
             <nav className="flex items-center bg-neutral-900 border border-neutral-800 p-0.5 rounded-xl ml-1 sm:ml-3">
               <span
-                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-neutral-800 text-white shadow-2xs flex items-center gap-1.5 cursor-default"
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-[#6B1124] to-[#C91E2A] text-white shadow-2xs flex items-center gap-1.5 cursor-default"
                 title="Você está no Gerador de Encartes"
               >
-                <LayoutGrid className="w-3.5 h-3.5 text-red-400" />
+                <LayoutGrid className="w-3.5 h-3.5 text-red-200" />
                 <span className="hidden md:inline">Encartes</span>
               </span>
 
@@ -1735,12 +1743,12 @@ function EncarteApp() {
               <span>Início</span>
             </Button>
 
-            {/* Botão Novo Encarte (Zerar Dados) */}
+            {/* Botão Novo Encarte (Zerar Dados) - Cores Bordô e Vermelho */}
             <Button
               variant="outline"
               size="sm"
               onClick={() => setResetModalOpen(true)}
-              className="h-9 px-3 text-xs font-bold bg-red-600/90 hover:bg-red-600 text-white border-red-500/60 shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+              className="h-9 px-3 text-xs font-bold bg-gradient-to-r from-[#6B1124] to-[#C91E2A] hover:from-[#570E1D] hover:to-[#B31A25] text-white border-red-600/50 shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               title="Zerar todos os dados e começar um novo encarte limpo"
             >
               <RotateCcw className="w-3.5 h-3.5" />

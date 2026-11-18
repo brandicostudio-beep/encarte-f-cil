@@ -14,6 +14,13 @@ export const DESIGN_TOKENS = {
     primary: "#E30613",
     primaryDark: "#B30009",
 
+    // Identidade Visual Cescom Distribuidor (Bordô & Vermelho)
+    cescomBordo: "#5B0E1E",
+    cescomBordoDark: "#3D0A14",
+    cescomBordoLight: "#780D21",
+    cescomVermelho: "#C91E2A",
+    cescomVermelhoBright: "#DC2626",
+
     // Vermelho escuro para títulos de produto (evita vibração excessiva nos nomes mantendo legibilidade)
     nameBurgundy: "#8B0000",
 

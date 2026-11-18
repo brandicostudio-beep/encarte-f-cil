@@ -55,18 +55,22 @@ export const NavigationDrawerContent: React.FC<NavigationDrawerContentProps> = (
 
   return (
     <div className="w-full h-full flex flex-col justify-between overflow-y-auto">
-      {/* Top Header do Drawer estilo Apple */}
-      <div className="p-6 pb-4 border-b border-neutral-800/80">
+      {/* Top Header do Drawer com a Logo da Cescom e estilo Bordô */}
+      <div className="p-6 pb-4 border-b border-neutral-800/80 bg-gradient-to-b from-[#2E070F] to-transparent">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-600 text-[#FFD400] font-black text-xl shadow-xs">
-            %
+          <div className="flex h-10 px-3 items-center justify-center rounded-xl bg-gradient-to-r from-[#3D0A14] via-[#5B0E1E] to-[#780D21] border border-red-500/30 shadow-xs">
+            <img
+              src="/logo-cescom-trimmed.png"
+              alt="Cescom Distribuidor"
+              className="h-5 w-auto object-contain"
+            />
           </div>
           <div>
             <h2 className="text-lg font-bold text-white tracking-tight">
               Menu do Sistema
             </h2>
             <p className="text-xs text-neutral-400">
-              Navegação rápida e configurações da plataforma
+              Cescom Distribuidor • Operações &amp; Validade
             </p>
           </div>
         </div>
