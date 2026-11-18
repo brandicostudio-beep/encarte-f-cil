@@ -198,6 +198,7 @@ export interface ValidadeFilterParams {
   noEncarte?: "todos" | "sim" | "nao";
   comprador?: string;
   ordenacao?: "critico_primeiro" | "escoa_tempo_asc" | "vencimento_asc" | "estoque_desc" | "nome_asc";
+  ocultarSemEstoque?: boolean; // Oculta produtos com estoque zerado no Winthor / WMS
 }
 
 export interface ValidadeAlertCounts {

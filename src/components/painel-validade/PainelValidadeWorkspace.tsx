@@ -54,6 +54,7 @@ const DEFAULT_FILTERS: ValidadeFilterParams = {
   noEncarte: "todos",
   comprador: "todos",
   ordenacao: "critico_primeiro",
+  ocultarSemEstoque: true,
 };
 
 export function PainelValidadeWorkspace({

@@ -609,6 +609,12 @@ export function filtrarLotes(
       if (!matchCod && !matchDesc && !matchComp) return false;
     }
 
+    // 1b. Ocultar itens sem estoque (quando ativado, despolui a lista excluindo itens zerados)
+    // Exceto se o filtro rápido selecionado for explicitamente "sem_estoque"
+    if (params.ocultarSemEstoque && params.filtroRapido !== "sem_estoque") {
+      if (l.isSemEstoque || l.estoque <= 0) return false;
+    }
+
     // 2. Filtro Rápido Principal
     if (params.filtroRapido === "critico") {
       if (l.isSemEstoque || l.estoque <= 0) return false;

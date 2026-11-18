@@ -1254,4 +1254,180 @@ describe("Painel de Validade (Visualização Interna do Gestor e Comprador)", ()
     expect(workspaceHtml).toContain("Dados sincronizados com a Rotina 8230 (Winthor)");
     expect(workspaceHtml).toContain("<footer");
   });
+
+  it("PainelValidadeCard: despoluído com Estoque Atual e Dias para Vencer em evidência máxima e botão de olhinho/lupa", () => {
+    const mockLote: ValidadeLoteCalculado = {
+      id: "33333_15_12_2026_0",
+      codprod: "33333",
+      descricao: "AZEITE EXTRA VIRGEM ANDORINHA 500ML",
+      embalagem: "CX C/ 12",
+      dtval: "15/12/2026",
+      dtvalDate: new Date("2026-12-15"),
+      diasParaVencer: 28,
+      isVencido: false,
+      isSemEstoque: false,
+      estoque: 48,
+      precoVenda: 39.9,
+      valorEmRisco: 399.0,
+      vendaMesAtual: 10,
+      vendaM1: 30,
+      vendaM2: 32,
+      vendaM3: 28,
+      mediaMensalFechada: 30,
+      isSemVenda: false,
+      ritmoAtualDia: 1.0,
+      ritmoNecessarioDia: 1.7,
+      escoaTempoPercent: 58,
+      sobraPrevistaUnidades: 20,
+      coberturaMeses: 1.6,
+      giroMesPercent: 62.5,
+      ritmoMesStatus: "normal",
+      vendaIrregular: false,
+      faixaVencimento: "8_a_30d",
+      faixaEscoaTempo: "vai_sobrar",
+      faixaGiroMes: "alto",
+      faixaCobertura: "ate_2_meses",
+      noEncarte: false,
+      codcomprador: "12",
+      nomeComprador: "MARIA OLIVEIRA",
+    };
+
+    const html = renderToString(<PainelValidadeCard lote={mockLote} />);
+
+    // 1. Estoque Atual em destaque
+    expect(html).toContain("Estoque Atual");
+    expect(html).toContain("48");
+    expect(html).toContain("CX C/ 12");
+
+    // 2. Dias para vencer em destaque
+    expect(html).toContain("Validade");
+    expect(html).toContain("28 dias");
+    expect(html).toContain("15/12/2026");
+
+    // 3. Botão com olhinho / lupa para ver análise e detalhes
+    expect(html).toContain("Ver Análise &amp; Detalhes");
+
+    // 4. Ação direta de encarte
+    expect(html).toContain("+ ENCARTE");
+
+    // 5. Card despoluído (sem repetição de comprador poluindo a grade inicial)
+    expect(html).not.toContain("Comprador: MARIA OLIVEIRA");
+  });
+
+  it("PainelValidadeItemDetailModal: Explicação em Frases Simples em evidência imediata e dados técnicos avançados recolhidos", () => {
+    const mockLote: ValidadeLoteCalculado = {
+      id: "44444_25_11_2026_0",
+      codprod: "44444",
+      descricao: "CAFÉ TRÊS CORAÇÕES TRADICIONAL 500G",
+      embalagem: "FD C/ 20",
+      dtval: "25/11/2026",
+      dtvalDate: new Date("2026-11-25"),
+      diasParaVencer: 8,
+      isVencido: false,
+      isSemEstoque: false,
+      estoque: 60,
+      precoVenda: 18.9,
+      valorEmRisco: 756.0,
+      vendaMesAtual: 5,
+      vendaM1: 40,
+      vendaM2: 38,
+      vendaM3: 42,
+      mediaMensalFechada: 40,
+      isSemVenda: false,
+      ritmoAtualDia: 1.33,
+      ritmoNecessarioDia: 7.5,
+      escoaTempoPercent: 18,
+      sobraPrevistaUnidades: 40,
+      coberturaMeses: 1.5,
+      giroMesPercent: 66.7,
+      ritmoMesStatus: "normal",
+      vendaIrregular: false,
+      faixaVencimento: "8_a_30d",
+      faixaEscoaTempo: "vai_sobrar",
+      faixaGiroMes: "alto",
+      faixaCobertura: "ate_2_meses",
+      noEncarte: false,
+      codcomprador: "10",
+      nomeComprador: "JOAO SILVA",
+    };
+
+    const html = renderToString(<PainelValidadeItemDetailContent lote={mockLote} />);
+
+    // 1. Explicação em frases simples no topo em destaque
+    expect(html).toContain("Explicação em Frases Simples:");
+    expect(html).toContain("Diagnóstico Comercial &amp; Ação Recomendada:");
+
+    // 2. Botão de comando para expandir informações avançadas
+    expect(html).toContain("Ver Histórico Completo &amp; Informações Avançadas");
+
+    // 3. Informações avançadas presentes para consulta com toggle
+    expect(html).toContain("Histórico de Vendas (Mês Atual + Últimos 3 Meses)");
+    expect(html).toContain("Ritmo Atual de Venda");
+  });
+
+  it("filtrarLotes: suporte a ocultarSemEstoque para despoluir listagem excluindo produtos com estoque zerado por padrão", () => {
+    const comEstoque: ValidadeLoteCalculado = {
+      id: "101",
+      codprod: "101",
+      descricao: "PRODUTO COM ESTOQUE",
+      embalagem: "UN",
+      dtval: "20/11/2026",
+      dtvalDate: new Date(),
+      diasParaVencer: 5,
+      isVencido: false,
+      isSemEstoque: false,
+      estoque: 50,
+      precoVenda: 10,
+      valorEmRisco: 0,
+      vendaMesAtual: 10,
+      vendaM1: 10,
+      vendaM2: 10,
+      vendaM3: 10,
+      mediaMensalFechada: 10,
+      isSemVenda: false,
+      ritmoAtualDia: 0.33,
+      ritmoNecessarioDia: 10,
+      escoaTempoPercent: 3,
+      sobraPrevistaUnidades: 48,
+      coberturaMeses: 5,
+      giroMesPercent: 20,
+      ritmoMesStatus: "normal",
+      vendaIrregular: false,
+      faixaVencimento: "ate_7d",
+      faixaEscoaTempo: "vai_sobrar",
+      faixaGiroMes: "baixo",
+      faixaCobertura: "2_a_6_meses",
+      noEncarte: false,
+      codcomprador: "01",
+      nomeComprador: "CARLOS",
+    };
+
+    const semEstoque: ValidadeLoteCalculado = {
+      ...comEstoque,
+      id: "102",
+      codprod: "102",
+      descricao: "PRODUTO SEM ESTOQUE",
+      isSemEstoque: true,
+      estoque: 0,
+    };
+
+    const lista = [comEstoque, semEstoque];
+
+    // Quando ocultarSemEstoque = true (padrão) -> apenas o produto com estoque aparece
+    const filtradosOcultando = filtrarLotes(lista, { ocultarSemEstoque: true });
+    expect(filtradosOcultando).toHaveLength(1);
+    expect(filtradosOcultando[0].codprod).toBe("101");
+
+    // Quando ocultarSemEstoque = false -> ambos aparecem
+    const filtradosTodos = filtrarLotes(lista, { ocultarSemEstoque: false });
+    expect(filtradosTodos).toHaveLength(2);
+
+    // Quando filtro rápido for explicitamente 'sem_estoque' -> exibe o produto sem estoque mesmo com ocultarSemEstoque: true
+    const filtradosApenasSemEstoque = filtrarLotes(lista, {
+      filtroRapido: "sem_estoque",
+      ocultarSemEstoque: true,
+    });
+    expect(filtradosApenasSemEstoque).toHaveLength(1);
+    expect(filtradosApenasSemEstoque[0].codprod).toBe("102");
+  });
 });

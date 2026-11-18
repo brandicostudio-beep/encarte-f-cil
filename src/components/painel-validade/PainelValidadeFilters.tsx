@@ -15,6 +15,8 @@ import {
   Clock,
   Sparkles,
   RefreshCw,
+  PackageCheck,
+  PackageX,
 } from "lucide-react";
 import {
   Sheet,
@@ -121,9 +123,18 @@ export const PainelValidadeFilters: React.FC<PainelValidadeFiltersProps> = ({
   if (filters.faixaVencimento && filters.faixaVencimento !== "todas") advancedActiveCount++;
   if (filters.faixaEscoaTempo && filters.faixaEscoaTempo !== "todas") advancedActiveCount++;
   if (filters.faixaCobertura && filters.faixaCobertura !== "todas") advancedActiveCount++;
+  if (filters.ocultarSemEstoque === false) advancedActiveCount++;
 
   // Chips de filtros ativos
   const activeChips: Array<{ id: string; label: string; onRemove: () => void }> = [];
+
+  if (filters.ocultarSemEstoque === false) {
+    activeChips.push({
+      id: "ocultarSemEstoque",
+      label: "Exibindo sem estoque",
+      onRemove: () => updateFilters({ ...filters, ocultarSemEstoque: true }),
+    });
+  }
 
   if (filters.busca && filters.busca.trim()) {
     activeChips.push({
@@ -223,6 +234,7 @@ export const PainelValidadeFilters: React.FC<PainelValidadeFiltersProps> = ({
         noEncarte: "todos",
         comprador: "todos",
         ordenacao: "critico_primeiro",
+        ocultarSemEstoque: true,
       });
     }
   };
@@ -527,17 +539,52 @@ export const PainelValidadeFilters: React.FC<PainelValidadeFiltersProps> = ({
       {/* 4. CONTAGEM E CHIPS DE FILTROS ATIVOS + BOTÃO LIMPAR TUDO */}
       <div className="pt-2 border-t border-neutral-100 dark:border-slate-800 space-y-2">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          {/* Texto "Mostrando X de Y lotes" */}
-          <div className="text-sm font-bold text-neutral-700 dark:text-neutral-300">
-            Mostrando{" "}
-            <span className="font-mono text-neutral-900 dark:text-white font-black">
-              {totalFiltrados ?? countTodos}
-            </span>{" "}
-            de{" "}
-            <span className="font-mono text-neutral-900 dark:text-white font-black">
-              {totalLotes ?? countTodos}
-            </span>{" "}
-            lotes
+          {/* Texto "Mostrando X de Y lotes" + Alternador Ocultar Sem Estoque */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="text-sm font-bold text-neutral-700 dark:text-neutral-300">
+              Mostrando{" "}
+              <span className="font-mono text-neutral-900 dark:text-white font-black">
+                {totalFiltrados ?? countTodos}
+              </span>{" "}
+              de{" "}
+              <span className="font-mono text-neutral-900 dark:text-white font-black">
+                {totalLotes ?? countTodos}
+              </span>{" "}
+              lotes
+            </div>
+
+            {/* Alternador Rápido: Ocultar Itens Sem Estoque */}
+            <button
+              type="button"
+              onClick={() =>
+                updateFilters({
+                  ...filters,
+                  ocultarSemEstoque: filters.ocultarSemEstoque === false ? true : false,
+                })
+              }
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                filters.ocultarSemEstoque !== false
+                  ? "bg-neutral-100 hover:bg-neutral-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-neutral-700 dark:text-neutral-200 border-neutral-300 dark:border-slate-600 shadow-2xs"
+                  : "bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700 shadow-2xs"
+              }`}
+              title={
+                filters.ocultarSemEstoque !== false
+                  ? "Itens com estoque zerado no Winthor estão ocultos para despoluir a visão. Clique para exibir."
+                  : "Itens sem estoque estão sendo exibidos. Clique para ocultar."
+              }
+            >
+              {filters.ocultarSemEstoque !== false ? (
+                <>
+                  <PackageCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Ocultar sem estoque (Ativo)</span>
+                </>
+              ) : (
+                <>
+                  <PackageX className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
+                  <span>Exibindo sem estoque</span>
+                </>
+              )}
+            </button>
           </div>
 
           {activeChips.length > 0 && (
@@ -724,6 +771,26 @@ export const PainelValidadeFilters: React.FC<PainelValidadeFiltersProps> = ({
                 <option value="vencimento_asc">Mais próximos de vencer</option>
                 <option value="estoque_desc">Maior estoque disponível</option>
                 <option value="nome_asc">Nome do produto (A-Z)</option>
+              </select>
+            </div>
+
+            {/* 7. Controle de Itens Sem Estoque */}
+            <div>
+              <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                Itens Sem Estoque (0 un)
+              </label>
+              <select
+                value={filters.ocultarSemEstoque === false ? "mostrar" : "ocultar"}
+                onChange={(e) =>
+                  updateFilters({
+                    ...filters,
+                    ocultarSemEstoque: e.target.value === "ocultar",
+                  })
+                }
+                className="w-full min-h-[44px] px-3 text-xs font-semibold rounded-xl border border-neutral-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-neutral-900 dark:text-white"
+              >
+                <option value="ocultar">Ocultar itens sem estoque (Recomendado)</option>
+                <option value="mostrar">Exibir itens sem estoque</option>
               </select>
             </div>
           </div>

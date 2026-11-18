@@ -13,6 +13,7 @@ import {
   ChevronRight,
   HelpCircle,
   Zap,
+  Eye,
 } from "lucide-react";
 import {
   Tooltip,
@@ -172,7 +173,7 @@ export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2 flex-wrap">
                 {/* Código do produto */}
-                <span className="font-mono font-bold text-sm bg-neutral-100 text-neutral-800 px-2 py-0.5 rounded-md border border-neutral-200">
+                <span className="font-mono font-bold text-sm bg-neutral-100 dark:bg-slate-800 text-neutral-800 dark:text-neutral-200 px-2 py-0.5 rounded-md border border-neutral-200 dark:border-slate-700">
                   {lote.codprod}
                 </span>
 
@@ -215,31 +216,9 @@ export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
                     + ENCARTE
                   </button>
                 )}
-
-                {/* Lote novo no snapshot */}
-                {lote.isNovoLote && (
-                  <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                    Novo Lote
-                  </span>
-                )}
-
-                {/* Badge Aceleração de Giro (Multiplicador de Esforço) */}
-                {lote.multiplicadorEsforco && lote.multiplicadorEsforco > 1.5 && (
-                  <span
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-black border ${
-                      lote.multiplicadorEsforco > 2.5
-                        ? "bg-red-100 text-red-800 border-red-300"
-                        : "bg-orange-100 text-orange-800 border-orange-300"
-                    }`}
-                    title={`Necessita acelerar vendas em ${lote.multiplicadorEsforco}x`}
-                  >
-                    <Zap className="h-3 w-3" />
-                    {lote.multiplicadorEsforco}x giro
-                  </span>
-                )}
               </div>
 
-              {/* Badge Vencimento */}
+              {/* Badge Vencimento com Dias em Evidência */}
               <span
                 className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs sm:text-sm font-black border shadow-2xs ${vencBadge.bg}`}
               >
@@ -258,121 +237,137 @@ export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
               />
               <div className="flex-1 min-w-0">
                 <h2
-                  className="font-black text-neutral-900 tracking-tight leading-snug line-clamp-2 group-hover:text-red-700 transition-colors"
+                  className="font-black text-neutral-900 dark:text-white tracking-tight leading-snug line-clamp-2 group-hover:text-red-700 transition-colors"
                   style={{ fontSize: "22px" }}
                   title={lote.descricao}
                 >
                   {lote.descricao}
                 </h2>
-                <div className="text-xs text-neutral-500 font-medium mt-1 flex items-center gap-2 flex-wrap">
-                  <span>Embalagem: <strong className="text-neutral-700">{lote.embalagem}</strong></span>
-                  <span>•</span>
-                  <span>Validade: <strong className="text-neutral-800 font-mono">{lote.dtval}</strong></span>
-                </div>
               </div>
             </div>
 
-            {/* 3. BARRA DE ESCOA A TEMPO (%) OU SITUAÇÃO SEM ESTOQUE */}
-            {isSemEstoque ? (
-              <div className="bg-neutral-100/70 p-3 rounded-xl border border-neutral-200/90 space-y-1.5">
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-neutral-600 flex items-center gap-1.5">
-                    <PackageX className="h-4 w-4 text-neutral-500" />
-                    Situação do Estoque:
-                  </span>
-                  <span className="font-mono text-xs font-black text-neutral-700 uppercase bg-neutral-200 px-2 py-0.5 rounded border border-neutral-300">
-                    Sem Estoque
-                  </span>
-                </div>
-
-                {/* Barra de Progresso Zerada */}
-                <div className="w-full h-2.5 rounded-full bg-neutral-200 overflow-hidden">
-                  <div className="h-full rounded-full bg-neutral-400 w-0" />
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-neutral-500 font-medium pt-0.5">
-                  <span>Estoque zerado no Winthor</span>
-                  <span className="text-neutral-600 font-bold">Sem sobra prevista</span>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-neutral-50 p-3 rounded-xl border border-neutral-200/80 space-y-1.5">
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-neutral-600">Escoa a tempo até o vencimento:</span>
-                  <span className={`font-mono text-sm font-black ${escoaBar.textClass}`}>
-                    {escoaBar.label}
-                  </span>
-                </div>
-
-                {/* Barra de Progresso Colorida */}
-                <div className="w-full h-3 rounded-full bg-neutral-200 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${escoaBar.barBg}`}
-                    style={{ width: `${Math.min(100, Math.max(3, lote.escoaTempoPercent))}%` }}
-                  />
-                </div>
-
-                {/* Projeção de Sobra ou Saída */}
-                <div className="flex items-center justify-between text-[11px] text-neutral-500 font-medium pt-0.5">
-                  <span>Ritmo atual: <strong>{formatRitmoBR(lote.ritmoAtualDia)} un/dia</strong></span>
-                  {lote.sobraPrevistaUnidades > 0 ? (
-                    <span className="text-red-700 font-bold">
-                      Previsão de sobra: ~{Math.round(lote.sobraPrevistaUnidades)} un
-                    </span>
-                  ) : (
-                    <span className="text-emerald-700 font-bold">
-                      Estoque deve escoar totalmente
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* 4. RODAPÉ DO CARD: ESTOQUE, COMPRADOR E BOTÃO DETALHES */}
-            <div className="flex items-center justify-between pt-2 border-t border-neutral-100 text-xs">
-              {/* Estoque em destaque */}
-              <div className="flex items-center gap-2">
+            {/* 3. AS DUAS INFORMAÇÕES MAIS PRINCIPAIS EM EVIDÊNCIA IMEDIATA (ESTOQUE ATUAL & DIAS PARA VENCER) */}
+            <div className="grid grid-cols-2 gap-2.5">
+              {/* Estoque Atual */}
+              <div className="bg-neutral-50 dark:bg-slate-800/60 p-3 rounded-xl border border-neutral-200/90 dark:border-slate-700 flex items-center gap-3">
                 <div
-                  className={`h-8 w-8 rounded-lg flex items-center justify-center ${
+                  className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${
                     isSemEstoque
-                      ? "bg-neutral-100 text-neutral-400"
-                      : "bg-neutral-100 text-neutral-700"
+                      ? "bg-neutral-200 dark:bg-slate-700 text-neutral-500"
+                      : "bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300"
                   }`}
                 >
-                  {isSemEstoque ? <PackageX className="h-4 w-4" /> : <Package className="h-4 w-4" />}
+                  {isSemEstoque ? <PackageX className="h-5 w-5" /> : <Package className="h-5 w-5" />}
                 </div>
-                <div>
-                  <div className="text-[10px] text-neutral-500 uppercase font-semibold">
-                    {isSemEstoque ? "Estoque (Winthor)" : "Estoque Atual"}
+                <div className="min-w-0">
+                  <div className="text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-black tracking-wider">
+                    Estoque Atual
                   </div>
-                  <div className="text-base font-black text-neutral-900 font-mono leading-none">
+                  <div className="text-lg sm:text-xl font-black text-neutral-900 dark:text-white font-mono leading-tight truncate">
                     {isSemEstoque ? (
-                      <span className="text-xs sm:text-sm font-bold text-neutral-500">
-                        Sem estoque
-                      </span>
+                      <span className="text-xs font-bold text-neutral-500">Sem Estoque</span>
                     ) : (
                       <>
-                        {lote.estoque} <span className="text-xs font-normal text-neutral-500">{lote.embalagem}</span>
+                        {lote.estoque}{" "}
+                        <span className="text-xs font-bold text-neutral-500 block truncate">
+                          {lote.embalagem}
+                        </span>
                       </>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* Comprador & Ação */}
-              <div className="flex items-center gap-2">
-                <div className="text-right hidden sm:block">
-                  <div className="text-[10px] text-neutral-500 uppercase font-semibold">
-                    Comprador
+              {/* Dias até Vencer */}
+              <div
+                className={`p-3 rounded-xl border flex items-center gap-3 ${
+                  lote.isVencido
+                    ? "bg-red-50/70 border-red-200 text-red-950 dark:bg-red-950/30 dark:border-red-900/60 dark:text-red-300"
+                    : lote.diasParaVencer <= 7
+                    ? "bg-orange-50/70 border-orange-200 text-orange-950 dark:bg-orange-950/30 dark:border-orange-900/60 dark:text-orange-300"
+                    : lote.diasParaVencer <= 30
+                    ? "bg-amber-50/70 border-amber-200 text-amber-950 dark:bg-amber-950/30 dark:border-amber-900/60 dark:text-amber-300"
+                    : "bg-emerald-50/70 border-emerald-200 text-emerald-950 dark:bg-emerald-950/30 dark:border-emerald-900/60 dark:text-emerald-300"
+                }`}
+              >
+                <div
+                  className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${
+                    lote.isVencido
+                      ? "bg-red-700 text-white"
+                      : lote.diasParaVencer <= 7
+                      ? "bg-orange-500 text-white"
+                      : lote.diasParaVencer <= 30
+                      ? "bg-amber-500 text-white"
+                      : "bg-emerald-600 text-white"
+                  }`}
+                >
+                  <Clock className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase font-black tracking-wider opacity-80">
+                    Validade
                   </div>
-                  <div className="text-xs font-bold text-neutral-700 truncate max-w-[120px]">
-                    {lote.nomeComprador}
+                  <div className="text-lg sm:text-xl font-black font-mono leading-tight truncate">
+                    {lote.isVencido ? "Vencido" : `${lote.diasParaVencer} dias`}
                   </div>
+                  <div className="text-[11px] font-sans opacity-75 font-medium truncate">
+                    até {lote.dtval}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. RESUMO DE ESCOAMENTO (COMPACTO E SEM POLUIÇÃO) */}
+            {isSemEstoque ? (
+              <div className="bg-neutral-100/70 dark:bg-slate-800/40 p-2.5 rounded-xl border border-neutral-200/90 dark:border-slate-700/80 text-xs text-neutral-500">
+                <div className="flex items-center justify-between font-bold">
+                  <span>Situação:</span>
+                  <span className="font-mono text-neutral-700 dark:text-neutral-300">Sem estoque no Winthor</span>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-neutral-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-neutral-200/80 dark:border-slate-700/80 space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className="text-neutral-600 dark:text-neutral-400">Escoa a tempo:</span>
+                  <span className={`font-mono text-xs font-black ${escoaBar.textClass}`}>
+                    {escoaBar.label}
+                  </span>
                 </div>
 
-                <div className="h-9 w-9 rounded-xl bg-neutral-100 group-hover:bg-neutral-900 group-hover:text-white flex items-center justify-center transition-colors">
-                  <ChevronRight className="h-5 w-5" />
+                {/* Barra de Progresso Colorida */}
+                <div className="w-full h-2 rounded-full bg-neutral-200 dark:bg-slate-700 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${escoaBar.barBg}`}
+                    style={{ width: `${Math.min(100, Math.max(3, lote.escoaTempoPercent))}%` }}
+                  />
                 </div>
+
+                <div className="flex items-center justify-between text-[11px] text-neutral-500 font-medium">
+                  {lote.sobraPrevistaUnidades > 0 ? (
+                    <span className="text-red-700 dark:text-red-400 font-bold">
+                      Previsão de sobra: ~{Math.round(lote.sobraPrevistaUnidades)} un
+                    </span>
+                  ) : (
+                    <span className="text-emerald-700 dark:text-emerald-400 font-bold">
+                      Estoque deve escoar totalmente
+                    </span>
+                  )}
+                  <span>{Math.round(lote.escoaTempoPercent)}%</span>
+                </div>
+              </div>
+            )}
+
+            {/* 5. RODAPÉ DO CARD: BOTÃO COM OLHINHO / LUPA PARA ABRIR ANÁLISE */}
+            <div className="flex items-center justify-between pt-2.5 border-t border-neutral-100 dark:border-slate-800 text-xs">
+              <div className="inline-flex items-center gap-2 font-bold text-neutral-700 dark:text-neutral-300 group-hover:text-red-700 dark:group-hover:text-red-400 transition-colors">
+                <span className="h-7 w-7 rounded-lg bg-neutral-100 dark:bg-slate-800 group-hover:bg-red-700 group-hover:text-white flex items-center justify-center transition-all shadow-2xs">
+                  <Eye className="h-4 w-4" />
+                </span>
+                <span>Ver Análise & Detalhes</span>
+              </div>
+
+              <div className="h-8 w-8 rounded-xl bg-neutral-100 dark:bg-slate-800 group-hover:bg-neutral-900 group-hover:text-white dark:group-hover:bg-white dark:group-hover:text-slate-900 flex items-center justify-center transition-colors">
+                <ChevronRight className="h-4 w-4" />
               </div>
             </div>
           </div>
