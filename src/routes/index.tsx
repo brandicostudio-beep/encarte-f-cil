@@ -59,6 +59,7 @@ import {
   saveProjectUnified,
   saveProjectAsUnified,
   renameProjectUnified,
+  loadProjectUnified,
 } from "@/lib/project-sync-manager";
 import { loadProjectLocal } from "@/lib/project-indexeddb";
 import { checkDriveStatusFn } from "@/lib/project.functions";
@@ -587,39 +588,49 @@ function EncarteApp() {
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [currentProject, products, campaign, store]);
 
-  // Abrir Projeto Selecionado no Gerenciador
+  // Abrir Projeto Selecionado no Gerenciador (Local ou Nuvem Drive)
   const handleOpenProject = async (projectId: string) => {
-    const res = await loadProjectLocal(projectId);
-    if (res.ok && res.project) {
-      const proj = res.project;
-      setCurrentProject(proj);
-      setProducts(proj.products || []);
-      if (proj.campaign) setCampaign(proj.campaign);
-      if (proj.store) setStore(proj.store);
+    setIsSavingProject(true);
+    setProjectStatusNotice("Carregando projeto...");
+    try {
+      const res = await loadProjectUnified(projectId);
+      if (res.ok && res.project) {
+        const proj = res.project;
+        setCurrentProject(proj);
+        setProducts(proj.products || []);
+        if (proj.campaign) setCampaign(proj.campaign);
+        if (proj.store) setStore(proj.store);
 
-      try {
-        localStorage.setItem("encarte-active-project-id", proj.id);
-        localStorage.setItem("encarte-products-v2", JSON.stringify(proj.products || []));
-        if (proj.store) localStorage.setItem("encarte-store-v2", JSON.stringify(proj.store));
-        if (proj.campaign) localStorage.setItem("encarte-campaign-v2", JSON.stringify(proj.campaign));
-      } catch {}
+        try {
+          localStorage.setItem("encarte-active-project-id", proj.id);
+          localStorage.setItem("encarte-products-v2", JSON.stringify(proj.products || []));
+          if (proj.store) localStorage.setItem("encarte-store-v2", JSON.stringify(proj.store));
+          if (proj.campaign) localStorage.setItem("encarte-campaign-v2", JSON.stringify(proj.campaign));
+        } catch {}
 
-      // Diagnóstico de fotos faltantes sem quebrar a tela
-      const missing = (proj.products || []).filter((p) => !p.image || String(p.image).trim() === "");
-      if (missing.length > 0) {
-        setMissingPhotosNotice(`${missing.length} produto(s) deste encarte estão sem foto vinculada.`);
+        // Diagnóstico de fotos faltantes sem quebrar a tela
+        const missing = (proj.products || []).filter((p) => !p.image || String(p.image).trim() === "");
+        if (missing.length > 0) {
+          setMissingPhotosNotice(`${missing.length} produto(s) deste encarte estão sem foto vinculada.`);
+        } else {
+          setMissingPhotosNotice(null);
+        }
+
+        setCompletedSteps(new Set(["origem", "dados", "precos"]));
+        navigateToStep("precos");
+        setProjectSaveStatus("synced");
+        setProjectStatusNotice(
+          res.source === "drive"
+            ? `Projeto "${proj.name}" baixado do Drive e carregado`
+            : `Projeto "${proj.name}" carregado`
+        );
+        isDirtyRef.current = false;
+        setProjectManagerOpen(false);
       } else {
-        setMissingPhotosNotice(null);
+        alert(res.error || "Não foi possível abrir o projeto.");
       }
-
-      setCompletedSteps(new Set(["origem", "dados", "precos"]));
-      navigateToStep("precos");
-      setProjectSaveStatus("synced");
-      setProjectStatusNotice(`Projeto "${proj.name}" carregado`);
-      isDirtyRef.current = false;
-      setProjectManagerOpen(false);
-    } else {
-      alert(res.error || "Não foi possível abrir o projeto.");
+    } finally {
+      setIsSavingProject(false);
     }
   };
 

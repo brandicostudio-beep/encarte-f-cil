@@ -28,7 +28,15 @@ import {
   restoreProjectUnified,
   restoreVersionUnified,
   applySelectedUpdates,
+  listAllProjectsUnified,
+  loadProjectUnified,
+  invalidateDriveIndexCache,
 } from "./project-sync-manager";
+import {
+  checkDriveStatusFn,
+  getDriveProjectsIndexFn,
+  loadProjectFromDriveByIdFn,
+} from "./project.functions";
 
 // Mock das server functions para teste unitário do cliente
 vi.mock("./project.functions", () => ({
@@ -36,7 +44,8 @@ vi.mock("./project.functions", () => ({
   saveProjectToDriveFn: vi.fn().mockResolvedValue({ ok: true, driveFileId: "drive-file-123", driveFolderId: "drive-folder-456" }),
   renameDriveProjectFn: vi.fn().mockResolvedValue({ ok: true }),
   deleteDriveProjectFn: vi.fn().mockResolvedValue({ ok: true }),
-  getDriveProjectsIndexFn: vi.fn().mockResolvedValue({ ok: true, projects: [] }),
+  getDriveProjectsIndexFn: vi.fn().mockResolvedValue({ ok: true, index: { projects: [] } }),
+  loadProjectFromDriveByIdFn: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
 describe("Sistema de Salvamento de Projetos de Encarte", () => {
@@ -383,5 +392,69 @@ describe("Sistema de Salvamento de Projetos de Encarte", () => {
 
     // O tempo de abertura deve ser imperceptível (< 50ms) graças ao JSON sem base64 pesado
     expect(loadTime).toBeLessThan(150);
+  });
+
+  it("12. Sincronização entre Computadores: lista projetos do Google Drive mesmo com IndexedDB local vazio", async () => {
+    invalidateDriveIndexCache();
+    const driveCloudProjects = [
+      {
+        id: "proj-cloud-computador-a",
+        name: "Encarte Criado no Computador A",
+        createdAt: "2026-11-18T10:00:00.000Z",
+        updatedAt: "2026-11-18T12:00:00.000Z",
+        currentVersion: 2,
+        versionCount: 2,
+        itemCount: 25,
+        sourceType: "spreadsheet" as const,
+        syncStatus: "synced" as const,
+        isTrashed: false,
+        driveFolderId: "folder-drive-123",
+      },
+    ];
+
+    (getDriveProjectsIndexFn as any).mockResolvedValueOnce({
+      ok: true,
+      index: {
+        app: "encartes-facil",
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        projects: driveCloudProjects as any,
+      },
+    });
+
+    // Simula abertura no Computador B (onde localItems pode estar vazio)
+    const unified = await listAllProjectsUnified(false, true);
+    expect(unified.driveConnected).toBe(true);
+
+    const cloudItem = unified.items.find((p) => p.id === "proj-cloud-computador-a");
+    expect(cloudItem).toBeDefined();
+    expect(cloudItem?.name).toBe("Encarte Criado no Computador A");
+    expect(cloudItem?.syncStatus).toBe("cloud_only");
+    expect(cloudItem?.itemCount).toBe(25);
+  });
+
+  it("13. Abertura de Projeto da Nuvem (loadProjectUnified): baixa do Drive e salva no IndexedDB", async () => {
+    const cloudProjectId = "proj-cloud-novo-123";
+    const remoteProject: ProjectData = {
+      ...sampleProject,
+      id: cloudProjectId,
+      name: "Encarte Baixado da Nuvem",
+      updatedAt: new Date().toISOString(),
+    };
+
+    (loadProjectFromDriveByIdFn as any).mockResolvedValueOnce({
+      ok: true,
+      project: remoteProject,
+    });
+
+    const loadRes = await loadProjectUnified(cloudProjectId);
+    expect(loadRes.ok).toBe(true);
+    expect(loadRes.source).toBe("drive");
+    expect(loadRes.project?.name).toBe("Encarte Baixado da Nuvem");
+
+    // Confirma que foi gravado no IndexedDB local para acessos posteriores ultra-rápidos
+    const cachedLocal = await loadProjectLocal(cloudProjectId);
+    expect(cachedLocal.ok).toBe(true);
+    expect(cachedLocal.project?.id).toBe(cloudProjectId);
   });
 });

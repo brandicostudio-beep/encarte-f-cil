@@ -232,4 +232,36 @@ describe("Painel de Validade - Gerenciador de Snapshots e Storage", () => {
     const removido101 = activeAposRemover.lotes.find((l) => l.codprod === "101")!;
     expect(removido101.noEncarte).toBe(false);
   });
+
+  it("sincroniza último encarte salvo na nuvem e atualiza pino noEncarte do snapshot", async () => {
+    getStorage().clear();
+
+    saveLastProjectEncarteCache({
+      id: "proj-nuvem-001",
+      name: "Encarte Nuvem",
+      updatedAt: new Date().toISOString(),
+      products: [
+        {
+          id: "p-101",
+          code: "101",
+          name: "BATATA PALHA",
+          packaging: "UN",
+          validity: "20/11/2026",
+          price: "5,00",
+          unit: "UND",
+          included: true,
+          image: "https://example.com/batata.png",
+        },
+      ],
+    } as any);
+
+    const info = await syncLastEncarteData();
+    expect(info.codes.has("101")).toBe(true);
+    expect(info.sourceEncarteName).toBe("Encarte Nuvem");
+
+    const snap = createSnapshotFromRaw(mockRawLotes, "validade-nuvem.csv");
+    const lote101 = snap.lotes.find((l) => l.codprod === "101");
+    expect(lote101?.noEncarte).toBe(true);
+    expect(lote101?.foto).toBe("https://example.com/batata.png");
+  });
 });

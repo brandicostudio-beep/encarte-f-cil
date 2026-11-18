@@ -59,7 +59,8 @@ export type ProjectSyncStatus =
   | "unsaved"
   | "local_only"
   | "sync_error"
-  | "update_available";
+  | "update_available"
+  | "cloud_only";
 
 export interface ProjectIndexItem {
   id: string;
@@ -75,6 +76,7 @@ export interface ProjectIndexItem {
   isTrashed?: boolean | undefined;
   trashedAt?: string | undefined;
   driveFolderId?: string | undefined;
+  driveFileId?: string | undefined;
   thumbnailUrl?: string | undefined;
 }
 

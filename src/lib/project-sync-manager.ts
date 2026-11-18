@@ -21,12 +21,43 @@ import {
   renameDriveProjectFn,
   deleteDriveProjectFn,
   getDriveProjectsIndexFn,
+  loadProjectFromDriveByIdFn,
 } from "./project.functions";
-import { analyzeProjectUpdates, validateProjectName } from "./project-serializer";
+import {
+  analyzeProjectUpdates,
+  validateProjectName,
+  stripHeavyImagesForStorage,
+} from "./project-serializer";
+import { getCachedPhoto } from "./drive-cache";
 
 export interface SyncManagerCallbacks {
   onStatusChange?: (status: ProjectSyncStatus, notice?: string) => void;
   onProjectSaved?: (project: ProjectData, notice: string) => void;
+}
+
+// Cache temporário em memória para o índice do Drive (evita múltiplas requisições repetidas de rede)
+let driveIndexCache: {
+  timestamp: number;
+  projects: any[];
+} | null = null;
+const DRIVE_CACHE_TTL_MS = 25000;
+
+export function invalidateDriveIndexCache(): void {
+  driveIndexCache = null;
+}
+
+/**
+ * Re-hidrata fotos de produtos a partir do cache local se a URL estiver vazia.
+ */
+export function rehydrateProductPhotos(products: EncarteProduct[]): EncarteProduct[] {
+  return products.map((p) => {
+    if (p.image && p.image.trim()) return p;
+    const cached = getCachedPhoto(p.code);
+    if (cached?.dataUrl) {
+      return { ...p, image: cached.dataUrl, photoSource: p.photoSource || "drive" };
+    }
+    return p;
+  });
 }
 
 /**
@@ -63,8 +94,15 @@ export async function saveProjectUnified(
   try {
     const driveStatus = await checkDriveStatusFn();
     if (driveStatus.connected) {
-      const driveRes = await saveProjectToDriveFn({ data: { project: projectToSave } });
+      // Prepara versão compacta para transmissão pela rede (sem data URLs gigantes)
+      const cleanProjectForDrive: ProjectData = {
+        ...projectToSave,
+        products: stripHeavyImagesForStorage(projectToSave.products),
+      };
+
+      const driveRes = await saveProjectToDriveFn({ data: { project: cleanProjectForDrive } });
       if (driveRes.ok) {
+        invalidateDriveIndexCache();
         if (driveRes.driveFolderId) {
           projectToSave.driveFolderId = driveRes.driveFolderId;
           await saveProjectLocal(projectToSave, false); // Atualiza ID do Drive no IndexedDB
@@ -150,6 +188,7 @@ export async function renameProjectUnified(
     await renameDriveProjectFn({
       data: { projectId, newName: nameVal.cleanName },
     });
+    invalidateDriveIndexCache();
   } catch {
     /* Drive offline continua válido */
   }
@@ -172,6 +211,7 @@ export async function duplicateProjectUnified(
   // Tentar salvar a cópia no Drive
   try {
     await saveProjectToDriveFn({ data: { project: localRes.newProject } });
+    invalidateDriveIndexCache();
   } catch {
     /* ignore */
   }
@@ -195,6 +235,7 @@ export async function deleteProjectUnified(
   // 2. Google Drive
   try {
     await deleteDriveProjectFn({ data: { projectId, permanent } });
+    invalidateDriveIndexCache();
   } catch {
     /* ignore */
   }
@@ -257,13 +298,74 @@ export async function restoreVersionUnified(
 }
 
 /**
+ * Carrega um projeto pelo ID, buscando primeiro no IndexedDB local e,
+ * se não existir ou se for da nuvem, baixando diretamente do Google Drive.
+ */
+export async function loadProjectUnified(projectId: string): Promise<{
+  ok: boolean;
+  project?: ProjectData;
+  source: "local" | "drive";
+  error?: string;
+}> {
+  // 1. Tentar ler do IndexedDB local primeiro
+  const localRes = await loadProjectLocal(projectId);
+  if (localRes.ok && localRes.project) {
+    const rehydrated: ProjectData = {
+      ...localRes.project,
+      products: rehydrateProductPhotos(localRes.project.products || []),
+    };
+    return { ok: true, project: rehydrated, source: "local" };
+  }
+
+  // 2. Se não encontrou localmente, tentar baixar do Google Drive
+  try {
+    const driveStatus = await checkDriveStatusFn();
+    if (driveStatus.connected) {
+      const driveRes = await loadProjectFromDriveByIdFn({
+        data: { projectId },
+      });
+      if (driveRes.ok && driveRes.project) {
+        const rehydrated: ProjectData = {
+          ...driveRes.project,
+          products: rehydrateProductPhotos(driveRes.project.products || []),
+        };
+        // Salva imediatamente no IndexedDB local para acesso offline e rápido futuro
+        await saveProjectLocal(rehydrated, false);
+        return { ok: true, project: rehydrated, source: "drive" };
+      }
+      if (driveRes.error) {
+        return { ok: false, source: "drive", error: driveRes.error };
+      }
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      source: "drive",
+      error: err instanceof Error ? err.message : "Falha ao baixar projeto da nuvem.",
+    };
+  }
+
+  return {
+    ok: false,
+    source: "local",
+    error: localRes.error || "Projeto não encontrado localmente nem no Drive.",
+  };
+}
+
+/**
  * Lista todos os projetos combinando IndexedDB e Google Drive.
+ * Garante que projetos salvos na nuvem em outro computador apareçam imediatamente.
  */
 export async function listAllProjectsUnified(
-  includeTrashed = false
+  includeTrashed = false,
+  forceRefresh = false
 ): Promise<{ items: ProjectIndexItem[]; driveConnected: boolean }> {
   // 1. Ler projetos locais do IndexedDB
   const localItems = await listProjectsLocal(includeTrashed);
+  const itemsMap = new Map<string, ProjectIndexItem>();
+  for (const item of localItems) {
+    itemsMap.set(item.id, item);
+  }
 
   // 2. Checar Google Drive
   let driveConnected = false;
@@ -272,15 +374,52 @@ export async function listAllProjectsUnified(
     driveConnected = Boolean(driveStatus.connected);
 
     if (driveConnected) {
-      const driveIndexRes = await getDriveProjectsIndexFn();
-      if (driveIndexRes.ok && driveIndexRes.index?.projects) {
-        // Mesclar dados do Drive atualizando status de sincronização
-        const driveProjects = driveIndexRes.index.projects;
-        for (const item of localItems) {
-          const inDrive = driveProjects.find((dp) => dp.id === item.id);
-          if (inDrive) {
-            item.syncStatus = "synced";
-            item.driveFolderId = inDrive.driveFolderId;
+      let driveProjects: any[] | null = null;
+      const now = Date.now();
+
+      if (!forceRefresh && driveIndexCache && now - driveIndexCache.timestamp < DRIVE_CACHE_TTL_MS) {
+        driveProjects = driveIndexCache.projects;
+      } else {
+        const driveIndexRes = await getDriveProjectsIndexFn();
+        if (driveIndexRes.ok && driveIndexRes.index?.projects) {
+          driveProjects = driveIndexRes.index.projects;
+          driveIndexCache = {
+            timestamp: now,
+            projects: driveProjects,
+          };
+        }
+      }
+
+      if (driveProjects) {
+        for (const dp of driveProjects) {
+          const isTrashedMatch = includeTrashed ? Boolean(dp.isTrashed) : !dp.isTrashed;
+          if (!isTrashedMatch) continue;
+
+          const localItem = itemsMap.get(dp.id);
+          if (localItem) {
+            localItem.syncStatus = "synced";
+            localItem.driveFolderId = dp.driveFolderId;
+            localItem.driveFileId = dp.driveFileId;
+          } else {
+            // PROJETO EXISTE NA NUVEM MAS NÃO NESTE COMPUTADOR
+            // Adiciona para que apareça em qualquer computador!
+            const cloudItem: ProjectIndexItem = {
+              id: dp.id,
+              name: dp.name || "Encarte na Nuvem",
+              createdAt: dp.createdAt || new Date().toISOString(),
+              updatedAt: dp.updatedAt || new Date().toISOString(),
+              currentVersion: dp.currentVersion || 1,
+              versionCount: dp.versionCount || 1,
+              itemCount: dp.itemCount || 0,
+              sourceType: dp.sourceType || "manual",
+              sourceName: dp.sourceName || "Google Drive",
+              syncStatus: "cloud_only",
+              isTrashed: Boolean(dp.isTrashed),
+              trashedAt: dp.trashedAt,
+              driveFolderId: dp.driveFolderId,
+              driveFileId: dp.driveFileId,
+            };
+            itemsMap.set(dp.id, cloudItem);
           }
         }
       }
@@ -289,7 +428,11 @@ export async function listAllProjectsUnified(
     driveConnected = false;
   }
 
-  return { items: localItems, driveConnected };
+  const items = Array.from(itemsMap.values()).sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
+
+  return { items, driveConnected };
 }
 
 /**

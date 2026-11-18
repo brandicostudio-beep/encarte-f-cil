@@ -21,6 +21,11 @@ import {
   loadProjectLocal,
   saveProjectLocal,
 } from "./project-indexeddb";
+import {
+  listAllProjectsUnified,
+  loadProjectUnified,
+  saveProjectUnified,
+} from "./project-sync-manager";
 import { deriveSaleUnit, getThumbnailFallbackUrl } from "./parse-product";
 
 export const SNAPSHOTS_STORAGE_KEY = "painel_validade_snapshots_v1";
@@ -225,22 +230,32 @@ export function getActiveEncartePhotoMap(): Map<string, string> {
 }
 
 /**
- * Sincroniza de forma assíncrona o último encarte feito a partir do IndexedDB
- * (busca o projeto mais recente salvo pelo usuário e atualiza os pinos do painel)
+ * Sincroniza de forma assíncrona o último encarte feito a partir do IndexedDB e Google Drive
+ * (busca o projeto mais recente salvo pelo usuário em qualquer computador e atualiza os pinos do painel)
  */
 export async function syncLastEncarteData(): Promise<ActiveEncarteInfo> {
   try {
-    const projects = await listProjectsLocal(false);
-    if (projects && projects.length > 0) {
+    const unified = await listAllProjectsUnified(false);
+    if (unified && unified.items && unified.items.length > 0) {
       // O primeiro item é o mais recentemente atualizado (updatedAt desc)
-      const newestSummary = projects[0];
-      const res = await loadProjectLocal(newestSummary.id);
+      const newestSummary = unified.items[0];
+      const res = await loadProjectUnified(newestSummary.id);
       if (res.ok && res.project && Array.isArray(res.project.products)) {
         saveLastProjectEncarteCache(res.project);
       }
+    } else {
+      // Fallback local caso o manager unificado falhe
+      const projects = await listProjectsLocal(false);
+      if (projects && projects.length > 0) {
+        const newestSummary = projects[0];
+        const res = await loadProjectLocal(newestSummary.id);
+        if (res.ok && res.project && Array.isArray(res.project.products)) {
+          saveLastProjectEncarteCache(res.project);
+        }
+      }
     }
   } catch (err) {
-    console.warn("Aviso ao sincronizar último encarte do IndexedDB:", err);
+    console.warn("Aviso ao sincronizar último encarte do IndexedDB/Drive:", err);
   }
 
   refreshEncartePinsOnActiveSnapshot();
@@ -522,13 +537,14 @@ export function addLoteToEncarte(lote: ValidadeLoteCalculado): {
     );
   } catch {}
 
-  // Sincroniza de forma assíncrona com o IndexedDB caso exista projeto recente salvo
+  // Sincroniza de forma assíncrona com o IndexedDB e Google Drive caso exista projeto recente salvo
   if (typeof window !== "undefined") {
-    listProjectsLocal(false)
-      .then(async (projectList) => {
-        if (projectList && projectList.length > 0) {
+    listAllProjectsUnified(false)
+      .then(async (unified) => {
+        const projectList = unified.items || [];
+        if (projectList.length > 0) {
           const newest = projectList[0];
-          const fullRes = await loadProjectLocal(newest.id);
+          const fullRes = await loadProjectUnified(newest.id);
           if (fullRes.ok && fullRes.project) {
             const projectProducts = [...(fullRes.project.products || [])];
             const pIdx = projectProducts.findIndex(
@@ -541,7 +557,7 @@ export function addLoteToEncarte(lote: ValidadeLoteCalculado): {
             } else {
               projectProducts.push(products[products.length - 1]);
             }
-            await saveProjectLocal(
+            await saveProjectUnified(
               {
                 ...fullRes.project,
                 products: projectProducts,

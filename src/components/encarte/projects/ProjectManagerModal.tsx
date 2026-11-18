@@ -369,7 +369,11 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
                           <span className="text-[10px] uppercase font-bold tracking-wider bg-white/20 backdrop-blur-xs px-2 py-0.5 rounded text-white">
                             v{p.currentVersion} • {p.itemCount} itens
                           </span>
-                          {p.syncStatus === "synced" ? (
+                          {p.syncStatus === "cloud_only" ? (
+                            <span className="flex items-center gap-1 text-[10px] text-sky-300 bg-sky-950/80 px-1.5 py-0.5 rounded border border-sky-600/40">
+                              <Cloud className="w-3 h-3" /> Na Nuvem
+                            </span>
+                          ) : p.syncStatus === "synced" ? (
                             <span className="flex items-center gap-1 text-[10px] text-emerald-300 bg-emerald-950/80 px-1.5 py-0.5 rounded">
                               <Cloud className="w-3 h-3" /> Drive
                             </span>
@@ -574,7 +578,11 @@ export const ProjectManagerModal: React.FC<ProjectManagerModalProps> = ({
                             </span>
                           </td>
                           <td className="p-3">
-                            {p.syncStatus === "synced" ? (
+                            {p.syncStatus === "cloud_only" ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                                <Cloud className="w-3 h-3 text-sky-600" /> Na Nuvem (Drive)
+                              </span>
+                            ) : p.syncStatus === "synced" ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                                 <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Salvo no Drive
                               </span>

@@ -4,6 +4,7 @@ import {
   checkDriveConnection,
   saveProjectVersionToDrive,
   loadProjectFromDrive,
+  loadProjectFromDriveById,
   renameDriveProject,
   deleteDriveProject,
   getOrCreateRootFolder,
@@ -53,6 +54,17 @@ export const loadProjectFromDriveFn = createServerFn({ method: "POST" })
   .validator((d: { fileId: string }) => z.object({ fileId: z.string().min(5) }).parse(d))
   .handler(async ({ data }) => {
     return await loadProjectFromDrive(data.fileId);
+  });
+
+/**
+ * Carrega a versão mais recente de um projeto no Google Drive a partir do projectId.
+ */
+export const loadProjectFromDriveByIdFn = createServerFn({ method: "POST" })
+  .validator((d: { projectId: string; driveFolderId?: string }) =>
+    z.object({ projectId: z.string().min(1), driveFolderId: z.string().optional() }).parse(d)
+  )
+  .handler(async ({ data }) => {
+    return await loadProjectFromDriveById(data.projectId, data.driveFolderId);
   });
 
 /**

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   UploadCloud,
   FileSpreadsheet,
@@ -13,7 +13,11 @@ import {
 } from "lucide-react";
 import type { ValidadePreviewImport, ValidadeSnapshot } from "@/types/painel-validade";
 import { parseWinthorCsv, parseWinthorXlsx, OBRIGATORIAS } from "@/lib/painel-validade-parser";
-import { createSnapshotFromRaw, getActiveSnapshot } from "@/lib/painel-validade-storage";
+import {
+  createSnapshotFromRaw,
+  getActiveSnapshot,
+  syncLastEncarteData,
+} from "@/lib/painel-validade-storage";
 
 interface PainelValidadeImportModalProps {
   open: boolean;
@@ -33,6 +37,13 @@ export function PainelValidadeImportModal({
   const [showErrorsList, setShowErrorsList] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sincroniza o último encarte da nuvem/local ao abrir o modal de importação
+  useEffect(() => {
+    if (open) {
+      syncLastEncarteData().catch(() => {});
+    }
+  }, [open]);
 
   if (!open) return null;
 

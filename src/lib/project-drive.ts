@@ -384,6 +384,7 @@ export async function saveProjectVersionToDrive(
       isTrashed: Boolean(project.isTrashed),
       trashedAt: project.trashedAt,
       driveFolderId: projectFolderId,
+      driveFileId,
     };
 
     const existingIdx = currentIndex.projects.findIndex((p) => p.id === project.id);
@@ -432,6 +433,99 @@ export async function loadProjectFromDrive(
     return deserializeProject(text);
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Erro ao carregar do Drive" };
+  }
+}
+
+/**
+ * Localiza e carrega a versão mais recente de um projeto no Google Drive a partir do seu ID.
+ */
+export async function loadProjectFromDriveById(
+  projectId: string,
+  driveFolderId?: string,
+  options: DriveOpOptions = {}
+): Promise<{ ok: boolean; project?: ProjectData; error?: string }> {
+  const { token, fetchFn = fetch } = options;
+  const config = getDriveRequestConfig(token);
+  if (!config) return { ok: false, error: "Sem conexão com o Google Drive." };
+
+  try {
+    const rootRes = await getOrCreateRootFolder(options);
+    if (!rootRes.ok || !rootRes.folderId) {
+      return { ok: false, error: rootRes.error || "Pasta raiz do Drive não acessível." };
+    }
+
+    let targetFolderId = driveFolderId;
+    let directFileId: string | undefined;
+
+    // 1. Tentar ler do índice do Drive
+    const idxRes = await readDriveIndex(rootRes.folderId, options);
+    if (idxRes.ok && idxRes.index?.projects) {
+      const found = idxRes.index.projects.find((p) => p.id === projectId);
+      if (found) {
+        if (found.driveFileId) {
+          directFileId = found.driveFileId;
+        }
+        if (!targetFolderId && found.driveFolderId) {
+          targetFolderId = found.driveFolderId;
+        }
+      }
+    }
+
+    // 2. Se temos directFileId, tenta baixar direto
+    if (directFileId) {
+      const loadRes = await loadProjectFromDrive(directFileId, options);
+      if (loadRes.ok && loadRes.project) {
+        return loadRes;
+      }
+    }
+
+    // 3. Se não temos a pasta do projeto ainda, busca pelo nome no Drive
+    if (!targetFolderId) {
+      const q = `'${rootRes.folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and name contains '[${projectId.replace(/'/g, "\\'")}]' and trashed = false`;
+      const searchRes = await fetchFn(
+        `${config.baseUrl}/files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=1&supportsAllDrives=true`,
+        { headers: config.headers }
+      );
+      if (searchRes.ok) {
+        const data = await searchRes.json();
+        if (Array.isArray(data.files) && data.files.length > 0) {
+          targetFolderId = data.files[0]?.id;
+        }
+      }
+    }
+
+    if (!targetFolderId) {
+      return { ok: false, error: "Pasta do projeto não encontrada no Google Drive." };
+    }
+
+    // 4. Buscar os arquivos JSON de versão dentro da pasta do projeto, ordenados pelo nome desc (projeto-v002 antes de v001)
+    const filesQuery = `'${targetFolderId}' in parents and mimeType = 'application/json' and trashed = false`;
+    const filesRes = await fetchFn(
+      `${config.baseUrl}/files?q=${encodeURIComponent(filesQuery)}&orderBy=name+desc&fields=files(id,name)&pageSize=10&supportsAllDrives=true`,
+      { headers: config.headers }
+    );
+
+    if (!filesRes.ok) {
+      return { ok: false, error: "Falha ao buscar arquivos do projeto no Google Drive." };
+    }
+
+    const filesData = await filesRes.json();
+    const jsonFiles = (filesData.files || []).filter((f: any) =>
+      typeof f.name === "string" && f.name.endsWith(".json")
+    );
+
+    if (jsonFiles.length === 0) {
+      return { ok: false, error: "Nenhum arquivo de versão encontrado para este projeto no Google Drive." };
+    }
+
+    // O primeiro arquivo é a versão mais recente
+    const latestFileId = jsonFiles[0].id;
+    return await loadProjectFromDrive(latestFileId, options);
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Erro ao carregar projeto do Drive",
+    };
   }
 }
 
