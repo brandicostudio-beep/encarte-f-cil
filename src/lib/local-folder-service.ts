@@ -46,10 +46,26 @@ export interface LocalFolderCrossingResult {
 /**
  * Verifica se a API File System Access (showDirectoryPicker) é suportada pelo navegador atual.
  * Chrome e Edge suportam nativamente. Firefox e Safari não suportam nativamente.
+ * Em subframes e iframes (ex.: Lovable preview, sandbox), a API é bloqueada por segurança do navegador
+ * ('Cross origin sub frames aren't allowed to show a file picker'). Nesses casos, retorna false
+ * para acionar o fallback seguro universal de seleção de pasta (<input type="file" webkitdirectory />).
  */
 export function isFileSystemAccessSupported(): boolean {
   if (typeof window === "undefined") return false;
-  return typeof (window as any).showDirectoryPicker === "function";
+  if (typeof (window as any).showDirectoryPicker !== "function") return false;
+
+  // Se estiver executando dentro de um iframe / subframe (ex: Lovable preview, web container),
+  // showDirectoryPicker é terminantemente rejeitado pelos navegadores com erro de cross-origin.
+  try {
+    if (window.self !== window.top) {
+      return false;
+    }
+  } catch {
+    // Exceção de cross-origin ao inspecionar window.top confirma ambiente de subframe
+    return false;
+  }
+
+  return true;
 }
 
 /**

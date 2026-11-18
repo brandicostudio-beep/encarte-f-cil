@@ -71,11 +71,11 @@ export const PainelValidadeHeader: React.FC<PainelValidadeHeaderProps> = ({
             variant="outline"
             size="sm"
             onClick={handleBack}
-            className="min-h-[44px] px-3 font-bold text-neutral-200 bg-neutral-900 border-neutral-700 hover:bg-[#5B0E1E] hover:text-white transition-colors"
-            title="Voltar ao Editor de Encartes"
+            className="min-h-[44px] px-3 font-bold text-white bg-gradient-to-r from-[#5B0E1E] to-[#8C142B] border-red-500/50 hover:bg-[#751227] hover:text-white transition-colors"
+            title="Voltar ao Editor de Encartes / Menu Principal"
           >
             <ChevronLeft className="h-5 w-5 mr-1" />
-            <span className="text-sm">Encartes</span>
+            <span className="text-sm">← Voltar ao Menu Principal</span>
           </Button>
 
           <div className="hidden sm:flex h-9 px-2.5 items-center justify-center rounded-xl bg-gradient-to-r from-[#3D0A14] via-[#5B0E1E] to-[#780D21] border border-red-500/30 shadow-xs shrink-0">

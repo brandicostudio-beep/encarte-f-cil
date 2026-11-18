@@ -16,6 +16,7 @@ describe("EncarteSemanalWorkspace: Navegação e Desbloqueio de Abas", () => {
 
     // 1. Botão Voltar aos Encartes com data-testid
     expect(html).toContain('data-testid="btn-back-to-encartes"');
+    expect(html).toContain("Voltar ao Menu Principal");
     expect(html).toContain("Encartes");
 
     // 2. Botão Menu Drawer lateral com data-testid

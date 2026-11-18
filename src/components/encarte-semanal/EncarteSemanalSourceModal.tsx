@@ -118,10 +118,8 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
 
   // Carregar fotos de pasta local com fallback seguro para iframes / Lovable preview
   const handleSelectLocalFolder = async () => {
-    const isIframe = typeof window !== "undefined" && window.self !== window.top;
-
-    // Se estiver em iframe ou navegador sem suporte nativo a showDirectoryPicker, usa input nativo seguro
-    if (isIframe || !isFileSystemAccessSupported()) {
+    // Se estiver em iframe ou navegador sem suporte nativo/autorizado a showDirectoryPicker, usa seletor nativo seguro
+    if (!isFileSystemAccessSupported()) {
       folderInputRef.current?.click();
       return;
     }
@@ -160,15 +158,10 @@ export const EncarteSemanalSourceModal: React.FC<EncarteSemanalSourceModalProps>
         `✓ ${matchResult.matchedCount} foto(s) associada(s) aos produtos a partir da pasta local.`
       );
     } catch (err: any) {
-      // Se for bloqueio de cross-origin sub frame, usa imediatamente o seletor nativo sem erro
-      if (
-        err.name === "SecurityError" ||
-        String(err).includes("sub frame") ||
-        String(err).includes("Cross origin")
-      ) {
-        folderInputRef.current?.click();
-      } else if (err.name !== "AbortError") {
-        setPhotoMatchMessage(`Aviso ao acessar pasta: ${err?.message || err}`);
+      if (err.name !== "AbortError") {
+        setPhotoMatchMessage(
+          "Não foi possível abrir a pasta pelo seletor do sistema. Por favor, utilize a opção 'Subir ZIP ou Fotos' ao lado para carregar as fotos."
+        );
       }
     } finally {
       setIsMatchingPhotos(false);

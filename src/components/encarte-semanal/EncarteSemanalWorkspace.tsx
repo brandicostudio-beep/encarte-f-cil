@@ -450,101 +450,156 @@ export const EncarteSemanalWorkspace: React.FC = () => {
     }
   };
 
+  // Handlers de navegação com duplo fallback (TanStack Router + window.location)
+  const handleBackToHome = () => {
+    if (typeof window !== "undefined") {
+      try {
+        navigate({ to: "/" as never });
+      } catch {
+        window.location.href = "/";
+      }
+    }
+  };
+
+  const handleNavigateValidade = () => {
+    if (typeof window !== "undefined") {
+      try {
+        navigate({ to: "/painel-validade" as never });
+      } catch {
+        window.location.href = "/painel-validade";
+      }
+    }
+  };
+
+  const handleNavigateColecoes = () => {
+    if (typeof window !== "undefined") {
+      try {
+        navigate({ to: "/colecoes" as never });
+      } catch {
+        window.location.href = "/colecoes";
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-[#0d0d0d] text-white">
-      {/* 1. CABEÇALHO DO WORKSPACE */}
-      <header className="border-b border-neutral-800 bg-[#141414] px-4 py-3 sticky top-0 z-40 shadow-md">
+      {/* 1. BARRA SUPERIOR FIXA: NAVEGAÇÃO GLOBAL & SAÍDA DO SISTEMA */}
+      <header className="border-b border-neutral-800 bg-[#121212] px-4 py-2.5 sticky top-0 z-50 shadow-xl">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          {/* Navegação, Botão Voltar e Módulos do Sistema */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Botão Menu Lateral (Drawer) */}
+          {/* Lado Esquerdo: BOTÃO VOLTAR DESTACADO & MENU GAVETA */}
+          <div className="flex items-center gap-2">
             <Button
               type="button"
-              variant="ghost"
               size="sm"
-              onClick={() => setNavDrawerOpen(true)}
-              className="h-9 w-9 p-0 text-neutral-400 hover:text-white hover:bg-neutral-800"
-              title="Menu Principal do Sistema"
-              data-testid="btn-semanal-menu-drawer"
+              onClick={handleBackToHome}
+              className="bg-gradient-to-r from-[#5B0E1E] to-[#8C142B] hover:from-[#751227] hover:to-[#A31833] text-white font-bold text-xs h-9 px-3.5 border border-red-500/50 shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Voltar para a tela inicial / Gerador de Encartes Principal"
+              data-testid="btn-back-to-encartes"
             >
-              <Menu className="h-5 w-5" />
+              <ChevronLeft className="h-4 w-4 text-red-200" />
+              <span>← Voltar ao Menu Principal</span>
             </Button>
 
-            {/* Botão Voltar aos Encartes */}
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => navigate({ to: "/" as never })}
-              className="bg-neutral-900 border-neutral-700 text-neutral-300 hover:text-white hover:bg-neutral-800 text-xs h-9 flex items-center gap-1.5"
-              title="Voltar ao Gerador de Encartes Principal"
-              data-testid="btn-back-to-encartes"
+              onClick={() => setNavDrawerOpen(true)}
+              className="h-9 px-3 bg-neutral-900 border-neutral-700 text-neutral-300 hover:text-white hover:bg-neutral-800 text-xs"
+              title="Abrir Menu Completo do Sistema"
+              data-testid="btn-semanal-menu-drawer"
             >
-              <ChevronLeft className="h-4 w-4" />
-              <span>Encartes</span>
+              <Menu className="h-4 w-4 mr-1.5" />
+              <span>Menu</span>
             </Button>
+          </div>
 
-            {/* Segmented Control Minimalista (Estilo Apple): Módulos do Sistema */}
-            <nav className="hidden lg:flex items-center bg-neutral-900 border border-neutral-800 p-0.5 rounded-xl">
-              <button
-                type="button"
-                onClick={() => navigate({ to: "/" as never })}
-                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:text-red-300 hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
-                title="Ir para o Gerador de Encartes Principal"
-              >
-                <LayoutGrid className="w-3.5 h-3.5 text-red-400" />
-                <span>Encartes</span>
-              </button>
+          {/* Centro: SELETOR DE MÓDULOS (Segmented Control Estilo Apple - Sempre Visível) */}
+          <nav className="flex items-center bg-black/70 border border-neutral-800 p-0.5 rounded-xl shadow-inner text-xs">
+            <button
+              type="button"
+              onClick={handleBackToHome}
+              className="px-3 py-1.5 rounded-lg font-semibold text-neutral-400 hover:text-white hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Ir para o Gerador de Encartes Principal"
+            >
+              <LayoutGrid className="w-3.5 h-3.5 text-red-400" />
+              <span className="hidden sm:inline">Encartes</span>
+            </button>
 
-              <span
-                className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-amber-600 to-amber-500 text-neutral-950 shadow-2xs flex items-center gap-1.5 cursor-default"
-                title="Você está no Encarte Semanal permanente"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-neutral-950" />
-                <span>Semanal</span>
+            <span
+              className="px-3 py-1.5 rounded-lg font-black bg-gradient-to-r from-amber-600 to-amber-500 text-neutral-950 shadow-md flex items-center gap-1.5 cursor-default"
+              title="Você está no Encarte Semanal permanente"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-neutral-950" />
+              <span>Semanal (4×5)</span>
+            </span>
+
+            <button
+              type="button"
+              onClick={handleNavigateValidade}
+              className="px-3 py-1.5 rounded-lg font-semibold text-neutral-400 hover:text-amber-200 hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Ir para o Painel de Validade (Rotina 8230)"
+            >
+              <CalendarClock className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Validade (8230)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleNavigateColecoes}
+              className="px-3 py-1.5 rounded-lg font-semibold text-neutral-400 hover:text-purple-300 hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Ir para o Encarte de Coleções"
+            >
+              <Layers className="w-3.5 h-3.5 text-purple-400" />
+              <span className="hidden md:inline">Coleções</span>
+            </button>
+          </nav>
+
+          {/* Lado Direito: Logo Cescom Trimmed */}
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2 bg-neutral-900 border border-neutral-800 px-2.5 py-1 rounded-lg">
+              <img
+                src="/logo-cescom-trimmed.png"
+                alt="Cescom Distribuidor"
+                className="h-4 w-auto object-contain"
+              />
+              <span className="text-[11px] font-bold text-neutral-300">
+                Cescom
               </span>
+            </div>
+          </div>
+        </div>
+      </header>
 
-              <button
-                type="button"
-                onClick={() => navigate({ to: "/painel-validade" as never })}
-                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:text-red-300 hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
-                title="Ir para o Painel de Validade (Rotina 8230)"
-              >
-                <CalendarClock className="w-3.5 h-3.5 text-red-400" />
-                <span>Validade</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigate({ to: "/colecoes" as never })}
-                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:text-purple-300 hover:bg-neutral-800/60 transition-all flex items-center gap-1.5 cursor-pointer"
-                title="Ir para o Encarte de Coleções"
-              >
-                <Layers className="w-3.5 h-3.5 text-purple-400" />
-                <span>Coleções</span>
-              </button>
-            </nav>
-
-            {/* Identidade Encarte Semanal */}
-            <div className="flex items-center gap-2.5 pl-2 border-l border-neutral-800">
-              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-neutral-950 font-black text-sm shadow-md shrink-0">
-                ES
-              </div>
-              <div>
-                <h1 className="text-sm font-black tracking-wide text-white uppercase flex items-center gap-1.5">
-                  Encarte Semanal
-                  <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded-full uppercase tracking-wider">
-                    Ofertas 4×5
-                  </span>
-                </h1>
-                <p className="text-[11px] text-neutral-400 hidden sm:block">
-                  Modelo 1080×1920 • 20 produtos por tela
+      {/* 2. BARRA OPERACIONAL DO ENCARTE: AÇÕES E ARQUIVO */}
+      <div className="bg-[#181818] border-b border-neutral-800 px-4 py-2.5">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+          {/* Identidade do Encarte Semanal & Indicador de Arquivo */}
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-neutral-950 font-black text-xs shadow-md shrink-0">
+              ES
+            </div>
+            <div>
+              <h2 className="text-xs font-black tracking-wide text-white uppercase flex items-center gap-1.5 leading-tight">
+                Encarte Semanal
+                <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.2 rounded">
+                  Ofertas da Semana • 20 Boxes
+                </span>
+              </h2>
+              {currentFileName ? (
+                <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-mono">
+                  <HardDrive className="h-3 w-3" />
+                  <span>Arquivo: {currentFileName}</span>
+                </div>
+              ) : (
+                <p className="text-[11px] text-neutral-400">
+                  Modelo permanente 1080×1920 • Clique em qualquer box para editar
                 </p>
-              </div>
+              )}
             </div>
           </div>
 
-          {/* Botões de Ação Principais */}
+          {/* Botões Operacionais Agrupados */}
           <div className="flex flex-wrap items-center gap-2">
             {/* Input oculto para subir novo modelo de arte */}
             <input
@@ -564,135 +619,119 @@ export const EncarteSemanalWorkspace: React.FC = () => {
               onChange={handleFallbackFileInputChange}
             />
 
-            {/* ABRIR DO COMPUTADOR */}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={handleOpenFromComputer}
-              className="bg-neutral-900 border-neutral-700 text-neutral-200 hover:text-white text-xs h-9"
-              title="Abrir encarte salvo previamente na pasta do computador"
-              data-testid="btn-open-from-pc"
-            >
-              <FolderOpen className="h-3.5 w-3.5 mr-1.5 text-blue-400" />
-              Abrir do PC
-            </Button>
-
-            {/* SALVAR NA PASTA DO COMPUTADOR */}
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => handleSaveToComputer(false)}
-              disabled={isSavingFile || products.length === 0}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 shadow-md"
-              title={
-                currentFileName
-                  ? `Salvar alterações diretamente no arquivo ${currentFileName}`
-                  : "Salvar este encarte diretamente na pasta do computador"
-              }
-              data-testid="btn-save-to-pc"
-            >
-              {isSavingFile ? (
-                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-              ) : (
-                <Save className="h-3.5 w-3.5 mr-1.5" />
-              )}
-              {currentFileName ? "Salvar no PC" : "Salvar no PC"}
-            </Button>
-
-            {/* SALVAR COMO (SE JÁ TIVER ARQUIVO ABERTO) */}
-            {currentFileName && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => handleSaveToComputer(true)}
-                disabled={isSavingFile || products.length === 0}
-                className="bg-neutral-900 border-neutral-700 text-neutral-300 hover:text-white text-xs h-9"
-                title="Salvar com outro nome ou em outra pasta do computador"
-              >
-                Salvar Como...
-              </Button>
-            )}
-
+            {/* CARREGAR PLANILHA & FOTOS (DESTAQUE) */}
             <Button
               type="button"
               size="sm"
               onClick={() => setSourceModalOpen(true)}
-              className="bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-xs h-9 shadow-md"
+              className="bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-xs h-8 shadow-md"
               data-testid="btn-open-source-modal"
             >
-              <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+              <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />
               Carregar Planilha & Fotos
             </Button>
 
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setGridModalOpen(true)}
-              className="bg-neutral-900 border-neutral-700 text-neutral-200 hover:text-white text-xs h-9"
-              title="Ajustar coordenadas da grade, linhas e colunas"
-            >
-              <Sliders className="h-3.5 w-3.5 mr-1.5 text-amber-400" />
-              Configurar Grade
-            </Button>
-
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => bgFileInputRef.current?.click()}
-              className="bg-neutral-900 border-neutral-700 text-neutral-200 hover:text-white text-xs h-9"
-              title="Trocar modelo de arte do fundo (mantém a planilha e os produtos)"
-            >
-              <ImageIcon className="h-3.5 w-3.5 mr-1.5 text-purple-400" />
-              Trocar Modelo
-            </Button>
-
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={handleResetTemplate}
-              className="text-neutral-400 hover:text-white text-xs h-9"
-              title="Restaura a arte original padrão"
-            >
-              <RotateCcw className="h-3.5 w-3.5 mr-1" />
-              Modelo Padrão
-            </Button>
-
-            {/* Exportar */}
-            <div className="flex items-center gap-1 pl-1 border-l border-neutral-800">
+            {/* GRUPO DE ARQUIVO LOCAL */}
+            <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg">
               <Button
                 type="button"
                 size="sm"
-                onClick={handleExportCurrentPng}
-                disabled={isExporting || (currentProducts.length === 0 && products.length === 0)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 shadow-md"
-                data-testid="btn-export-png"
+                variant="ghost"
+                onClick={handleOpenFromComputer}
+                className="text-neutral-300 hover:text-white text-xs h-7 px-2.5"
+                title="Abrir encarte salvo previamente na pasta do computador"
+                data-testid="btn-open-from-pc"
               >
-                {isExporting ? (
-                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                ) : (
-                  <Download className="h-3.5 w-3.5 mr-1.5" />
-                )}
-                Exportar PNG (Tela {currentPage})
+                <FolderOpen className="h-3.5 w-3.5 mr-1 text-blue-400" />
+                Abrir do PC
               </Button>
 
-              {totalPages > 1 && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleExportAllZip}
-                  disabled={isExporting}
-                  className="bg-neutral-900 border-neutral-700 text-white hover:bg-neutral-800 text-xs h-9"
-                >
-                  Exportar Todas (ZIP)
-                </Button>
-              )}
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => handleSaveToComputer(false)}
+                disabled={isSavingFile || products.length === 0}
+                className="text-emerald-400 hover:text-emerald-300 text-xs h-7 px-2.5 font-bold"
+                title="Salvar alterações no computador"
+                data-testid="btn-save-to-pc"
+              >
+                {isSavingFile ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5 mr-1" />
+                )}
+                Salvar no PC
+              </Button>
             </div>
+
+            {/* GRUPO DE DESIGN */}
+            <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => bgFileInputRef.current?.click()}
+                className="text-neutral-300 hover:text-white text-xs h-7 px-2.5"
+                title="Trocar modelo de arte do fundo (mantém a planilha e os produtos)"
+              >
+                <ImageIcon className="h-3.5 w-3.5 mr-1 text-purple-400" />
+                Trocar Fundo
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setGridModalOpen(true)}
+                className="text-neutral-300 hover:text-white text-xs h-7 px-2.5"
+                title="Ajustar coordenadas da grade, linhas e colunas"
+              >
+                <Sliders className="h-3.5 w-3.5 mr-1 text-amber-400" />
+                Grade
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={handleResetTemplate}
+                className="text-neutral-400 hover:text-white text-xs h-7 px-2"
+                title="Restaura a arte original padrão"
+              >
+                <RotateCcw className="h-3 w-3" />
+              </Button>
+            </div>
+
+            {/* GRUPO DE EXPORTAÇÃO */}
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleExportCurrentPng}
+              disabled={isExporting || (currentProducts.length === 0 && products.length === 0)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 shadow-md"
+              data-testid="btn-export-png"
+            >
+              {isExporting ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              Exportar PNG (Tela {currentPage})
+            </Button>
+
+            {totalPages > 1 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleExportAllZip}
+                disabled={isExporting}
+                className="bg-neutral-900 border-neutral-700 text-white hover:bg-neutral-800 text-xs h-8"
+              >
+                ZIP ({totalPages} Telas)
+              </Button>
+            )}
           </div>
         </div>
 
@@ -703,41 +742,11 @@ export const EncarteSemanalWorkspace: React.FC = () => {
             <span>{exportMessage}</span>
           </div>
         )}
-      </header>
+      </div>
 
-      {/* 2. BARRA DE CAMPO EDITÁVEL DO RODAPÉ (DATA DA OFERTA) */}
-      <div className="bg-[#181818] border-b border-neutral-800/80 px-4 py-2.5">
+      {/* 3. BARRA DE ABAS & RODAPÉ EDITÁVEL DA OFERTA */}
+      <div className="bg-[#121212] border-b border-neutral-800/80 px-4 py-2">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 flex-1 min-w-[320px]">
-            <Calendar className="h-4 w-4 text-amber-400 shrink-0" />
-            <Label htmlFor="footerOffer" className="text-xs font-bold text-neutral-300 shrink-0">
-              Datas da Oferta no Rodapé:
-            </Label>
-            <Input
-              id="footerOffer"
-              value={footerText}
-              onChange={(e) => handleFooterTextChange(e.target.value)}
-              placeholder="Ex: OFERTA VÁLIDA DO DIA 16/11 AO DIA 21/11 OU ENQUANTO DURAREM OS ESTOQUES PROMOCIONAIS."
-              className="h-8 bg-neutral-900 border-neutral-700 text-amber-300 font-semibold text-xs uppercase"
-              data-testid="input-semanal-footer"
-            />
-          </div>
-
-          {/* Indicador de Arquivo Local Salvo no Computador */}
-          {currentFileName && (
-            <div
-              className="flex items-center gap-1.5 bg-neutral-900/90 border border-emerald-500/40 px-3 py-1 rounded-lg text-xs shadow-xs"
-              title="Este encarte está salvo na pasta do computador. Use 'Salvar no PC' para atualizar o arquivo existente."
-              data-testid="local-file-indicator"
-            >
-              <HardDrive className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-              <span className="text-neutral-400 text-[11px] shrink-0">Arquivo Local:</span>
-              <span className="font-mono font-bold text-emerald-300 text-[11px] truncate max-w-[240px]">
-                {currentFileName}
-              </span>
-            </div>
-          )}
-
           {/* Abas: Visualizar Encarte / Lista de Produtos / Pendências */}
           <div className="flex items-center gap-1 bg-black/60 p-1 rounded-lg border border-neutral-800">
             <button
@@ -776,6 +785,22 @@ export const EncarteSemanalWorkspace: React.FC = () => {
               <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
               Pendências / Sem Foto ({pendingProducts.length})
             </button>
+          </div>
+
+          {/* Campo Editável do Rodapé (Data da Oferta) */}
+          <div className="flex items-center gap-2 flex-1 max-w-lg min-w-[280px]">
+            <Calendar className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+            <Label htmlFor="footerOffer" className="text-xs font-bold text-neutral-300 shrink-0">
+              Datas no Rodapé:
+            </Label>
+            <Input
+              id="footerOffer"
+              value={footerText}
+              onChange={(e) => handleFooterTextChange(e.target.value)}
+              placeholder="Ex: OFERTA VÁLIDA DO DIA 16/11 AO DIA 21/11 OU ENQUANTO DURAREM OS ESTOQUES."
+              className="h-8 bg-neutral-900 border-neutral-700 text-amber-300 font-semibold text-xs uppercase"
+              data-testid="input-semanal-footer"
+            />
           </div>
         </div>
       </div>

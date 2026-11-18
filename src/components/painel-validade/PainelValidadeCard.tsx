@@ -317,47 +317,25 @@ export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
               </div>
             </div>
 
-            {/* 4. RESUMO DE ESCOAMENTO (COMPACTO E SEM POLUIÇÃO) */}
-            {isSemEstoque ? (
-              <div className="bg-neutral-100/70 dark:bg-slate-800/40 p-2.5 rounded-xl border border-neutral-200/90 dark:border-slate-700/80 text-xs text-neutral-500">
-                <div className="flex items-center justify-between font-bold">
-                  <span>Situação:</span>
-                  <span className="font-mono text-neutral-700 dark:text-neutral-300">Sem estoque no Winthor</span>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-neutral-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-neutral-200/80 dark:border-slate-700/80 space-y-1.5">
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-neutral-600 dark:text-neutral-400">Escoa a tempo:</span>
-                  <span className={`font-mono text-xs font-black ${escoaBar.textClass}`}>
-                    {escoaBar.label}
+            {/* 4. EXPLICAÇÃO EM FRASES SIMPLES EM EVIDÊNCIA DIRETA NO CARD (DESPOLUÍDO) */}
+            <div className="bg-amber-50/70 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-200/80 dark:border-amber-900/40 space-y-1">
+              <div className="text-[10px] uppercase font-black tracking-wider text-amber-800 dark:text-amber-300 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                  <span>Explicação em Frases Simples:</span>
+                </span>
+                {!isSemEstoque && (
+                  <span className="font-mono text-[11px] font-bold text-neutral-600 dark:text-neutral-400">
+                    {Math.round(lote.escoaTempoPercent)}% escoa
                   </span>
-                </div>
-
-                {/* Barra de Progresso Colorida */}
-                <div className="w-full h-2 rounded-full bg-neutral-200 dark:bg-slate-700 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${escoaBar.barBg}`}
-                    style={{ width: `${Math.min(100, Math.max(3, lote.escoaTempoPercent))}%` }}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-neutral-500 font-medium">
-                  {lote.sobraPrevistaUnidades > 0 ? (
-                    <span className="text-red-700 dark:text-red-400 font-bold">
-                      Previsão de sobra: ~{Math.round(lote.sobraPrevistaUnidades)} un
-                    </span>
-                  ) : (
-                    <span className="text-emerald-700 dark:text-emerald-400 font-bold">
-                      Estoque deve escoar totalmente
-                    </span>
-                  )}
-                  <span>{Math.round(lote.escoaTempoPercent)}%</span>
-                </div>
+                )}
               </div>
-            )}
+              <p className="text-xs sm:text-sm font-semibold text-neutral-800 dark:text-neutral-200 leading-snug">
+                {isSemEstoque ? "Sem estoque disponível no Winthor. Não gera alerta de sobra." : motivoLinha}
+              </p>
+            </div>
 
-            {/* 5. RODAPÉ DO CARD: BOTÃO COM OLHINHO / LUPA PARA ABRIR ANÁLISE */}
+            {/* 5. RODAPÉ DO CARD: BOTÃO COM OLHINHO / LUPA PARA ABRIR ANÁLISE COMPLETA */}
             <div className="flex items-center justify-between pt-2.5 border-t border-neutral-100 dark:border-slate-800 text-xs">
               <div className="inline-flex items-center gap-2 font-bold text-neutral-700 dark:text-neutral-300 group-hover:text-red-700 dark:group-hover:text-red-400 transition-colors">
                 <span className="h-7 w-7 rounded-lg bg-neutral-100 dark:bg-slate-800 group-hover:bg-red-700 group-hover:text-white flex items-center justify-center transition-all shadow-2xs">
@@ -366,7 +344,8 @@ export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
                 <span>Ver Análise & Detalhes</span>
               </div>
 
-              <div className="h-8 w-8 rounded-xl bg-neutral-100 dark:bg-slate-800 group-hover:bg-neutral-900 group-hover:text-white dark:group-hover:bg-white dark:group-hover:text-slate-900 flex items-center justify-center transition-colors">
+              <div className="flex items-center gap-1.5 text-xs text-neutral-400 group-hover:text-neutral-800 dark:group-hover:text-white font-medium">
+                <span>Histórico & Fórmulas</span>
                 <ChevronRight className="h-4 w-4" />
               </div>
             </div>

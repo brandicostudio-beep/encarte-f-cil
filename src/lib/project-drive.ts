@@ -850,10 +850,28 @@ export async function loadProjectFromDriveById(
       }
     } catch {}
 
-    return {
-      ok: false,
-      error: `A pasta "${found?.name || "do encarte"}" no Google Drive contém imagens exportadas, mas não possui arquivo de projeto (.json) salvo. Para editar, use a opção "Buscar na Pasta Local (.json)" ou importe a planilha correspondente.`,
+    // 6. Se não encontrou JSON nem planilha na pasta, abre como projeto pronto para edição associado a essa pasta na nuvem
+    const fallbackProject: ProjectData = {
+      id: projectId,
+      name: found?.name || "Encarte",
+      createdAt: found?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      version: 1,
+      source: { type: "manual" },
+      products: [],
+      campaign: DEFAULT_CAMPAIGN,
+      store: DEFAULT_STORE,
+      versionHistory: [
+        {
+          version: 1,
+          savedAt: new Date().toISOString(),
+          itemCount: 0,
+          notes: "Projeto aberto a partir da pasta na nuvem",
+        },
+      ],
+      driveFolderId: targetFolderId,
     };
+    return { ok: true, project: fallbackProject };
   } catch (err) {
     return {
       ok: false,
