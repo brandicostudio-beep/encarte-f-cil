@@ -102,9 +102,12 @@ export const WelcomeHubModal: React.FC<WelcomeHubModalProps> = ({
             id="welcome-hub-title"
             className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white"
           >
-            Bem-vindo à Plataforma Cescom
+            Controle de Validade
           </h2>
-          <p className="text-sm sm:text-base text-neutral-400 max-w-xl mx-auto">
+          <p className="text-sm sm:text-base font-semibold text-neutral-200 max-w-xl mx-auto">
+            Marketing e Acompanhamento
+          </p>
+          <p className="text-xs sm:text-sm text-neutral-400 max-w-xl mx-auto">
             Selecione o fluxo de trabalho que você deseja acessar agora. Você pode alternar entre eles a qualquer momento pelo menu.
           </p>
         </div>

@@ -15,9 +15,10 @@ describe("UI/UX Redesign: WelcomeHubModal & NavigationDrawer (Estilo Apple)", ()
       />
     );
 
-    // Título e identificação de Central de Operações Cescom
+    // Título e identificação do sistema
     expect(html).toContain("Central Comercial &amp; Estoque");
-    expect(html).toContain("Bem-vindo à Plataforma");
+    expect(html).toContain("Controle de Validade");
+    expect(html).toContain("Marketing e Acompanhamento");
     expect(html).toContain("logo-cescom-trimmed.png");
 
     // Fluxo 1: Gerador de Encartes
@@ -63,7 +64,8 @@ describe("UI/UX Redesign: WelcomeHubModal & NavigationDrawer (Estilo Apple)", ()
     );
 
     // Header do menu lateral Cescom
-    expect(html).toContain("Menu do Sistema");
+    expect(html).toContain("Controle de Validade");
+    expect(html).toContain("Marketing e Acompanhamento");
     expect(html).toContain("logo-cescom-trimmed.png");
     expect(html).toContain("Cescom Distribuidor");
 

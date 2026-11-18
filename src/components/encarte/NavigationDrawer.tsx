@@ -75,10 +75,10 @@ export const NavigationDrawerContent: React.FC<NavigationDrawerContentProps> = (
           </div>
           <div>
             <h2 className="text-lg font-bold text-white tracking-tight">
-              Menu do Sistema
+              Controle de Validade
             </h2>
             <p className="text-xs text-neutral-400">
-              Cescom Distribuidor • Operações &amp; Validade
+              Marketing e Acompanhamento • Cescom Distribuidor
             </p>
           </div>
         </div>

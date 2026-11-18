@@ -131,13 +131,13 @@ import { ColecoesWorkspace } from "@/components/colecoes/ColecoesWorkspace";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Gerador de Encartes de Varejo - Story 9:16 Digital" },
+      { title: "Controle de Validade - Marketing e Acompanhamento" },
       {
         name: "description",
         content:
-          "Do zero ao encarte digital para WhatsApp e redes sociais (Story 9:16), com validação de preços, códigos e validades.",
+          "Controle de validade, acompanhamento de estoque e marketing com geração de encartes digitais (Story 9:16).",
       },
-      { property: "og:title", content: "Gerador de Encartes de Varejo - Story 9:16 Digital" },
+      { property: "og:title", content: "Controle de Validade - Marketing e Acompanhamento" },
       { property: "og:description", content: "Crie encartes digitais com preços, códigos e validades." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -1710,10 +1710,10 @@ function EncarteApp() {
               </div>
               <div className="hidden sm:block min-w-0">
                 <h1 className="font-display text-sm sm:text-base font-bold tracking-wider text-white uppercase leading-none group-hover:text-red-400 transition-colors truncate">
-                  Controle de Validade &amp; Encartes
+                  Controle de Validade
                 </h1>
                 <p className="text-[11px] text-neutral-400 font-medium truncate mt-1">
-                  Marketing Digital • Story 9:16
+                  Marketing e Acompanhamento
                 </p>
               </div>
             </button>
