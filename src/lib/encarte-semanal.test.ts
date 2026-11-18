@@ -250,4 +250,99 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     expect(updated.alternativePhotos?.some((a) => a.dataUrl === "data:img2")).toBe(true);
     expect(updated.alternativePhotos?.some((a) => a.dataUrl === "data:img3")).toBe(true);
   });
+
+  // =========================================================================
+  // Teste 8: Serialização e Desserialização de Projeto para Pasta Local
+  // =========================================================================
+  it("Teste 8: Salva o encarte como arquivo do computador e reabre perfeitamente", async () => {
+    const {
+      serializeEncarteSemanalProject,
+      deserializeEncarteSemanalProject,
+      readEncarteSemanalFromFile,
+      generateDefaultFilename,
+    } = await import("./encarte-semanal-file-manager");
+
+    const sampleProducts: EncarteSemanalProduct[] = [
+      {
+        id: "p1",
+        code: "19396",
+        description: "AMEIXA EM CALDA PREDILECTA",
+        image: "data:image/png;base64,sampleImage1",
+        scale: 1.25,
+        offsetX: 4,
+        offsetY: -2,
+        overlapY: 18,
+        limit: "1000CX",
+      },
+      {
+        id: "p2",
+        code: "5522",
+        description: "GOIABADA BLOCO PREDILECTA",
+        image: "data:image/png;base64,sampleImage2",
+      },
+    ];
+
+    const config = {
+      name: "Encarte Semanal - Novembro Semana 3",
+      templateImage: "data:image/jpeg;base64,sampleBgTemplate",
+      footerText: "OFERTA VÁLIDA DE 16/11 A 21/11 OU ATÉ DURAREM OS ESTOQUES",
+      gridConfig: DEFAULT_ENCARTE_SEMANAL_GRID,
+    };
+
+    // 1. Serializa para JSON
+    const jsonString = serializeEncarteSemanalProject(sampleProducts, config);
+    expect(jsonString).toContain('"format": "encarte-semanal"');
+    expect(jsonString).toContain("19396");
+    expect(jsonString).toContain("1000CX");
+
+    // 2. Desserializa a partir da string
+    const deserialized = deserializeEncarteSemanalProject(jsonString);
+    expect(deserialized.ok).toBe(true);
+    expect(deserialized.project).toBeDefined();
+
+    const proj = deserialized.project!;
+    expect(proj.name).toBe("Encarte Semanal - Novembro Semana 3");
+    expect(proj.footerText).toBe("OFERTA VÁLIDA DE 16/11 A 21/11 OU ATÉ DURAREM OS ESTOQUES");
+    expect(proj.templateImage).toBe("data:image/jpeg;base64,sampleBgTemplate");
+    expect(proj.products.length).toBe(2);
+    expect(proj.products[0].code).toBe("19396");
+    expect(proj.products[0].scale).toBe(1.25);
+    expect(proj.products[0].limit).toBe("1000CX");
+
+    // 3. Simula leitura de arquivo File real selecionado pelo usuário
+    const mockFile = new File([jsonString], "encarte_semanal_18_11_2026.json", {
+      type: "application/json",
+    });
+
+    const fileOpenResult = await readEncarteSemanalFromFile(mockFile);
+    expect(fileOpenResult.ok).toBe(true);
+    expect(fileOpenResult.filename).toBe("encarte_semanal_18_11_2026.json");
+    expect(fileOpenResult.project?.products.length).toBe(2);
+
+    // 4. Nome padrão padronizado com data
+    const filename = generateDefaultFilename();
+    expect(filename).toMatch(/^encarte_semanal_\d{2}_\d{2}_\d{4}\.json$/);
+  });
+
+  // =========================================================================
+  // Teste 9: Tratamento de arquivo corrompido ou formato incompatível
+  // =========================================================================
+  it("Teste 9: Rejeita com mensagem amigável arquivos corrompidos ou inválidos", async () => {
+    const { deserializeEncarteSemanalProject, readEncarteSemanalFromFile } = await import(
+      "./encarte-semanal-file-manager"
+    );
+
+    const corruptJson = "{ produtos: indevidos sem fechar chaves";
+    const corruptRes = deserializeEncarteSemanalProject(corruptJson);
+    expect(corruptRes.ok).toBe(false);
+    expect(corruptRes.error).toBeDefined();
+
+    const notAnEncarte = JSON.stringify({ mensagem: "olá mundo" });
+    const invalidRes = deserializeEncarteSemanalProject(notAnEncarte);
+    expect(invalidRes.ok).toBe(false);
+
+    const invalidFile = new File(["nada a ver"], "teste.txt", { type: "text/plain" });
+    const fileRes = await readEncarteSemanalFromFile(invalidFile);
+    expect(fileRes.ok).toBe(false);
+  });
 });

@@ -26,6 +26,12 @@ import {
   exportEncarteSemanalPageAsPng,
   exportAllEncarteSemanalPagesAsZip,
 } from "@/lib/encarte-semanal-export";
+import {
+  saveEncarteSemanalToComputer,
+  openEncarteSemanalFromComputer,
+  readEncarteSemanalFromFile,
+  type EncarteSemanalProjectFile,
+} from "@/lib/encarte-semanal-file-manager";
 import { EncarteSemanalCell } from "./EncarteSemanalCell";
 import { EncarteSemanalProductModal } from "./EncarteSemanalProductModal";
 import { EncarteSemanalGridConfigModal } from "./EncarteSemanalGridConfigModal";
@@ -52,6 +58,9 @@ import {
   Loader2,
   HelpCircle,
   Calendar,
+  Save,
+  FolderOpen,
+  HardDrive,
 } from "lucide-react";
 
 export const EncarteSemanalWorkspace: React.FC = () => {
@@ -78,7 +87,112 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<EncarteSemanalProduct | null>(null);
   const [productModalOpen, setProductModalOpen] = useState<boolean>(false);
 
+  // Estados de Salvamento na Pasta do Computador (File System Access)
+  const [currentFileName, setCurrentFileName] = useState<string | null>(null);
+  const [fileHandle, setFileHandle] = useState<any>(null);
+  const [isSavingFile, setIsSavingFile] = useState<boolean>(false);
+
   const bgFileInputRef = useRef<HTMLInputElement>(null);
+  const openProjectFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Aplica os dados de um projeto carregado do computador
+  const applyLoadedProject = (project: EncarteSemanalProjectFile, handle?: any) => {
+    if (project.products && Array.isArray(project.products)) {
+      setProducts(project.products);
+      saveEncarteSemanalProducts(project.products);
+    }
+    if (project.templateImage) {
+      setTemplateImage(project.templateImage);
+      saveEncarteSemanalTemplate(project.templateImage);
+    }
+    if (project.gridConfig) {
+      setGridConfig(project.gridConfig);
+      saveEncarteSemanalGridConfig(project.gridConfig);
+    }
+    if (typeof project.footerText === "string") {
+      setFooterText(project.footerText);
+      saveEncarteSemanalFooterText(project.footerText);
+    }
+    if (handle) {
+      setFileHandle(handle);
+      setCurrentFileName(handle.name || project.name);
+    } else {
+      setCurrentFileName(project.name);
+    }
+    setCurrentPage(1);
+    setActiveTab("preview");
+    setExportMessage(`✓ Encarte aberto da pasta do computador: ${handle?.name || project.name}`);
+    setTimeout(() => setExportMessage(null), 4000);
+  };
+
+  // Salvar na pasta do computador (grava diretamente no mesmo arquivo se já tiver handle)
+  const handleSaveToComputer = async (forceSaveAs = false) => {
+    if (products.length === 0) {
+      alert("Nenhum produto para salvar. Carregue produtos ou adicione dados antes de salvar.");
+      return;
+    }
+
+    setIsSavingFile(true);
+    try {
+      const result = await saveEncarteSemanalToComputer(products, {
+        name: currentFileName || "Encarte Semanal - Ofertas da Semana",
+        templateImage,
+        footerText,
+        gridConfig,
+        existingFileHandle: forceSaveAs ? null : fileHandle,
+        suggestedFilename: currentFileName || undefined,
+      });
+
+      if (result.ok) {
+        if (result.fileHandle) {
+          setFileHandle(result.fileHandle);
+        }
+        if (result.filename) {
+          setCurrentFileName(result.filename);
+        }
+        setExportMessage(`✓ Encarte salvo com sucesso na pasta do computador (${result.filename})`);
+        setTimeout(() => setExportMessage(null), 4000);
+      } else if (result.error && !result.error.includes("cancelado")) {
+        alert(result.error);
+      }
+    } catch (err: any) {
+      alert(`Erro ao salvar no computador: ${err?.message || err}`);
+    } finally {
+      setIsSavingFile(false);
+    }
+  };
+
+  // Abrir encarte salvo previamente na pasta do computador
+  const handleOpenFromComputer = async () => {
+    try {
+      const result = await openEncarteSemanalFromComputer();
+      if (result.ok && result.project) {
+        applyLoadedProject(result.project, result.fileHandle);
+      } else if (!result.ok && result.error && result.error.includes("não suporta")) {
+        // Fallback para navegadores sem showOpenFilePicker
+        openProjectFileInputRef.current?.click();
+      } else if (result.error && !result.error.includes("cancelad")) {
+        alert(result.error);
+      }
+    } catch {
+      openProjectFileInputRef.current?.click();
+    }
+  };
+
+  // Fallback de abertura via input tradicional
+  const handleFallbackFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const result = await readEncarteSemanalFromFile(file);
+    if (result.ok && result.project) {
+      applyLoadedProject(result.project);
+    } else {
+      alert(result.error || "Não foi possível carregar o arquivo.");
+    }
+    // Limpa valor para permitir reabertura do mesmo arquivo
+    e.target.value = "";
+  };
 
   // Salvar alterações de produtos no localStorage
   useEffect(() => {
@@ -276,6 +390,66 @@ export const EncarteSemanalWorkspace: React.FC = () => {
               onChange={handleTemplateUpload}
             />
 
+            {/* Input oculto para abrir projeto do computador */}
+            <input
+              ref={openProjectFileInputRef}
+              type="file"
+              accept=".json,.encarte"
+              className="hidden"
+              onChange={handleFallbackFileInputChange}
+            />
+
+            {/* ABRIR DO COMPUTADOR */}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleOpenFromComputer}
+              className="bg-neutral-900 border-neutral-700 text-neutral-200 hover:text-white text-xs h-9"
+              title="Abrir encarte salvo previamente na pasta do computador"
+              data-testid="btn-open-from-pc"
+            >
+              <FolderOpen className="h-3.5 w-3.5 mr-1.5 text-blue-400" />
+              Abrir do PC
+            </Button>
+
+            {/* SALVAR NA PASTA DO COMPUTADOR */}
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => handleSaveToComputer(false)}
+              disabled={isSavingFile || products.length === 0}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 shadow-md"
+              title={
+                currentFileName
+                  ? `Salvar alterações diretamente no arquivo ${currentFileName}`
+                  : "Salvar este encarte diretamente na pasta do computador"
+              }
+              data-testid="btn-save-to-pc"
+            >
+              {isSavingFile ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Save className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              {currentFileName ? "Salvar no PC" : "Salvar no PC"}
+            </Button>
+
+            {/* SALVAR COMO (SE JÁ TIVER ARQUIVO ABERTO) */}
+            {currentFileName && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => handleSaveToComputer(true)}
+                disabled={isSavingFile || products.length === 0}
+                className="bg-neutral-900 border-neutral-700 text-neutral-300 hover:text-white text-xs h-9"
+                title="Salvar com outro nome ou em outra pasta do computador"
+              >
+                Salvar Como...
+              </Button>
+            )}
+
             <Button
               type="button"
               size="sm"
@@ -383,6 +557,21 @@ export const EncarteSemanalWorkspace: React.FC = () => {
               data-testid="input-semanal-footer"
             />
           </div>
+
+          {/* Indicador de Arquivo Local Salvo no Computador */}
+          {currentFileName && (
+            <div
+              className="flex items-center gap-1.5 bg-neutral-900/90 border border-emerald-500/40 px-3 py-1 rounded-lg text-xs shadow-xs"
+              title="Este encarte está salvo na pasta do computador. Use 'Salvar no PC' para atualizar o arquivo existente."
+              data-testid="local-file-indicator"
+            >
+              <HardDrive className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+              <span className="text-neutral-400 text-[11px] shrink-0">Arquivo Local:</span>
+              <span className="font-mono font-bold text-emerald-300 text-[11px] truncate max-w-[240px]">
+                {currentFileName}
+              </span>
+            </div>
+          )}
 
           {/* Abas: Visualizar Encarte / Lista de Produtos / Pendências */}
           <div className="flex items-center gap-1 bg-black/60 p-1 rounded-lg border border-neutral-800">
