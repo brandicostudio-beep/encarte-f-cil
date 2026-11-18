@@ -257,17 +257,17 @@ export const HOW_IT_WORKS_STEPS: StepData[] = [
         </g>
 
         <g transform="translate(195, 100)">
-          <rect x="0" y="0" width="95" height="42" rx="6" fill="#DC2626" stroke="#B91C1C" strokeWidth="1.5" />
+          <rect x="0" y="0" width="95" height="42" rx="6" fill="#1E293B" stroke="#0F172A" strokeWidth="1.5" />
           <circle cx="20" cy="21" r="10" fill="#FFFFFF" />
-          <path d="M20 16V26M16 22L20 26L24 22" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" />
+          <path d="M20 16V26M16 22L20 26L24 22" stroke="#1E293B" strokeWidth="2" strokeLinecap="round" />
           <text x="36" y="18" fill="#FFFFFF" fontSize="9" fontWeight="bold">
-            Baixar PDF
+            Baixar ZIP
           </text>
-          <text x="36" y="28" fill="#FEE2E2" fontSize="7">
-            A4 Impressão
+          <text x="36" y="28" fill="#E2E8F0" fontSize="7">
+            Todas as Páginas
           </text>
-          <text x="36" y="36" fill="#FEE2E2" fontSize="6">
-            Pronto para imprimir
+          <text x="36" y="36" fill="#E2E8F0" fontSize="6">
+            Pacote completo
           </text>
         </g>
       </svg>

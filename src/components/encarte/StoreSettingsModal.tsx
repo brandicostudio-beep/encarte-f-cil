@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { StoreConfig, CampaignConfig, ProductsPerPageOption, EncarteFormat, TemplateProductArea } from "@/types/encarte";
 import { DEFAULT_TEMPLATE_9_16_AREA, DEFAULT_CAMPAIGN, DEFAULT_STORE } from "@/types/encarte";
 import { TemplateAreaAdjuster } from "./TemplateAreaAdjuster";
-import { Store, Upload, Trash2, Palette, Megaphone, LayoutGrid, Image as ImageIcon, AlertTriangle, Smartphone, FileText, CheckCircle2 } from "lucide-react";
+import { Store, Upload, Trash2, Palette, Megaphone, LayoutGrid, Image as ImageIcon, AlertTriangle, Smartphone, CheckCircle2 } from "lucide-react";
 
 interface StoreSettingsModalProps {
   open: boolean;
@@ -47,7 +47,7 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
     setCampForm({
       ...DEFAULT_CAMPAIGN,
       ...safeCampaign,
-      format: safeCampaign.format || DEFAULT_CAMPAIGN.format,
+      format: "story_9_16",
       template916Area: {
         ...DEFAULT_TEMPLATE_9_16_AREA,
         ...(safeCampaign.template916Area || {}),
@@ -157,61 +157,24 @@ export const StoreSettingsModal: React.FC<StoreSettingsModalProps> = ({
               1. Formato do Encarte & Produtos por Página
             </h3>
 
-            {/* Seletor de Formato: Story 9:16 vs A4 Impresso */}
+            {/* Formato do Encarte: Story 9:16 (Digital) */}
             <div>
               <Label className="block mb-2 font-semibold">
                 Formato do Encarte
               </Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCampForm((prev) => ({ ...prev, format: "story_9_16" }))
-                  }
-                  className={`min-h-[52px] p-3 rounded-lg border text-left flex items-center justify-between transition-all ${
-                    campForm.format === "story_9_16"
-                      ? "bg-red-600 text-white font-bold border-red-600 shadow-xs"
-                      : "bg-white text-neutral-800 hover:bg-neutral-50 border-neutral-300 font-medium"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Smartphone className="h-5 w-5 shrink-0" />
-                    <div>
-                      <div className="text-sm font-bold">Story 9:16 (Digital)</div>
-                      <div className="text-[11px] opacity-85">
-                        1080 × 1920 px · WhatsApp, Instagram & Redes
-                      </div>
+              <div className="min-h-[52px] p-3 rounded-lg border border-red-500/30 bg-red-50/60 text-neutral-800 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Smartphone className="h-5 w-5 text-red-600 shrink-0" />
+                  <div>
+                    <div className="text-sm font-bold text-neutral-900">Story 9:16 (Digital)</div>
+                    <div className="text-[11px] text-neutral-600">
+                      1080 × 1920 px · WhatsApp, Instagram &amp; Redes
                     </div>
                   </div>
-                  {campForm.format === "story_9_16" && (
-                    <CheckCircle2 className="h-5 w-5 text-yellow-300 shrink-0" />
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCampForm((prev) => ({ ...prev, format: "a4" }))
-                  }
-                  className={`min-h-[52px] p-3 rounded-lg border text-left flex items-center justify-between transition-all ${
-                    campForm.format === "a4"
-                      ? "bg-red-600 text-white font-bold border-red-600 shadow-xs"
-                      : "bg-white text-neutral-800 hover:bg-neutral-50 border-neutral-300 font-medium"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <FileText className="h-5 w-5 shrink-0" />
-                    <div>
-                      <div className="text-sm font-bold">A4 Impresso (Gráfica)</div>
-                      <div className="text-[11px] opacity-85">
-                        210 × 297 mm · PDF 300 DPI para impressão
-                      </div>
-                    </div>
-                  </div>
-                  {campForm.format === "a4" && (
-                    <CheckCircle2 className="h-5 w-5 text-yellow-300 shrink-0" />
-                  )}
-                </button>
+                </div>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-600 text-white">
+                  Padrão
+                </span>
               </div>
             </div>
 

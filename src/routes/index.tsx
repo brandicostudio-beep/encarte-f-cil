@@ -124,11 +124,11 @@ import { ColecoesWorkspace } from "@/components/colecoes/ColecoesWorkspace";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Gerador de Encartes de Varejo - A4 Impresso & Digital" },
+      { title: "Gerador de Encartes de Varejo - Story 9:16 Digital" },
       {
         name: "description",
         content:
-          "Do zero ao encarte A4 de supermercado pronto para gráfica em 300 DPI ou JPG digital, com validação de preços, códigos e validades.",
+          "Do zero ao encarte digital para WhatsApp e redes sociais (Story 9:16), com validação de preços, códigos e validades.",
       },
     ],
   }),
@@ -373,7 +373,7 @@ function EncarteApp() {
               parsed.subtitle || parsed.subtitulo || DEFAULT_CAMPAIGN.subtitle,
             observation:
               parsed.observation || parsed.observacao || DEFAULT_CAMPAIGN.observation,
-            format: parsed.format === "a4" ? "a4" : "story_9_16",
+            format: "story_9_16",
             productsPerPage: [6, 8, 9, 10, 12].includes(Number(parsed.productsPerPage))
               ? (Number(parsed.productsPerPage) as ProductsPerPageOption)
               : DEFAULT_CAMPAIGN.productsPerPage,
@@ -1701,7 +1701,7 @@ function EncarteApp() {
                   </span>
                 </div>
                 <p className="text-[11px] text-neutral-400 font-medium truncate">
-                  Varejo Promocional A4 &amp; Digital
+                  Varejo Promocional Digital • Story 9:16
                 </p>
               </div>
             </button>
@@ -1938,7 +1938,7 @@ function EncarteApp() {
                     Resumo do Encarte:
                   </div>
                   <div className="flex justify-between text-neutral-600">
-                    <span>Páginas A4:</span>
+                    <span>Total de Páginas:</span>
                     <span className="font-bold">{totalPages}</span>
                   </div>
                   <div className="flex justify-between text-neutral-600">
@@ -2099,7 +2099,7 @@ function EncarteApp() {
                         Configuração da Campanha & Layout
                       </h2>
                       <p className="text-xs text-neutral-500">
-                        Escolha o formato do encarte (Story 9:16 ou A4 Impresso), template de fundo, quantidade de produtos por página e dados da loja.
+                        Escolha o template de fundo (Story 9:16), quantidade de produtos por página e dados da loja.
                       </p>
                     </div>
 
@@ -2120,58 +2120,17 @@ function EncarteApp() {
                     <label className="text-sm font-bold text-neutral-800 block">
                       1. Formato do Encarte
                     </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          saveCampaignConfig({ ...campaign, format: "story_9_16" });
-                          setPreviewZoom(0.38);
-                        }}
-                        className={`min-h-[56px] p-3.5 rounded-xl border text-left flex items-center justify-between transition-all ${
-                          campaign.format === "story_9_16"
-                            ? "bg-red-600 text-white font-bold border-red-600 shadow-xs"
-                            : "bg-white text-neutral-800 hover:bg-neutral-100 border-neutral-300 font-medium"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Smartphone className="h-6 w-6 shrink-0" />
-                          <div>
-                            <div className="text-sm font-bold">Story 9:16 (Digital & Redes)</div>
-                            <div className="text-[11px] opacity-85">
-                              1080 × 1920 px · Template PNG completo · WhatsApp & Instagram
-                            </div>
+                    <div className="p-3.5 rounded-xl border border-red-600 bg-red-600 text-white flex items-center justify-between shadow-xs">
+                      <div className="flex items-center gap-3">
+                        <Smartphone className="h-6 w-6 shrink-0" />
+                        <div>
+                          <div className="text-sm font-bold">Story 9:16 (Digital &amp; Redes)</div>
+                          <div className="text-[11px] opacity-90">
+                            1080 × 1920 px · Template PNG completo · WhatsApp &amp; Instagram
                           </div>
                         </div>
-                        {campaign.format === "story_9_16" && (
-                          <CheckCircle2 className="h-5 w-5 text-yellow-300 shrink-0" />
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          saveCampaignConfig({ ...campaign, format: "a4" });
-                          setPreviewZoom(0.68);
-                        }}
-                        className={`min-h-[56px] p-3.5 rounded-xl border text-left flex items-center justify-between transition-all ${
-                          campaign.format === "a4"
-                            ? "bg-red-600 text-white font-bold border-red-600 shadow-xs"
-                            : "bg-white text-neutral-800 hover:bg-neutral-100 border-neutral-300 font-medium"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <FileText className="h-6 w-6 shrink-0" />
-                          <div>
-                            <div className="text-sm font-bold">A4 Impresso (Gráfica / Folheto)</div>
-                            <div className="text-[11px] opacity-85">
-                              210 × 297 mm · PDF pronto para impressão a 300 DPI
-                            </div>
-                          </div>
-                        </div>
-                        {campaign.format === "a4" && (
-                          <CheckCircle2 className="h-5 w-5 text-yellow-300 shrink-0" />
-                        )}
-                      </button>
+                      </div>
+                      <CheckCircle2 className="h-5 w-5 text-yellow-300 shrink-0" />
                     </div>
                   </div>
 
@@ -2354,50 +2313,20 @@ function EncarteApp() {
                           Conferência do Encarte ({flyerProducts.length} itens inclusos)
                         </h2>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 uppercase">
-                          {campaign.format === "story_9_16" ? "Story 9:16" : "A4 Impresso"}
+                          Story 9:16
                         </span>
                       </div>
                       <p className="text-[11px] text-neutral-500">
-                        {totalPages} {totalPages === 1 ? "página" : "páginas"} · {campaign.format === "story_9_16" ? "1080 × 1920 px (ou 2160 × 3840 4K)" : "Padrão gráfica 300 DPI"}
+                        {totalPages} {totalPages === 1 ? "página" : "páginas"} · 1080 × 1920 px (ou 2160 × 3840 4K)
                       </p>
                     </div>
 
                     {/* Controles de Formato, Resolução, Zoom e Produtos por Página */}
                     <div className="flex items-center gap-2 flex-wrap">
-                      {/* Seletor Rápido de Formato */}
-                      <div className="flex items-center border rounded-lg bg-neutral-50 p-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            saveCampaignConfig({ ...campaign, format: "story_9_16" });
-                            setPreviewZoom(0.38);
-                          }}
-                          className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-bold transition-colors ${
-                            campaign.format === "story_9_16"
-                              ? "bg-red-600 text-white shadow-2xs"
-                              : "text-neutral-700 hover:bg-neutral-200"
-                          }`}
-                          title="Alternar para Formato Story 9:16"
-                        >
-                          <Smartphone className="h-3.5 w-3.5" />
-                          Story 9:16
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            saveCampaignConfig({ ...campaign, format: "a4" });
-                            setPreviewZoom(0.68);
-                          }}
-                          className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-bold transition-colors ${
-                            campaign.format === "a4"
-                              ? "bg-red-600 text-white shadow-2xs"
-                              : "text-neutral-700 hover:bg-neutral-200"
-                          }`}
-                          title="Alternar para Formato A4 Impresso"
-                        >
-                          <FileText className="h-3.5 w-3.5" />
-                          A4 Impresso
-                        </button>
+                      {/* Formato Ativo */}
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-100 border text-xs font-bold text-neutral-700">
+                        <Smartphone className="h-3.5 w-3.5 text-red-600" />
+                        Story 9:16
                       </div>
 
                       {/* Seletor Rápido de Resolução para 9:16 */}

@@ -23,7 +23,7 @@ describe("UI/UX Redesign: WelcomeHubModal & NavigationDrawer (Estilo Apple)", ()
     expect(html).toContain("Gerador de Encartes");
     expect(html).toContain("Criação &amp; Marketing");
     expect(html).toContain("Entrar no Gerador de Encartes");
-    expect(html).toContain("Diagramação A4 para gráfica e formatos digitais");
+    expect(html).toContain("Design em alta resolução no formato Story 9:16");
 
     // Fluxo 2: Painel de Validade & Giro
     expect(html).toContain("Painel de Validade &amp; Giro");
