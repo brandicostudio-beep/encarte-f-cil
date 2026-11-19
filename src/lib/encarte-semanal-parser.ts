@@ -12,7 +12,11 @@ import type {
 } from "@/types/encarte-semanal";
 import { normalizeHeader } from "./spreadsheet-parser";
 import { getActiveSnapshot } from "./painel-validade-storage";
-import { cleanPrincipalDescription } from "./encarte-semanal-catalog";
+import {
+  cleanPrincipalDescription,
+  lookupProductByCode,
+  fetchCescomProductOnline,
+} from "./encarte-semanal-catalog";
 
 export function parseBooleanFlag(val: any): boolean {
   if (typeof val === "boolean") return val;
@@ -279,10 +283,15 @@ export async function parseEncarteSemanalSpreadsheet(
       if (fallbackDesc) {
         description = fallbackDesc;
       } else {
-        description = `PRODUTO ${code}`;
-        warnings.push(
-          `Código ${code} na linha ${rowNumber} está sem descrição. Usando "${description}".`
-        );
+        const lookedUp = lookupProductByCode(code);
+        if (lookedUp && lookedUp.description && !lookedUp.description.startsWith("PRODUTO ")) {
+          description = lookedUp.description;
+        } else {
+          description = `PRODUTO ${code}`;
+          warnings.push(
+            `Código ${code} na linha ${rowNumber} está sem descrição. Usando "${description}".`
+          );
+        }
       }
     }
 
@@ -301,6 +310,26 @@ export async function parseEncarteSemanalSpreadsheet(
       originalDescription,
     });
   });
+
+  // Se houver produtos sem descrição preenchida na planilha, tenta buscar automaticamente do site https://www.cescom.com.br/
+  const missingDescProds = products.filter(
+    (p) => !p.description || p.description.startsWith("PRODUTO ")
+  );
+  if (missingDescProds.length > 0) {
+    try {
+      await Promise.all(
+        missingDescProds.slice(0, 20).map(async (p) => {
+          const online = await fetchCescomProductOnline(p.originalCode || p.code);
+          if (online && online.description && !online.description.startsWith("PRODUTO ")) {
+            p.description = online.description;
+            if (!p.image && online.image) {
+              p.image = online.image;
+            }
+          }
+        })
+      );
+    } catch {}
+  }
 
   return {
     success: products.length > 0,

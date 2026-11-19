@@ -5,6 +5,7 @@ import {
   lookupProductByCode,
   createSemanalProductFromSuggestion,
   cleanPrincipalDescription,
+  fetchCescomProductOnline,
   type ProductSuggestion,
 } from "@/lib/encarte-semanal-catalog";
 import { findKnownPhotoForCode } from "@/lib/encarte-semanal-photos";
@@ -66,6 +67,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   const [suggestions, setSuggestions] = useState<ProductSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoadingPhoto, setIsLoadingPhoto] = useState(false);
+  const [isSearchingCescom, setIsSearchingCescom] = useState(false);
 
   const codeInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,18 +80,35 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     codeInputRef.current?.select();
   }, []);
 
-  // Atualiza sugestões conforme digitação
+  // Atualiza sugestões conforme digitação (busca local e consulta online no cescom.com.br)
   useEffect(() => {
+    let active = true;
     const cleanTerm = codeQuery.split(/[/,]+/)[0]?.trim() || "";
     if (cleanTerm.length > 0) {
       const results = searchProductSuggestions(cleanTerm, 6);
       setSuggestions(results);
       setShowSuggestions(results.length > 0);
+
+      // Se for código de 3+ dígitos não encontrado na planilha/catálogo local, consulta o site da Cescom
+      if (cleanTerm.length >= 3 && results.length === 0) {
+        setIsSearchingCescom(true);
+        fetchCescomProductOnline(cleanTerm).then((online) => {
+          if (active && online) {
+            setSuggestions([online]);
+            setShowSuggestions(true);
+          }
+          if (active) setIsSearchingCescom(false);
+        });
+      }
     } else {
       const popular = searchProductSuggestions("", 6);
       setSuggestions(popular);
       setShowSuggestions(false);
     }
+
+    return () => {
+      active = false;
+    };
   }, [codeQuery]);
 
   // Aplica uma sugestão selecionada com predição de texto
@@ -128,7 +147,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   };
 
   // Quando o usuário termina de digitar o código manualmente (Enter ou blur)
-  const handleApplyManualCode = () => {
+  const handleApplyManualCode = async () => {
     if (!codeQuery.trim()) return;
 
     const trimmed = codeQuery.trim();
@@ -144,8 +163,22 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       primaryCode = parts[0];
       secCode = parts[1];
 
-      const lookedUp1 = lookupProductByCode(primaryCode);
-      const lookedUp2 = lookupProductByCode(secCode);
+      let lookedUp1 = lookupProductByCode(primaryCode);
+      let lookedUp2 = lookupProductByCode(secCode);
+
+      // Se não encontrou no catálogo/planilha, busca no site https://www.cescom.com.br/
+      if (!lookedUp1.description || lookedUp1.description.startsWith("PRODUTO ")) {
+        setIsSearchingCescom(true);
+        const online1 = await fetchCescomProductOnline(primaryCode);
+        if (online1) lookedUp1 = online1;
+        setIsSearchingCescom(false);
+      }
+      if (!lookedUp2.description || lookedUp2.description.startsWith("PRODUTO ")) {
+        setIsSearchingCescom(true);
+        const online2 = await fetchCescomProductOnline(secCode);
+        if (online2) lookedUp2 = online2;
+        setIsSearchingCescom(false);
+      }
 
       if (!photo1) {
         photo1 = lookedUp1.image || findKnownPhotoForCode(primaryCode);
@@ -156,15 +189,24 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       if (!newDesc) {
         const d1 = lookedUp1.description;
         const d2 = lookedUp2.description;
-        if (d1 && d2) {
+        if (d1 && d2 && !d1.startsWith("PRODUTO ") && !d2.startsWith("PRODUTO ")) {
           newDesc = `${d1} E ${d2}`;
         } else {
           newDesc = d1 || d2;
         }
       }
     } else {
-      const lookedUp = lookupProductByCode(trimmed);
-      if (!newDesc) newDesc = lookedUp.description;
+      let lookedUp = lookupProductByCode(trimmed);
+      // Se não estiver na planilha/catálogo local, consulta o site https://www.cescom.com.br/
+      if (!newDesc || newDesc.startsWith("PRODUTO ") || !lookedUp.description || lookedUp.description.startsWith("PRODUTO ")) {
+        setIsSearchingCescom(true);
+        const online = await fetchCescomProductOnline(trimmed);
+        if (online) {
+          lookedUp = online;
+        }
+        setIsSearchingCescom(false);
+      }
+      if (!newDesc || newDesc.startsWith("PRODUTO ")) newDesc = lookedUp.description;
       if (!photo1) photo1 = lookedUp.image || findKnownPhotoForCode(trimmed);
     }
 
@@ -185,7 +227,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       scale,
       offsetX: product?.offsetX ?? 0,
       offsetY: product?.offsetY ?? 0,
-      overlapY: product?.overlapY ?? 15,
+      overlapY: product?.overlapY ?? 4,
       included: true,
       originalCode: product?.originalCode || primaryCode,
       originalDescription: product?.originalDescription || newDesc,
@@ -194,7 +236,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
 
     onSaveProduct(updated);
 
-    if (photo1) {
+    if (photo1 && !photo1.startsWith("data:image/png")) {
       removeWhiteBackground(photo1).then((clean) => {
         if (clean && clean.startsWith("data:image/png")) {
           setImage(clean);
@@ -205,7 +247,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
         }
       });
     }
-    if (photo2) {
+    if (photo2 && !photo2.startsWith("data:image/png")) {
       removeWhiteBackground(photo2).then((clean) => {
         if (clean && clean.startsWith("data:image/png")) {
           setSecondaryImage(clean);
@@ -224,10 +266,11 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     if (!file) return;
 
     setIsLoadingPhoto(true);
+    const isFilePng = file.name.toLowerCase().endsWith(".png") || file.type === "image/png";
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const dataUrl = ev.target?.result as string;
-      const cleanUrl = await removeWhiteBackground(dataUrl);
+      const cleanUrl = isFilePng ? dataUrl : await removeWhiteBackground(dataUrl);
       const finalUrl = cleanUrl || dataUrl;
 
       setImage(finalUrl);
@@ -245,16 +288,17 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     reader.readAsDataURL(file);
   };
 
-  // Upload manual de imagem 2 / variação (recorta fundo branco para PNG transparente)
+  // Upload manual de imagem 2 / variação
   const handleSecondaryImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsLoadingPhoto(true);
+    const isFilePng = file.name.toLowerCase().endsWith(".png") || file.type === "image/png";
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const dataUrl = ev.target?.result as string;
-      const cleanUrl = await removeWhiteBackground(dataUrl);
+      const cleanUrl = isFilePng ? dataUrl : await removeWhiteBackground(dataUrl);
       const finalUrl = cleanUrl || dataUrl;
 
       setSecondaryImage(finalUrl);
@@ -396,7 +440,13 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       <div className="space-y-1 relative">
         <Label htmlFor="inArtCode" className="text-[11px] font-bold text-neutral-300 flex items-center justify-between">
           <span>Código do Produto:</span>
-          <span className="text-[10px] text-amber-400/90 font-mono">Aceita 2 códigos (ex: 14352 / 17585)</span>
+          {isSearchingCescom ? (
+            <span className="text-[10px] text-amber-300 font-bold flex items-center gap-1 animate-pulse">
+              <Loader2 className="h-3 w-3 animate-spin" /> Buscando no cescom.com.br...
+            </span>
+          ) : (
+            <span className="text-[10px] text-amber-400/90 font-mono">Puxa do site Cescom</span>
+          )}
         </Label>
         <div className="relative">
           <Input

@@ -189,10 +189,19 @@ export function parseFilenameForFolderIndex(
  * Converte um arquivo File em Data URL.
  */
 export async function fileToDataUrl(file: File | Blob): Promise<string> {
+  const fileName = (file as any).name || "";
+  const isPng = fileName.toLowerCase().endsWith(".png") || file.type === "image/png";
+
   if (typeof FileReader !== "undefined") {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
+      reader.onload = () => {
+        let result = String(reader.result);
+        if (isPng && !result.startsWith("data:image/png")) {
+          result = result.replace(/^data:[^;]*;/, "data:image/png;");
+        }
+        resolve(result);
+      };
       reader.onerror = () => reject(reader.error);
       reader.readAsDataURL(file);
     });
@@ -211,14 +220,16 @@ export async function fileToDataUrl(file: File | Blob): Promise<string> {
     base64 = btoa(binary);
   }
   let type = file.type;
-  if (!type && (file as any).name) {
-    const ext = (file as any).name.split(".").pop()?.toLowerCase();
+  if (isPng) {
+    type = "image/png";
+  } else if (!type && fileName) {
+    const ext = fileName.split(".").pop()?.toLowerCase();
     if (ext === "png") type = "image/png";
     else if (ext === "webp") type = "image/webp";
     else if (ext === "svg") type = "image/svg+xml";
     else if (ext === "jpg" || ext === "jpeg") type = "image/jpeg";
   }
-  type = type || "image/png";
+  type = type || (isPng ? "image/png" : "image/jpeg");
   return `data:${type};base64,${base64}`;
 }
 

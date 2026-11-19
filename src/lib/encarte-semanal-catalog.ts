@@ -143,6 +143,13 @@ export function getAllKnownProducts(): ProductSuggestion[] {
     }
   }
 
+  // Inclui produtos obtidos online no site da Cescom
+  for (const [code, item] of onlineProductCache.entries()) {
+    if (!map.has(code)) {
+      map.set(code, item);
+    }
+  }
+
   return Array.from(map.values());
 }
 
@@ -206,9 +213,64 @@ export function searchProductSuggestions(query: string, limit = 8): ProductSugge
   }));
 }
 
+const onlineProductCache = new Map<string, ProductSuggestion>();
+
+/**
+ * Busca o produto online no site oficial da Cescom (https://www.cescom.com.br/)
+ * caso o código não esteja na planilha anexada nem no catálogo local.
+ * Retorna código, descrição oficial e URL da foto em alta resolução.
+ */
+export async function fetchCescomProductOnline(code: string): Promise<ProductSuggestion | null> {
+  const cleanCode = code.trim();
+  if (!cleanCode) return null;
+
+  if (onlineProductCache.has(cleanCode)) {
+    return onlineProductCache.get(cleanCode)!;
+  }
+
+  // Verificar cache persistido no localStorage
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const stored = localStorage.getItem(`cescom_online_prod_${cleanCode}`);
+      if (stored) {
+        const parsed = JSON.parse(stored) as ProductSuggestion;
+        onlineProductCache.set(cleanCode, parsed);
+        return parsed;
+      }
+    }
+  } catch {}
+
+  // Consulta o endpoint de proxy /api/cescom-product
+  try {
+    const res = await fetch(`/api/cescom-product?code=${encodeURIComponent(cleanCode)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.ok && data.product && data.product.description) {
+        const prod: ProductSuggestion = {
+          code: cleanCode,
+          description: data.product.description.toUpperCase(),
+          image: data.product.image || findKnownPhotoForCode(cleanCode),
+          source: "cescom",
+        };
+        onlineProductCache.set(cleanCode, prod);
+        try {
+          if (typeof window !== "undefined" && window.localStorage) {
+            localStorage.setItem(`cescom_online_prod_${cleanCode}`, JSON.stringify(prod));
+          }
+        } catch {}
+        return prod;
+      }
+    }
+  } catch (err) {
+    console.warn(`Aviso ao buscar produto ${cleanCode} no site cescom.com.br:`, err);
+  }
+
+  return null;
+}
+
 /**
  * Busca dados completos de um produto a partir de um código exato.
- * Se não existir no catálogo, cria um objeto com a foto resolvida automaticamente.
+ * Se não existir no catálogo, verifica o cache online do site da Cescom.
  */
 export function lookupProductByCode(code: string): ProductSuggestion {
   const cleanCode = code.trim();
@@ -223,6 +285,14 @@ export function lookupProductByCode(code: string): ProductSuggestion {
     return {
       ...found,
       image: found.image || resolvedPhoto,
+    };
+  }
+
+  if (onlineProductCache.has(cleanCode)) {
+    const online = onlineProductCache.get(cleanCode)!;
+    return {
+      ...online,
+      image: online.image || resolvedPhoto,
     };
   }
 
@@ -249,10 +319,10 @@ export function createSemanalProductFromSuggestion(
     description: suggestion.description,
     image,
     limit: existingProduct?.limit,
-    scale: existingProduct?.scale ?? 1.15,
+    scale: existingProduct?.scale ?? 1.0,
     offsetX: existingProduct?.offsetX ?? 0,
     offsetY: existingProduct?.offsetY ?? 0,
-    overlapY: existingProduct?.overlapY ?? 15,
+    overlapY: existingProduct?.overlapY ?? 4,
     included: true,
     originalCode: existingProduct?.originalCode || suggestion.code,
     originalDescription: existingProduct?.originalDescription || suggestion.description,

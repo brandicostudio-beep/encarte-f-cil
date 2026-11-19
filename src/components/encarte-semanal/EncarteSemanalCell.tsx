@@ -38,18 +38,22 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
 
     if (photo1) {
       setCleanPhoto1(photo1);
-      removeWhiteBackground(photo1).then((res) => {
-        if (isMounted && res) setCleanPhoto1(res);
-      });
+      if (!photo1.startsWith("data:image/png")) {
+        removeWhiteBackground(photo1).then((res) => {
+          if (isMounted && res) setCleanPhoto1(res);
+        });
+      }
     } else {
       setCleanPhoto1("");
     }
 
     if (photo2) {
       setCleanPhoto2(photo2);
-      removeWhiteBackground(photo2).then((res) => {
-        if (isMounted && res) setCleanPhoto2(res);
-      });
+      if (!photo2.startsWith("data:image/png")) {
+        removeWhiteBackground(photo2).then((res) => {
+          if (isMounted && res) setCleanPhoto2(res);
+        });
+      }
     } else {
       setCleanPhoto2("");
     }
@@ -145,17 +149,9 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
   const scale = rawScale > 10 ? rawScale / 100 : rawScale;
   const offsetX = product.offsetX ?? 0;
   const offsetY = product.offsetY ?? 0;
-  const overlapY = product.overlapY ?? 0;
-
-  // Dimensões da foto contidas confortavelmente na área de foto
-  const baseW = width * 0.92;
-  const baseH = photoAreaHeight * 0.94;
-  const imgW = baseW * scale;
-  const imgH = baseH * scale;
+  const overlapY = product.overlapY ?? 4;
 
   const hasTwoPhotos = Boolean(cleanPhoto1 && cleanPhoto2);
-  const isPhoto1Cutout = Boolean(cleanPhoto1 && cleanPhoto1.startsWith("data:image/png"));
-  const isPhoto2Cutout = Boolean(cleanPhoto2 && cleanPhoto2.startsWith("data:image/png"));
   const displayCode = product.secondaryCode
     ? `${product.code} / ${product.secondaryCode}`
     : product.code;
@@ -209,59 +205,57 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
         </button>
       )}
 
-      {/* Área da foto (zIndex: 10, com contenção e suporte a 2 fotos lado a lado sem fundo branco) */}
+      {/* Área da foto (zIndex: 10, com contenção, proporção perfeita sem deformar e folga no topo) */}
       <div
-        className="absolute left-0 right-0 top-0 overflow-hidden flex items-center justify-center"
+        className="absolute left-0 right-0 top-0 overflow-hidden flex items-end justify-center pointer-events-none px-1.5 pt-2"
         style={{ height: `${photoAreaHeight}px`, zIndex: 10 }}
       >
         {hasTwoPhotos ? (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            {/* Foto 1 (Esquerda) */}
+          <div className="relative w-full h-full flex items-end justify-center pointer-events-none">
+            {/* Foto 1 (Esquerda) com proporção 100% preservada */}
             <img
               src={cleanPhoto1}
               alt={product.description}
               draggable={false}
-              className="pointer-events-none absolute object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.65)]"
+              className="absolute object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.50)] pointer-events-none"
               style={{
-                width: `${imgW * 0.68}px`,
-                height: `${imgH * 0.90}px`,
-                left: `${width * 0.04 + offsetX}px`,
-                top: `${photoAreaHeight - imgH * 0.90 + offsetY + overlapY}px`,
+                maxWidth: `${(width - 12) * 0.54 * scale}px`,
+                maxHeight: `${(photoAreaHeight - 10) * scale}px`,
+                left: `${(width - 12) * 0.04 + offsetX}px`,
+                bottom: `${-overlapY - offsetY}px`,
                 zIndex: 11,
-                mixBlendMode: isPhoto1Cutout ? "normal" : "multiply",
               }}
             />
-            {/* Foto 2 (Direita / Variação / Duplicata escalonada) */}
+            {/* Foto 2 (Direita / Variação / Duplicata escalonada) com proporção 100% preservada */}
             <img
               src={cleanPhoto2}
               alt={product.description}
               draggable={false}
-              className="pointer-events-none absolute object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.7)]"
+              className="absolute object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.55)] pointer-events-none"
               style={{
-                width: `${imgW * 0.68}px`,
-                height: `${imgH * 0.90}px`,
-                left: `${width * 0.30 + offsetX}px`,
-                top: `${photoAreaHeight - imgH * 0.90 + offsetY + overlapY}px`,
+                maxWidth: `${(width - 12) * 0.54 * scale}px`,
+                maxHeight: `${(photoAreaHeight - 10) * scale}px`,
+                right: `${(width - 12) * 0.04 - offsetX}px`,
+                bottom: `${-overlapY - offsetY}px`,
                 zIndex: 12,
-                mixBlendMode: isPhoto2Cutout ? "normal" : "multiply",
               }}
             />
           </div>
         ) : cleanPhoto1 ? (
-          <img
-            src={cleanPhoto1}
-            alt={product.description}
-            draggable={false}
-            className="pointer-events-none absolute object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.65)]"
-            style={{
-              width: `${imgW}px`,
-              height: `${imgH}px`,
-              left: `${(width - imgW) / 2 + offsetX}px`,
-              top: `${(photoAreaHeight - imgH) / 2 + offsetY + overlapY}px`,
-              zIndex: 11,
-              mixBlendMode: isPhoto1Cutout ? "normal" : "multiply",
-            }}
-          />
+          <div className="relative w-full h-full flex items-end justify-center pointer-events-none">
+            <img
+              src={cleanPhoto1}
+              alt={product.description}
+              draggable={false}
+              className="object-contain drop-shadow-[0_5px_12px_rgba(0,0,0,0.50)] pointer-events-none"
+              style={{
+                maxWidth: `${(width - 16) * 0.88 * scale}px`,
+                maxHeight: `${(photoAreaHeight - 10) * scale}px`,
+                transform: `translate(${offsetX}px, ${overlapY + offsetY}px)`,
+                zIndex: 11,
+              }}
+            />
+          </div>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
             <span
@@ -277,7 +271,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
 
       {/* Barra Inferior Bege (#F6E0A6) com COD e DESCRIÇÃO: zIndex: 20 (SEMPRE EM FRENTE, SEM SOBREPOSIÇÃO) */}
       <div
-        className="absolute bottom-0 left-0 right-0 flex flex-col items-center justify-end"
+        className="absolute bottom-0 left-0 right-0 flex flex-col items-center justify-end px-1.5"
         style={{ zIndex: 20 }}
       >
         {product.limit && (

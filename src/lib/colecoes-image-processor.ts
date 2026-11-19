@@ -57,6 +57,12 @@ async function loadRemoteUrlAsDataUrl(src: string): Promise<string> {
 export async function removeWhiteBackground(src: string): Promise<string> {
   if (!src || !src.trim()) return "";
 
+  // 1. Se já for PNG (que já possui fundo transparente da pasta de origem ou upload),
+  // NUNCA fazer recorte destrutivo ou re-processamento que deforme o produto.
+  if (src.startsWith("data:image/png")) {
+    return src;
+  }
+
   // Retorna do cache se já processada com sucesso
   if (imageCache.has(src)) {
     const cached = imageCache.get(src)!;
@@ -220,22 +226,8 @@ export async function removeWhiteBackground(src: string): Promise<string> {
 
         ctx.putImageData(imgData, 0, 0);
 
-        // Auto-trim: se detectou margens ao redor do produto, recorta no tamanho útil
-        if (hasContent && (minX > 2 || minY > 2 || maxX < width - 3 || maxY < height - 3)) {
-          const trimW = Math.max(10, maxX - minX + 1);
-          const trimH = Math.max(10, maxY - minY + 1);
-          const trimmedCanvas = document.createElement("canvas");
-          trimmedCanvas.width = trimW;
-          trimmedCanvas.height = trimH;
-          const trimCtx = trimmedCanvas.getContext("2d");
-          if (trimCtx) {
-            trimCtx.drawImage(canvas, minX, minY, trimW, trimH, 0, 0, trimW, trimH);
-            const trimmedPng = trimmedCanvas.toDataURL("image/png");
-            finish(trimmedPng);
-            return;
-          }
-        }
-
+        // Retorna o PNG transparente mantendo as dimensões e proporções originais
+        // (sem corte automático destrutivo que corta tampas ou deforma a embalagem)
         const transparentPng = canvas.toDataURL("image/png");
         finish(transparentPng);
       } catch (err) {

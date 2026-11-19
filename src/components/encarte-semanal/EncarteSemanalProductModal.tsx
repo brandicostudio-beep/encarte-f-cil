@@ -26,7 +26,7 @@ import { removeWhiteBackground } from "@/lib/colecoes-image-processor";
 import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
 import { findKnownPhotoForCode } from "@/lib/encarte-semanal-photos";
 import { getActiveSnapshot } from "@/lib/painel-validade-storage";
-import { cleanPrincipalDescription } from "@/lib/encarte-semanal-catalog";
+import { cleanPrincipalDescription, fetchCescomProductOnline } from "@/lib/encarte-semanal-catalog";
 
 interface EncarteSemanalProductModalProps {
   product: EncarteSemanalProduct | null;
@@ -103,7 +103,23 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
     if (foundPhoto || foundDesc) {
       setCodeChangedWarning("Foto e descrição atualizadas com base no novo código.");
     } else {
-      setCodeChangedWarning("Nenhuma foto encontrada automaticamente para este código.");
+      setCodeChangedWarning("Consultando site cescom.com.br...");
+      fetchCescomProductOnline(trimmedCode).then((online) => {
+        if (online) {
+          setForm((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  description: online.description,
+                  image: online.image || prev.image,
+                }
+              : prev
+          );
+          setCodeChangedWarning(`✓ Dados puxados do site cescom.com.br: ${online.description}`);
+        } else {
+          setCodeChangedWarning("Nenhuma foto encontrada automaticamente para este código.");
+        }
+      });
     }
   };
 
@@ -125,11 +141,12 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
     if (!file) return;
 
     setIsProcessingImg(true);
+    const isPng = file.name.toLowerCase().endsWith(".png") || file.type === "image/png";
     try {
       const reader = new FileReader();
       reader.onload = async () => {
         const dataUrl = reader.result as string;
-        const cleaned = await removeWhiteBackground(dataUrl);
+        const cleaned = isPng ? dataUrl : await removeWhiteBackground(dataUrl);
         setForm((prev) => (prev ? { ...prev, image: cleaned || dataUrl } : prev));
         setIsProcessingImg(false);
       };

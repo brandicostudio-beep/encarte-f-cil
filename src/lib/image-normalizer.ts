@@ -212,14 +212,24 @@ export async function autoTrimImageWhitespace(
  */
 export function optimizeDataUrl(
   dataUrl: string,
-  maxDimension = 1200,
-  quality = 0.88
+  maxDimension = 1400,
+  quality = 0.92
 ): Promise<string> {
-  if (typeof window === "undefined" || !dataUrl || !dataUrl.startsWith("data:image")) {
+  if (typeof window === "undefined" || !dataUrl || !dataUrl.startsWith("data:")) {
     return Promise.resolve(dataUrl);
   }
-  // Se for pequena (<150KB), não precisa reprocessar
-  if (dataUrl.length < 150000) {
+
+  // Se for imagem PNG (que já possui fundo transparente da pasta de origem),
+  // preserva integralmente sem conversão para JPEG e sem perda de transparência.
+  const isPng = dataUrl.startsWith("data:image/png") || dataUrl.includes("image/png");
+
+  // Se for PNG com tamanho razoável (< 4MB), mantém os bytes originais 100% fiéis sem tocar
+  if (isPng && dataUrl.length < 4000000) {
+    return Promise.resolve(dataUrl);
+  }
+
+  // Se for pequena (<200KB), não precisa reprocessar
+  if (dataUrl.length < 200000) {
     return Promise.resolve(dataUrl);
   }
 
@@ -253,7 +263,8 @@ export function optimizeDataUrl(
         if (!ctx) return resolve(dataUrl);
 
         ctx.drawImage(img, 0, 0, w, h);
-        const mime = dataUrl.includes("image/png") ? "image/png" : "image/jpeg";
+        // NUNCA converter PNG para JPEG! Canvas JPEG converte transparência em fundo branco.
+        const mime = isPng ? "image/png" : "image/jpeg";
         const optimized = canvas.toDataURL(mime, quality);
         resolve(optimized);
       } catch {

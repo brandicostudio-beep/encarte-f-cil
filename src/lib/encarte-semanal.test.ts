@@ -495,4 +495,45 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     expect(resD.photo1).toBe("data:image/png;base64,goiabada");
     expect(resD.photo2).toBe("");
   });
+
+  // =========================================================================
+  // Teste 14: Busca de produto no site cescom.com.br quando não estiver na planilha
+  // =========================================================================
+  it("Teste 14: Busca automática de produto no site cescom.com.br quando não estiver na planilha", async () => {
+    const { fetchCescomProductOnline, lookupProductByCode } = await import("./encarte-semanal-catalog");
+
+    // Mock global de fetch para simular resposta do endpoint /api/cescom-product
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      const urlStr = String(url);
+      if (urlStr.includes("/api/cescom-product?code=99887")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            product: {
+              code: "99887",
+              description: "CHOCOLATE AO LEITE NESTLE 90G",
+              image: "https://cescom.agilecdn.com.br/99887_thumb_1.jpg",
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      return originalFetch(url);
+    }) as any;
+
+    try {
+      const onlineProd = await fetchCescomProductOnline("99887");
+      expect(onlineProd).not.toBeNull();
+      expect(onlineProd?.code).toBe("99887");
+      expect(onlineProd?.description).toBe("CHOCOLATE AO LEITE NESTLE 90G");
+      expect(onlineProd?.image).toContain("99887_thumb_1.jpg");
+
+      // Uma vez buscado, lookupProductByCode também passa a conhecê-lo
+      const lookedUp = lookupProductByCode("99887");
+      expect(lookedUp.description).toBe("CHOCOLATE AO LEITE NESTLE 90G");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

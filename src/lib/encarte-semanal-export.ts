@@ -137,76 +137,103 @@ export async function renderEncarteSemanalPageToCanvas(
     const product = products[i];
     if (!product) continue;
 
-    const barW = cell.width - 6;
-    const barX = cell.x + 3;
+    const insetX = 6;
+    const barW = cell.width - insetX * 2;
+    const barX = cell.x + insetX;
     const barY = cell.barY;
     const barH = cell.barHeight || 54;
 
-    // A. DESENHAR FOTO(S) (com suporte a 2 fotos lado a lado e recorte de fundo branco)
+    // A. DESENHAR FOTO(S) (mantendo 100% da proporção original e sem deformar embalagens)
     const { photo1, photo2, hasTwoPhotos } = resolveSemanalCellPhotos(product);
-    const scale = (product.scale || 1.15) > 10 ? (product.scale || 115) / 100 : product.scale || 1.15;
-    const overlapY = product.overlapY ?? 8;
+    const scale = (product.scale || 1.0) > 10 ? (product.scale || 100) / 100 : product.scale || 1.0;
+    const overlapY = product.overlapY ?? 4;
     const offsetX = product.offsetX || 0;
     const offsetY = product.offsetY || 0;
 
+    // Área útil da foto com folga de 10px no topo para respiração entre linhas de boxes
+    const availableW = barW;
+    const availableH = cell.photoAreaHeight - 10;
+
     if (hasTwoPhotos && photo1 && photo2) {
       try {
-        const clean1 = await removeWhiteBackground(photo1);
-        const clean2 = await removeWhiteBackground(photo2);
+        const clean1 = photo1.startsWith("data:image/png") ? photo1 : await removeWhiteBackground(photo1);
+        const clean2 = photo2.startsWith("data:image/png") ? photo2 : await removeWhiteBackground(photo2);
         const [img1, img2] = await Promise.all([
           loadImage(clean1 || photo1),
           loadImage(clean2 || photo2),
         ]);
 
-        const itemW = cell.width * 0.68 * scale;
-        const itemH = cell.photoAreaHeight * 0.90 * scale;
+        const aspect1 = (img1.naturalWidth || img1.width) / (img1.naturalHeight || img1.height);
+        const aspect2 = (img2.naturalWidth || img2.width) / (img2.naturalHeight || img2.height);
 
-        // Foto 1 (Esquerda)
-        const x1 = cell.x + cell.width * 0.04 + offsetX;
-        const y1 = cell.y + cell.photoAreaHeight - itemH + overlapY + offsetY;
+        // Cada produto ocupa até 54% da largura do box, com altura contida
+        const maxItemW = availableW * 0.54 * scale;
+        const maxItemH = availableH * scale;
 
+        // Foto 1 com proporção nativa
+        let drawW1 = maxItemW;
+        let drawH1 = drawW1 / aspect1;
+        if (drawH1 > maxItemH) {
+          drawH1 = maxItemH;
+          drawW1 = drawH1 * aspect1;
+        }
+
+        // Foto 2 com proporção nativa
+        let drawW2 = maxItemW;
+        let drawH2 = drawW2 / aspect2;
+        if (drawH2 > maxItemH) {
+          drawH2 = maxItemH;
+          drawW2 = drawH2 * aspect2;
+        }
+
+        // Posicionamento elegante lado a lado, contido estritamente dentro do box
+        const x1 = barX + Math.max(0, (barW * 0.48 - drawW1) / 2) + offsetX;
+        const y1 = barY - drawH1 + overlapY + offsetY;
+
+        const x2 = barX + barW - drawW2 - Math.max(0, (barW * 0.48 - drawW2) / 2) + offsetX;
+        const y2 = barY - drawH2 + overlapY + offsetY;
+
+        // Foto 1 (Esquerda / Trás)
         ctx.save();
-        ctx.shadowColor = "rgba(0, 0, 0, 0.65)";
-        ctx.shadowBlur = 12;
-        ctx.shadowOffsetY = 6;
-        ctx.drawImage(img1, x1, y1, itemW, itemH);
+        ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetY = 4;
+        ctx.drawImage(img1, x1, y1, drawW1, drawH1);
         ctx.restore();
 
-        // Foto 2 (Direita / Variação / Duplicata escalonada)
-        const x2 = cell.x + cell.width * 0.30 + offsetX;
-        const y2 = cell.y + cell.photoAreaHeight - itemH + overlapY + offsetY;
-
+        // Foto 2 (Direita / Frente)
         ctx.save();
-        ctx.shadowColor = "rgba(0, 0, 0, 0.70)";
-        ctx.shadowBlur = 16;
-        ctx.shadowOffsetY = 8;
-        ctx.drawImage(img2, x2, y2, itemW, itemH);
+        ctx.shadowColor = "rgba(0, 0, 0, 0.50)";
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 5;
+        ctx.drawImage(img2, x2, y2, drawW2, drawH2);
         ctx.restore();
       } catch (err) {
         console.warn(`Aviso ao desenhar fotos do produto ${product.code}:`, err);
       }
     } else if (photo1) {
       try {
-        const clean1 = await removeWhiteBackground(photo1);
+        const clean1 = photo1.startsWith("data:image/png") ? photo1 : await removeWhiteBackground(photo1);
         const photoImg = await loadImage(clean1 || photo1);
 
-        const aspect = photoImg.width / photoImg.height;
-        let drawW = cell.width * 0.9 * scale;
-        let drawH = drawW / aspect;
+        const aspect = (photoImg.naturalWidth || photoImg.width) / (photoImg.naturalHeight || photoImg.height);
+        const maxW = availableW * 0.88 * scale;
+        const maxH = availableH * scale;
 
-        const maxH = (cell.photoAreaHeight + overlapY) * scale;
+        let drawW = maxW;
+        let drawH = drawW / aspect;
         if (drawH > maxH) {
           drawH = maxH;
           drawW = drawH * aspect;
         }
 
-        const drawX = cell.x + (cell.width - drawW) / 2 + offsetX;
-        const drawY = cell.y + cell.photoAreaHeight - drawH + overlapY + offsetY;
+        const drawX = barX + (barW - drawW) / 2 + offsetX;
+        const drawY = barY - drawH + overlapY + offsetY;
 
         ctx.save();
-        ctx.shadowColor = "rgba(0, 0, 0, 0.65)";
-        ctx.shadowBlur = 14;
-        ctx.shadowOffsetY = 6;
+        ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 5;
         ctx.drawImage(photoImg, drawX, drawY, drawW, drawH);
         ctx.restore();
       } catch (err) {
