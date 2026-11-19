@@ -24,6 +24,7 @@ import {
   Loader2,
   Sparkles,
   Zap,
+  MousePointerClick,
   Trash2,
   Edit2,
   Star,
@@ -50,13 +51,13 @@ export interface EncarteSemanalSourceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   existingProducts: EncarteSemanalProduct[];
-  onApply: (products: EncarteSemanalProduct[]) => void;
+  onApply: (products: EncarteSemanalProduct[], mode?: "auto" | "manual") => void;
 }
 
 export interface EncarteSemanalSourceModalContentProps {
   onClose: () => void;
   existingProducts: EncarteSemanalProduct[];
-  onApply: (products: EncarteSemanalProduct[]) => void;
+  onApply: (products: EncarteSemanalProduct[], mode?: "auto" | "manual") => void;
 }
 
 export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModalContentProps> = ({
@@ -339,8 +340,13 @@ export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModa
     }
   };
 
-  const handleApply = () => {
-    onApply(stagedProducts);
+  const handleApplyAuto = () => {
+    onApply(stagedProducts, "auto");
+    onClose();
+  };
+
+  const handleApplyManual = () => {
+    onApply(stagedProducts, "manual");
     onClose();
   };
 
@@ -836,7 +842,7 @@ export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModa
           </TabsContent>
         </Tabs>
 
-        <DialogFooter className="mt-4 border-t border-neutral-800 pt-3 flex items-center justify-between">
+        <DialogFooter className="mt-4 border-t border-neutral-800 pt-3 flex flex-wrap items-center justify-between gap-2">
           <Button
             type="button"
             variant="ghost"
@@ -846,15 +852,30 @@ export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModa
             Cancelar
           </Button>
 
-          <Button
-            type="button"
-            onClick={handleApply}
-            disabled={stagedProducts.length === 0}
-            className="bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold"
-          >
-            <Check className="h-4 w-4 mr-1.5" />
-            Aplicar ao Encarte Semanal ({stagedProducts.length} itens)
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleApplyManual}
+              disabled={stagedProducts.length === 0}
+              className="bg-neutral-800 border-neutral-700 text-amber-300 hover:bg-neutral-700 hover:text-white text-xs font-bold"
+              title="Guarda a planilha com todas as fotos e descrições na memória, deixando os 20 boxes da arte vazios para preenchimento manual"
+            >
+              <MousePointerClick className="h-4 w-4 mr-1.5" />
+              Guardar e Preencher Manual (Boxes Vazios)
+            </Button>
+
+            <Button
+              type="button"
+              onClick={handleApplyAuto}
+              disabled={stagedProducts.length === 0}
+              className="bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-xs"
+              title="Preenche todos os 20 boxes da arte automaticamente em sequência"
+            >
+              <Zap className="h-4 w-4 mr-1.5" />
+              Preencher Tudo Automático ({stagedProducts.length} itens)
+            </Button>
+          </div>
         </DialogFooter>
     </div>
   );

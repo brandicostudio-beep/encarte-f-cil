@@ -9,7 +9,6 @@ import {
   type ProductSuggestion,
 } from "@/lib/encarte-semanal-catalog";
 import { findKnownPhotoForCode } from "@/lib/encarte-semanal-photos";
-import { removeWhiteBackground } from "@/lib/colecoes-image-processor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,7 +60,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   const [image, setImage] = useState(product?.image || "");
   const [secondaryImage, setSecondaryImage] = useState(product?.secondaryImage || "");
   const [duplicatePhoto, setDuplicatePhoto] = useState<boolean>(
-    product?.duplicatePhoto !== false
+    Boolean(product?.duplicatePhoto)
   );
   const [scale, setScale] = useState(product?.scale ?? 1.15);
   const [suggestions, setSuggestions] = useState<ProductSuggestion[]>([]);
@@ -117,28 +116,16 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     setDescription(suggestion.description);
     setShowSuggestions(false);
 
-    // Puxa a foto automaticamente com recorte de fundo
+    // Puxa a foto automaticamente
     const photo = suggestion.image || findKnownPhotoForCode(suggestion.code);
     if (photo) {
       setImage(photo);
-      removeWhiteBackground(photo).then((clean) => {
-        if (clean && clean.startsWith("data:image/png")) {
-          setImage(clean);
-          onSaveProduct({
-            ...updated,
-            image: clean,
-            limit: limit.trim() || undefined,
-            scale,
-            duplicatePhoto,
-            secondaryImage: secondaryImage || undefined,
-          });
-        }
-      });
     }
 
     const updated = createSemanalProductFromSuggestion(suggestion, product);
     onSaveProduct({
       ...updated,
+      image: photo || updated.image,
       limit: limit.trim() || undefined,
       scale,
       duplicatePhoto,
@@ -235,51 +222,24 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     };
 
     onSaveProduct(updated);
-
-    if (photo1 && !photo1.startsWith("data:image/png")) {
-      removeWhiteBackground(photo1).then((clean) => {
-        if (clean && clean.startsWith("data:image/png")) {
-          setImage(clean);
-          onSaveProduct({
-            ...updated,
-            image: clean,
-          });
-        }
-      });
-    }
-    if (photo2 && !photo2.startsWith("data:image/png")) {
-      removeWhiteBackground(photo2).then((clean) => {
-        if (clean && clean.startsWith("data:image/png")) {
-          setSecondaryImage(clean);
-          onSaveProduct({
-            ...updated,
-            secondaryImage: clean,
-          });
-        }
-      });
-    }
   };
 
-  // Upload manual de imagem 1 (recorta fundo branco automaticamente para PNG transparente)
+  // Upload manual de imagem 1 (preserva 100% o PNG transparente original sem conversão ou recorte destrutivo)
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsLoadingPhoto(true);
-    const isFilePng = file.name.toLowerCase().endsWith(".png") || file.type === "image/png";
     const reader = new FileReader();
-    reader.onload = async (ev) => {
+    reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
-      const cleanUrl = isFilePng ? dataUrl : await removeWhiteBackground(dataUrl);
-      const finalUrl = cleanUrl || dataUrl;
-
-      setImage(finalUrl);
+      setImage(dataUrl);
       setIsLoadingPhoto(false);
 
       if (product) {
         onSaveProduct({
           ...product,
-          image: finalUrl,
+          image: dataUrl,
         });
       } else if (codeQuery.trim()) {
         handleApplyManualCode();
@@ -288,26 +248,22 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     reader.readAsDataURL(file);
   };
 
-  // Upload manual de imagem 2 / variação
+  // Upload manual de imagem 2 / variação (preserva 100% o PNG transparente original)
   const handleSecondaryImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsLoadingPhoto(true);
-    const isFilePng = file.name.toLowerCase().endsWith(".png") || file.type === "image/png";
     const reader = new FileReader();
-    reader.onload = async (ev) => {
+    reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
-      const cleanUrl = isFilePng ? dataUrl : await removeWhiteBackground(dataUrl);
-      const finalUrl = cleanUrl || dataUrl;
-
-      setSecondaryImage(finalUrl);
+      setSecondaryImage(dataUrl);
       setIsLoadingPhoto(false);
 
       if (product) {
         onSaveProduct({
           ...product,
-          secondaryImage: finalUrl,
+          secondaryImage: dataUrl,
         });
       }
     };

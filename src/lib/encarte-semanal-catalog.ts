@@ -79,7 +79,50 @@ export const CESCOM_STANDARD_CATALOG: Array<{ code: string; description: string 
 export function getAllKnownProducts(): ProductSuggestion[] {
   const map = new Map<string, ProductSuggestion>();
 
-  // 1. Catálogo Base Oficial Cescom
+  // 1. Planilha Armazenada do Encarte Semanal (Máxima Prioridade)
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const storedCatalogRaw = window.localStorage.getItem("encarte_semanal_stored_catalog_v1");
+      if (storedCatalogRaw) {
+        const parsed = JSON.parse(storedCatalogRaw);
+        if (Array.isArray(parsed)) {
+          for (const p of parsed) {
+            if (!p.code) continue;
+            const code = String(p.code).trim();
+            map.set(code, {
+              code,
+              description: (p.description || "").trim().toUpperCase(),
+              image: p.image || findKnownPhotoForCode(code),
+              source: "planilha",
+            });
+          }
+        }
+      }
+      // Produtos ativos no encarte
+      const activeProductsRaw = window.localStorage.getItem("encarte_semanal_products_v1");
+      if (activeProductsRaw) {
+        const parsed = JSON.parse(activeProductsRaw);
+        if (Array.isArray(parsed)) {
+          for (const p of parsed) {
+            if (!p.code) continue;
+            const code = String(p.code).trim();
+            if (!map.has(code)) {
+              map.set(code, {
+                code,
+                description: (p.description || "").trim().toUpperCase(),
+                image: p.image || findKnownPhotoForCode(code),
+                source: "planilha",
+              });
+            }
+          }
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // 2. Catálogo Base Oficial Cescom
   for (const item of CESCOM_STANDARD_CATALOG) {
     const code = item.code.trim();
     if (!map.has(code)) {

@@ -219,12 +219,14 @@ export function optimizeDataUrl(
     return Promise.resolve(dataUrl);
   }
 
-  // Se for imagem PNG (que já possui fundo transparente da pasta de origem),
-  // preserva integralmente sem conversão para JPEG e sem perda de transparência.
-  const isPng = dataUrl.startsWith("data:image/png") || dataUrl.includes("image/png");
-
-  // Se for PNG com tamanho razoável (< 4MB), mantém os bytes originais 100% fiéis sem tocar
-  if (isPng && dataUrl.length < 4000000) {
+  // Imagens PNG ou WebP com suporte nativo a canal alfa (sem fundo da pasta de origem)
+  // são preservadas 100% intactas para nunca converter transparência em fundo branco ou distorcer embalagens.
+  if (
+    dataUrl.startsWith("data:image/png") ||
+    dataUrl.startsWith("data:image/webp") ||
+    dataUrl.includes("image/png") ||
+    dataUrl.includes("image/webp")
+  ) {
     return Promise.resolve(dataUrl);
   }
 

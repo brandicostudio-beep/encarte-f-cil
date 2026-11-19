@@ -17,6 +17,10 @@ import {
   saveEncarteSemanalFooterText,
   loadEncarteSemanalProducts,
   saveEncarteSemanalProducts,
+  loadStoredCatalog,
+  saveStoredCatalog,
+  loadFillMode,
+  saveFillMode,
 } from "@/lib/encarte-semanal-storage";
 import {
   calculateEncarteSemanalGridCells,
@@ -71,6 +75,8 @@ import {
   CalendarClock,
   Layers,
   Star,
+  MousePointerClick,
+  Zap,
 } from "lucide-react";
 
 export const EncarteSemanalWorkspace: React.FC = () => {
@@ -86,6 +92,43 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   const [products, setProducts] = useState<EncarteSemanalProduct[]>(() =>
     loadEncarteSemanalProducts()
   );
+  const [storedCatalog, setStoredCatalog] = useState<EncarteSemanalProduct[]>(() => {
+    const loaded = loadStoredCatalog();
+    if (loaded.length > 0) return loaded;
+    const initialProds = loadEncarteSemanalProducts();
+    return initialProds.length > 0 ? initialProds : [];
+  });
+  const [fillMode, setFillMode] = useState<"auto" | "manual">(() => loadFillMode());
+
+  // Alterna para o modo de preenchimento manual (deixa os 20 boxes da arte vazios, guardando a planilha em memória)
+  const handleSwitchToManualMode = () => {
+    if (products.length > 0 && storedCatalog.length === 0) {
+      setStoredCatalog(products);
+      saveStoredCatalog(products);
+    }
+    setFillMode("manual");
+    saveFillMode("manual");
+    setProducts([]);
+    saveEncarteSemanalProducts([]);
+    setSelectedSlotIndex(null);
+    setExportMessage("✏️ Modo Manual ativado: tela limpa com boxes vazios. A planilha continua salva na memória! Clique em qualquer box para preencher.");
+    setTimeout(() => setExportMessage(null), 5000);
+  };
+
+  // Alterna para o modo automático (preenche todos os 20 boxes da arte com os produtos da planilha)
+  const handleSwitchToAutoMode = () => {
+    setFillMode("auto");
+    saveFillMode("auto");
+    const catalogToUse = storedCatalog.length > 0 ? storedCatalog : products;
+    if (catalogToUse.length > 0) {
+      setProducts(catalogToUse);
+      saveEncarteSemanalProducts(catalogToUse);
+      setExportMessage(`⚡ Modo Automático ativado: todos os boxes foram preenchidos com os ${catalogToUse.length} produtos da planilha!`);
+    } else {
+      setExportMessage("Nenhuma planilha armazenada ainda. Carregue uma planilha para preencher automaticamente!");
+    }
+    setTimeout(() => setExportMessage(null), 4000);
+  };
 
   // Estados de navegação e visualização
   const [activeTab, setActiveTab] = useState<"preview" | "tabela" | "pendencias">("preview");
@@ -657,6 +700,43 @@ export const EncarteSemanalWorkspace: React.FC = () => {
               <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />
               Carregar Planilha & Fotos
             </Button>
+
+            {/* SELETOR DE MODO: AUTOMÁTICO VS MANUAL (BOXES VAZIOS) */}
+            <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg">
+              <Button
+                type="button"
+                size="sm"
+                variant={fillMode === "auto" ? "secondary" : "ghost"}
+                onClick={handleSwitchToAutoMode}
+                className={`text-xs h-7 px-2.5 font-bold transition-all ${
+                  fillMode === "auto"
+                    ? "bg-amber-500 text-neutral-950 shadow-xs"
+                    : "text-neutral-400 hover:text-white"
+                }`}
+                title="Preenche todos os 20 boxes da arte automaticamente em sequência"
+                data-testid="btn-mode-auto"
+              >
+                <Zap className="h-3 w-3 mr-1" />
+                Preencher Automático
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant={fillMode === "manual" ? "secondary" : "ghost"}
+                onClick={handleSwitchToManualMode}
+                className={`text-xs h-7 px-2.5 font-bold transition-all ${
+                  fillMode === "manual"
+                    ? "bg-amber-500 text-neutral-950 shadow-xs"
+                    : "text-neutral-400 hover:text-white"
+                }`}
+                title="Deixa os 20 boxes vazios para preenchimento manual, mantendo a planilha e fotos salvas na memória"
+                data-testid="btn-mode-manual"
+              >
+                <MousePointerClick className="h-3 w-3 mr-1" />
+                Modo Manual (Box por Box)
+              </Button>
+            </div>
 
             {/* GRUPO DE ARQUIVO LOCAL */}
             <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg">
@@ -1364,11 +1444,25 @@ export const EncarteSemanalWorkspace: React.FC = () => {
       <EncarteSemanalSourceModal
         open={sourceModalOpen}
         onOpenChange={setSourceModalOpen}
-        existingProducts={products}
-        onApply={(newProducts) => {
-          setProducts(newProducts);
+        existingProducts={storedCatalog.length > 0 ? storedCatalog : products}
+        onApply={(newProducts, mode = "auto") => {
+          setStoredCatalog(newProducts);
+          saveStoredCatalog(newProducts);
+          saveFillMode(mode);
+          setFillMode(mode);
+
+          if (mode === "auto") {
+            setProducts(newProducts);
+            saveEncarteSemanalProducts(newProducts);
+            setExportMessage(`⚡ ${newProducts.length} produto(s) aplicados automaticamente aos boxes do encarte!`);
+          } else {
+            setProducts([]);
+            saveEncarteSemanalProducts([]);
+            setExportMessage(`✏️ Planilha com ${newProducts.length} produto(s) e fotos armazenada com sucesso! Os 20 boxes da arte estão vazios para você preencher um por um.`);
+          }
           setCurrentPage(1);
           setActiveTab("preview");
+          setTimeout(() => setExportMessage(null), 5000);
         }}
       />
 

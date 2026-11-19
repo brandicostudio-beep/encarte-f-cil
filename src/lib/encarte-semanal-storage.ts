@@ -17,6 +17,8 @@ export const STORAGE_KEYS = {
   GRID: "encarte_semanal_grid_v1",
   FOOTER: "encarte_semanal_footer_v1",
   PRODUCTS: "encarte_semanal_products_v1",
+  STORED_CATALOG: "encarte_semanal_stored_catalog_v1",
+  FILL_MODE: "encarte_semanal_fill_mode_v1",
   CONFIG: "encarte_semanal_config_v1",
 } as const;
 
@@ -179,6 +181,64 @@ export function loadEncarteSemanalProducts(): EncarteSemanalProduct[] {
     /* ignore */
   }
   return [];
+}
+
+/**
+ * Salva a lista completa da planilha carregada (catálogo armazenado da semana),
+ * permitindo que ela permaneça salva em memória mesmo quando o usuário escolhe
+ * preencher manualmente box por box.
+ */
+export function saveStoredCatalog(products: EncarteSemanalProduct[]): void {
+  const storage = getSafeStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(STORAGE_KEYS.STORED_CATALOG, JSON.stringify(products));
+  } catch (err) {
+    console.warn("Aviso ao salvar catálogo armazenado:", err);
+  }
+}
+
+/**
+ * Carrega o catálogo armazenado da planilha.
+ */
+export function loadStoredCatalog(): EncarteSemanalProduct[] {
+  const storage = getSafeStorage();
+  if (!storage) return [];
+  try {
+    const raw = storage.getItem(STORAGE_KEYS.STORED_CATALOG);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Salva o modo de preenchimento atual ("auto" para preencher tudo, "manual" para boxes vazios).
+ */
+export function saveFillMode(mode: "auto" | "manual"): void {
+  const storage = getSafeStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(STORAGE_KEYS.FILL_MODE, mode);
+  } catch (err) {
+    console.warn("Aviso ao salvar modo de preenchimento:", err);
+  }
+}
+
+/**
+ * Carrega o modo de preenchimento ("auto" ou "manual").
+ */
+export function loadFillMode(): "auto" | "manual" {
+  const storage = getSafeStorage();
+  if (!storage) return "auto";
+  try {
+    const mode = storage.getItem(STORAGE_KEYS.FILL_MODE);
+    return mode === "manual" ? "manual" : "auto";
+  } catch {
+    return "auto";
+  }
 }
 
 /**

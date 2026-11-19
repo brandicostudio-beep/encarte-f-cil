@@ -437,10 +437,10 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
   // =========================================================================
   // Teste 13: Resolução de 2 fotos no box (Duplicação e Variação)
   // =========================================================================
-  it("Teste 13: resolveSemanalCellPhotos suporta 2 fotos lado a lado no box (duplicação e variações)", async () => {
+  it("Teste 13: resolveSemanalCellPhotos suporta 1 foto única e espaçosa por padrão e 2 fotos lado a lado no box quando solicitado", async () => {
     const { resolveSemanalCellPhotos } = await import("./encarte-semanal-layout");
 
-    // Caso A: Produto normal não-principal sem foto secundária -> duplica a foto principal (padrão do encarte)
+    // Caso A: Produto normal não-principal sem foto secundária -> mantém 1 foto única e centralizada para não espremer
     const normalProd: EncarteSemanalProduct = {
       id: "p1",
       code: "19396",
@@ -448,9 +448,9 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
       image: "data:image/png;base64,ameixa1",
     };
     const resA = resolveSemanalCellPhotos(normalProd);
-    expect(resA.hasTwoPhotos).toBe(true);
+    expect(resA.hasTwoPhotos).toBe(false);
     expect(resA.photo1).toBe("data:image/png;base64,ameixa1");
-    expect(resA.photo2).toBe("data:image/png;base64,ameixa1");
+    expect(resA.photo2).toBe("");
 
     // Caso B: Produto Principal com foto alternativa de fragrância/sabor -> usa variação como foto 2
     const principalProd: EncarteSemanalProduct = {
@@ -482,18 +482,18 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     expect(resC.photo1).toBe("data:image/png;base64,lasanha");
     expect(resC.photo2).toBe("data:image/png;base64,fermento");
 
-    // Caso D: Usuário desativa duplicação (duplicatePhoto: false)
-    const singleProd: EncarteSemanalProduct = {
+    // Caso D: Usuário ativa duplicação explicitamente (duplicatePhoto: true)
+    const dupProd: EncarteSemanalProduct = {
       id: "p4",
       code: "5522",
       description: "GOIABADA",
       image: "data:image/png;base64,goiabada",
-      duplicatePhoto: false,
+      duplicatePhoto: true,
     };
-    const resD = resolveSemanalCellPhotos(singleProd);
-    expect(resD.hasTwoPhotos).toBe(false);
+    const resD = resolveSemanalCellPhotos(dupProd);
+    expect(resD.hasTwoPhotos).toBe(true);
     expect(resD.photo1).toBe("data:image/png;base64,goiabada");
-    expect(resD.photo2).toBe("");
+    expect(resD.photo2).toBe("data:image/png;base64,goiabada");
   });
 
   // =========================================================================

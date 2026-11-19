@@ -137,7 +137,7 @@ export async function renderEncarteSemanalPageToCanvas(
     const product = products[i];
     if (!product) continue;
 
-    const insetX = 6;
+    const insetX = 8;
     const barW = cell.width - insetX * 2;
     const barX = cell.x + insetX;
     const barY = cell.barY;
@@ -146,21 +146,19 @@ export async function renderEncarteSemanalPageToCanvas(
     // A. DESENHAR FOTO(S) (mantendo 100% da proporção original e sem deformar embalagens)
     const { photo1, photo2, hasTwoPhotos } = resolveSemanalCellPhotos(product);
     const scale = (product.scale || 1.0) > 10 ? (product.scale || 100) / 100 : product.scale || 1.0;
-    const overlapY = product.overlapY ?? 4;
+    const overlapY = product.overlapY ?? 2;
     const offsetX = product.offsetX || 0;
     const offsetY = product.offsetY || 0;
 
-    // Área útil da foto com folga de 10px no topo para respiração entre linhas de boxes
+    // Área útil da foto com folga de 16px no topo para respiração ampla entre linhas de boxes
     const availableW = barW;
-    const availableH = cell.photoAreaHeight - 10;
+    const availableH = cell.photoAreaHeight - 16;
 
     if (hasTwoPhotos && photo1 && photo2) {
       try {
-        const clean1 = photo1.startsWith("data:image/png") ? photo1 : await removeWhiteBackground(photo1);
-        const clean2 = photo2.startsWith("data:image/png") ? photo2 : await removeWhiteBackground(photo2);
         const [img1, img2] = await Promise.all([
-          loadImage(clean1 || photo1),
-          loadImage(clean2 || photo2),
+          loadImage(photo1),
+          loadImage(photo2),
         ]);
 
         const aspect1 = (img1.naturalWidth || img1.width) / (img1.naturalHeight || img1.height);
@@ -213,8 +211,7 @@ export async function renderEncarteSemanalPageToCanvas(
       }
     } else if (photo1) {
       try {
-        const clean1 = photo1.startsWith("data:image/png") ? photo1 : await removeWhiteBackground(photo1);
-        const photoImg = await loadImage(clean1 || photo1);
+        const photoImg = await loadImage(photo1);
 
         const aspect = (photoImg.naturalWidth || photoImg.width) / (photoImg.naturalHeight || photoImg.height);
         const maxW = availableW * 0.88 * scale;

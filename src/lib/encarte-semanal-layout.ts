@@ -89,9 +89,9 @@ export interface SemanalPhotosResolution {
 /**
  * Resolve as fotos a serem exibidas no box do Encarte Semanal (1 ou 2 fotos lado a lado).
  * Regras:
- * - Se houver secondaryImage explícita, usa como foto 2.
- * - Se for Principal e houver foto alternativa com variação/fragrância/sabor diferente, usa como foto 2.
- * - Caso padrão (duplicatePhoto !== false): duplica a foto principal no box para o padrão visual clássico.
+ * - Padrão visual clássico e espaçoso: 1 FOTO ÚNICA E CENTRALIZADA no box, com proporções 100% naturais.
+ * - Duplicação (2 unidades da mesma foto): apenas se o usuário ativar explicitamente (duplicatePhoto === true).
+ * - Duas fotos distintas (variação de sabor/fragrância ou 2º código): quando houver secondaryImage ou quando for item Principal com foto alternativa.
  */
 export function resolveSemanalCellPhotos(product: EncarteSemanalProduct): SemanalPhotosResolution {
   const photo1 = product.image ? product.image.trim() : "";
@@ -106,7 +106,7 @@ export function resolveSemanalCellPhotos(product: EncarteSemanalProduct): Semana
     photo2 = photo2Custom;
   } else if (product.isPrincipal && altPhoto && altPhoto !== photo1) {
     photo2 = altPhoto;
-  } else if (product.duplicatePhoto !== false && photo1) {
+  } else if (product.duplicatePhoto === true && photo1) {
     photo2 = photo1;
   }
 

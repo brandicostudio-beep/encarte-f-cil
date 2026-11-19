@@ -141,13 +141,11 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
     if (!file) return;
 
     setIsProcessingImg(true);
-    const isPng = file.name.toLowerCase().endsWith(".png") || file.type === "image/png";
     try {
       const reader = new FileReader();
-      reader.onload = async () => {
+      reader.onload = () => {
         const dataUrl = reader.result as string;
-        const cleaned = isPng ? dataUrl : await removeWhiteBackground(dataUrl);
-        setForm((prev) => (prev ? { ...prev, image: cleaned || dataUrl } : prev));
+        setForm((prev) => (prev ? { ...prev, image: dataUrl } : prev));
         setIsProcessingImg(false);
       };
       reader.readAsDataURL(file);
