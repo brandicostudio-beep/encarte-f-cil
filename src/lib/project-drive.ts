@@ -723,8 +723,8 @@ export async function loadProjectFromDriveById(
 
     // 1. Tentar ler do índice do Drive
     const idxRes = await readDriveIndex(rootRes.folderId, options);
-    if (idxRes.ok && idxRes.index?.projects) {
-      const found = idxRes.index.projects.find((p) => p.id === projectId);
+    const found = idxRes.ok ? idxRes.index?.projects?.find(p => p.id === projectId) : undefined;
+    if (found) {
       if (found) {
         if (found.driveFileId) {
           directFileId = found.driveFileId;

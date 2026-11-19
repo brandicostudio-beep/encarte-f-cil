@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { parseSemanalCodes, semanalCodes } from "@/lib/encarte-semanal-editing";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -42,12 +43,14 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
   onSave,
 }) => {
   const [form, setForm] = useState<EncarteSemanalProduct | null>(null);
+  const [codeText, setCodeText] = useState("");
   const [isProcessingImg, setIsProcessingImg] = useState(false);
   const [codeChangedWarning, setCodeChangedWarning] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (product) {
+      setCodeText(semanalCodes(product).join(" / "));
       setForm({
         ...product,
         originalCode: product.originalCode ?? product.code,
@@ -66,61 +69,27 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
   }
 
   const handleCodeChange = (newCode: string) => {
-    setForm((prev) => (prev ? { ...prev, code: newCode } : prev));
+    const codes = parseSemanalCodes(newCode);
+    setForm(prev => prev ? { ...prev, code: codes[0] || "", secondaryCode: codes[1], additionalProducts: codes.slice(2).map(code => ({ code, image: prev.additionalProducts?.find(p => p.code === code)?.image })) } : prev);
   };
 
-  const handleSearchCodeMatch = () => {
-    if (!form.code.trim()) return;
-
-    const trimmedCode = form.code.trim();
-    const foundPhoto = findKnownPhotoForCode(trimmedCode);
-
-    // Buscar descrição do snapshot se disponível
-    let foundDesc = "";
-    try {
-      const snap = getActiveSnapshot();
-      if (snap?.lotes) {
-        const item = snap.lotes.find(
-          (l) => l.codprod && l.codprod.trim().toLowerCase() === trimmedCode.toLowerCase()
-        );
-        if (item && item.descricao) {
-          foundDesc = item.descricao.toUpperCase();
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-
-    setForm((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        image: foundPhoto || prev.image,
-        description: foundDesc || prev.description,
-      };
-    });
-
-    if (foundPhoto || foundDesc) {
-      setCodeChangedWarning("Foto e descrição atualizadas com base no novo código.");
-    } else {
-      setCodeChangedWarning("Consultando site cescom.com.br...");
-      fetchCescomProductOnline(trimmedCode).then((online) => {
-        if (online) {
-          setForm((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  description: online.description,
-                  image: online.image || prev.image,
-                }
-              : prev
-          );
-          setCodeChangedWarning(`✓ Dados puxados do site cescom.com.br: ${online.description}`);
-        } else {
-          setCodeChangedWarning("Nenhuma foto encontrada automaticamente para este código.");
-        }
-      });
-    }
+  const handleSearchCodeMatch = async () => {
+    const codes = parseSemanalCodes(codeText);
+    if (!codes.length) return;
+    setCodeChangedWarning("Buscando fotos dos códigos...");
+    const resolved = await Promise.all(codes.map(async code => {
+      const online = await fetchCescomProductOnline(code);
+      return { code, image: online?.image || findKnownPhotoForCode(code), description: online?.description };
+    }));
+    setForm(prev => prev ? {
+      ...prev,
+      code: codes[0] || "", secondaryCode: codes[1],
+      image: resolved[0]?.image || prev.image,
+      secondaryImage: resolved[1]?.image || prev.secondaryImage,
+      additionalProducts: resolved.slice(2).map(({ code, image }) => ({ code, image })),
+      description: prev.description || resolved.map(p => p.description).filter(Boolean).join(" E "),
+    } : prev);
+    setCodeChangedWarning("Busca concluída.");
   };
 
   const handleUndoCodeChange = () => {
@@ -160,7 +129,7 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
     try {
       const cleaned = await removeWhiteBackground(form.image);
       const trimmed = await autoTrimImageWhitespace(cleaned);
-      setForm((prev) => (prev ? { ...prev, image: trimmed } : prev));
+      setForm((prev) => (prev ? { ...prev, image: trimmed.trimmedSrc } : prev));
     } catch (err) {
       console.warn("Erro ao remover fundo:", err);
     } finally {
@@ -186,9 +155,11 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
     );
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (form) {
-      onSave(form);
+      const codes = parseSemanalCodes(codeText);
+      const photos = await Promise.all(codes.map(async code => findKnownPhotoForCode(code) || (await fetchCescomProductOnline(code))?.image));
+      onSave({ ...form, code: codes[0] || "", secondaryCode: codes[1], image: form.image || photos[0], secondaryImage: form.secondaryImage || photos[1], additionalProducts: codes.slice(2).map((code, index) => ({ code, image: form.additionalProducts?.find(item => item.code === code)?.image || photos[index + 2] })) });
       onOpenChange(false);
     }
   };
@@ -482,8 +453,9 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
               <div className="flex items-center gap-2">
                 <Input
                   id="code"
-                  value={form.code}
-                  onChange={(e) => handleCodeChange(e.target.value)}
+                  value={codeText}
+                  onChange={(e) => setCodeText(e.target.value)}
+                  onBlur={() => handleCodeChange(codeText)}
                   placeholder="Ex: 19396"
                   className="bg-neutral-800 border-neutral-700 text-white font-mono text-sm uppercase"
                   data-testid="modal-input-code"
@@ -556,7 +528,7 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
                       {form.code}
                     </span>
                   )}
-                  <span className="line-clamp-2 flex-1 text-[11px] font-black">
+                  <span className="whitespace-pre-wrap flex-1 text-[11px] font-black">
                     {form.description || "NOME DO PRODUTO"}
                   </span>
                 </div>

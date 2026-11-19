@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import type {
   EncarteSemanalProduct,
   EncarteSemanalGridConfig,
@@ -26,6 +26,7 @@ import {
   calculateEncarteSemanalGridCells,
   paginateEncarteSemanalProducts,
 } from "@/lib/encarte-semanal-layout";
+import { changeSemanalHistory, undoSemanalHistory, redoSemanalHistory } from "@/lib/encarte-semanal-editing";
 import { cleanPrincipalDescription } from "@/lib/encarte-semanal-catalog";
 import {
   exportEncarteSemanalPageAsPng,
@@ -89,9 +90,24 @@ export const EncarteSemanalWorkspace: React.FC = () => {
     loadEncarteSemanalGridConfig()
   );
   const [footerText, setFooterText] = useState<string>(() => loadEncarteSemanalFooterText());
-  const [products, setProducts] = useState<EncarteSemanalProduct[]>(() =>
-    loadEncarteSemanalProducts()
-  );
+  const [history, setHistory] = useState(() => ({ past: [] as EncarteSemanalProduct[][], present: loadEncarteSemanalProducts(), future: [] as EncarteSemanalProduct[][] }));
+  const products = history.present;
+  const setProducts = useCallback((update: React.SetStateAction<EncarteSemanalProduct[]>) => {
+    setHistory(previous => changeSemanalHistory(previous, typeof update === "function" ? update(previous.present) : update));
+  }, []);
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.closest("input, textarea, [contenteditable=true]") || target.closest('[role="dialog"]'))) return;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault(); setHistory(event.shiftKey ? redoSemanalHistory : undoSemanalHistory);
+      } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
+        event.preventDefault(); setHistory(redoSemanalHistory);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
   const [storedCatalog, setStoredCatalog] = useState<EncarteSemanalProduct[]>(() => {
     const loaded = loadStoredCatalog();
     if (loaded.length > 0) return loaded;
@@ -1007,6 +1023,10 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                 Grade: 4 colunas × 5 linhas • Barra: {gridConfig.barHeight}px • Resolução: 1080×1920
               </div>
 
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" disabled={!history.past.length} onClick={() => setHistory(undoSemanalHistory)} title="Desfazer (Ctrl+Z)" aria-label="Desfazer"><RotateCcw className="h-4 w-4" /></Button>
+                <Button variant="outline" size="icon" disabled={!history.future.length} onClick={() => setHistory(redoSemanalHistory)} title="Refazer (Ctrl+Y)" aria-label="Refazer"><RotateCcw className="h-4 w-4 -scale-x-100" /></Button>
+              </div>
               {/* Controles de Zoom */}
               <div className="flex items-center gap-2">
                 <Button
@@ -1075,6 +1095,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                         product={product}
                         cell={cell}
                         interactive={true}
+                        onTransform={updated => handleSaveSlotProduct(idx, updated)}
                         isSelected={isSelected}
                         onClickSlot={() => {
                           setSelectedSlotIndex(selectedSlotIndex === idx ? null : idx);

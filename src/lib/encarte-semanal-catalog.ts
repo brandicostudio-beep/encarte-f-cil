@@ -18,7 +18,7 @@ export interface ProductSuggestion {
   code: string;
   description: string;
   image?: string;
-  source: "winthor" | "catalogo" | "encarte" | "custom";
+  source: "winthor" | "catalogo" | "encarte" | "custom" | "planilha" | "cescom";
 }
 
 /**

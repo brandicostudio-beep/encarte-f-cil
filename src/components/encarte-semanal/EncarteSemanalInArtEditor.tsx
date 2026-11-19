@@ -11,6 +11,8 @@ import {
 import { findKnownPhotoForCode } from "@/lib/encarte-semanal-photos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { parseSemanalCodes, semanalCodes } from "@/lib/encarte-semanal-editing";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Search,
@@ -50,9 +52,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   onOpenAdvancedModal,
 }) => {
   // Se houver secondaryCode, compõe o texto inicial (ex: "14352 / 17585")
-  const initialCode = product?.secondaryCode
-    ? `${product.code} / ${product.secondaryCode}`
-    : product?.code || "";
+  const initialCode = product ? semanalCodes(product).join(" / ") : "";
 
   const [codeQuery, setCodeQuery] = useState(initialCode);
   const [description, setDescription] = useState(product?.description || "");
@@ -72,6 +72,16 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   const fileInputRef = useRef<HTMLInputElement>(null);
   const secFileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setCodeQuery(product ? semanalCodes(product).join(" / ") : "");
+    setDescription(product?.description || "");
+    setImage(product?.image || "");
+    setSecondaryImage(product?.secondaryImage || "");
+    setLimit(product?.limit || "");
+    setScale(product?.scale ?? 1.15);
+    setDuplicatePhoto(Boolean(product?.duplicatePhoto));
+  }, [product]);
 
   // Foco automático no input de código ao abrir
   useEffect(() => {
@@ -112,6 +122,8 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
 
   // Aplica uma sugestão selecionada com predição de texto
   const handleSelectSuggestion = (suggestion: ProductSuggestion) => {
+    const codes = parseSemanalCodes(codeQuery);
+    if (codes.length > 1) { handleApplyManualCode(); return; }
     setCodeQuery(suggestion.code);
     setDescription(suggestion.description);
     setShowSuggestions(false);
@@ -135,93 +147,33 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
 
   // Quando o usuário termina de digitar o código manualmente (Enter ou blur)
   const handleApplyManualCode = async () => {
-    if (!codeQuery.trim()) return;
-
-    const trimmed = codeQuery.trim();
-    const parts = trimmed.split(/[/,]+/).map((p) => p.trim()).filter(Boolean);
-
-    let primaryCode = trimmed;
-    let secCode: string | undefined = undefined;
-    let photo1 = image;
-    let photo2 = secondaryImage;
-    let newDesc = description.trim();
-
-    if (parts.length >= 2) {
-      primaryCode = parts[0];
-      secCode = parts[1];
-
-      let lookedUp1 = lookupProductByCode(primaryCode);
-      let lookedUp2 = lookupProductByCode(secCode);
-
-      // Se não encontrou no catálogo/planilha, busca no site https://www.cescom.com.br/
-      if (!lookedUp1.description || lookedUp1.description.startsWith("PRODUTO ")) {
-        setIsSearchingCescom(true);
-        const online1 = await fetchCescomProductOnline(primaryCode);
-        if (online1) lookedUp1 = online1;
-        setIsSearchingCescom(false);
-      }
-      if (!lookedUp2.description || lookedUp2.description.startsWith("PRODUTO ")) {
-        setIsSearchingCescom(true);
-        const online2 = await fetchCescomProductOnline(secCode);
-        if (online2) lookedUp2 = online2;
-        setIsSearchingCescom(false);
-      }
-
-      if (!photo1) {
-        photo1 = lookedUp1.image || findKnownPhotoForCode(primaryCode);
-      }
-      if (!photo2) {
-        photo2 = lookedUp2.image || findKnownPhotoForCode(secCode);
-      }
-      if (!newDesc) {
-        const d1 = lookedUp1.description;
-        const d2 = lookedUp2.description;
-        if (d1 && d2 && !d1.startsWith("PRODUTO ") && !d2.startsWith("PRODUTO ")) {
-          newDesc = `${d1} E ${d2}`;
-        } else {
-          newDesc = d1 || d2;
-        }
-      }
-    } else {
-      let lookedUp = lookupProductByCode(trimmed);
-      // Se não estiver na planilha/catálogo local, consulta o site https://www.cescom.com.br/
-      if (!newDesc || newDesc.startsWith("PRODUTO ") || !lookedUp.description || lookedUp.description.startsWith("PRODUTO ")) {
-        setIsSearchingCescom(true);
-        const online = await fetchCescomProductOnline(trimmed);
-        if (online) {
-          lookedUp = online;
-        }
-        setIsSearchingCescom(false);
-      }
-      if (!newDesc || newDesc.startsWith("PRODUTO ")) newDesc = lookedUp.description;
-      if (!photo1) photo1 = lookedUp.image || findKnownPhotoForCode(trimmed);
-    }
-
-    setDescription(newDesc);
-    if (photo1) setImage(photo1);
-    if (photo2) setSecondaryImage(photo2);
-    setShowSuggestions(false);
-
-    const updated: EncarteSemanalProduct = {
-      id: product?.id || `semanal-prod-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      code: primaryCode,
-      secondaryCode: secCode,
-      description: newDesc,
-      image: photo1,
-      secondaryImage: photo2 || undefined,
-      duplicatePhoto,
-      limit: limit.trim() || undefined,
-      scale,
-      offsetX: product?.offsetX ?? 0,
-      offsetY: product?.offsetY ?? 0,
-      overlapY: product?.overlapY ?? 4,
-      included: true,
-      originalCode: product?.originalCode || primaryCode,
-      originalDescription: product?.originalDescription || newDesc,
-      originalImage: product?.originalImage || photo1,
-    };
-
-    onSaveProduct(updated);
+    const codes = parseSemanalCodes(codeQuery);
+    if (!codes.length && !product?.isPrincipal) return;
+    setIsSearchingCescom(true);
+    try {
+      const resolved = await Promise.all(codes.map(async (code, index) => {
+        const oldImage = product && semanalCodes(product)[index] === code
+          ? (index === 0 ? image : index === 1 ? secondaryImage : product.additionalProducts?.[index - 2]?.image)
+          : undefined;
+        const local = lookupProductByCode(code);
+        const online = local.description.startsWith("PRODUTO ") ? await fetchCescomProductOnline(code) : null;
+        return { code, image: oldImage || online?.image || local.image || findKnownPhotoForCode(code), description: online?.description || local.description };
+      }));
+      const first = resolved[0];
+      const desc = description.trim() || resolved.map(item => item.description).join(" E ");
+      onSaveProduct({
+        ...product,
+        id: product?.id || `semanal-prod-${Date.now()}`,
+        code: first?.code || "", secondaryCode: resolved[1]?.code,
+        additionalProducts: resolved.slice(2).map(({ code, image }) => ({ code, image })),
+        description: desc, image: first?.image || image, secondaryImage: resolved[1]?.image || (codes.length < 2 ? secondaryImage : undefined),
+        duplicatePhoto, limit: limit.trim() || undefined, scale, included: true,
+        originalCode: product?.originalCode || first?.code || "",
+        originalDescription: product?.originalDescription || desc,
+        originalImage: product?.originalImage || first?.image || image,
+      });
+      setShowSuggestions(false);
+    } finally { setIsSearchingCescom(false); }
   };
 
   // Upload manual de imagem 1 (preserva 100% o PNG transparente original sem conversão ou recorte destrutivo)
@@ -477,7 +429,8 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
         <Label htmlFor="inArtDesc" className="text-[11px] font-bold text-neutral-300">
           Descrição no Box:
         </Label>
-        <Input
+        <Textarea
+          rows={3}
           id="inArtDesc"
           value={description}
           onChange={(e) => {
@@ -489,13 +442,16 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
               });
             }
           }}
-          onBlur={handleApplyManualCode}
-          onKeyDown={(e) => e.key === "Enter" && handleApplyManualCode()}
           placeholder="Descrição do produto..."
-          className="h-8 bg-neutral-900 border-neutral-700 text-neutral-100 text-xs uppercase font-medium focus:border-amber-400"
+          className="min-h-20 bg-neutral-900 border-neutral-700 text-neutral-100 text-xs uppercase font-medium focus:border-amber-400"
           data-testid="in-art-input-desc"
         />
       </div>
+
+      {product && <div className="grid grid-cols-2 gap-2">
+        <div><Label htmlFor="semanal-code-size">Fonte do código</Label><Input id="semanal-code-size" type="number" min={6} max={40} value={product.codeFontSize ?? 13} onChange={e => onSaveProduct({ ...product, codeFontSize: Math.max(6, Math.min(40, Number(e.target.value))) })} /></div>
+        <div><Label htmlFor="semanal-desc-size">Fonte da descrição</Label><Input id="semanal-desc-size" type="number" min={6} max={40} value={product.descriptionFontSize ?? 12} onChange={e => onSaveProduct({ ...product, descriptionFontSize: Math.max(6, Math.min(40, Number(e.target.value))) })} /></div>
+      </div>}
 
       {/* 3. CAMPO LIMITE (OPCIONAL) */}
       <div className="space-y-1">
@@ -515,7 +471,6 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
               });
             }
           }}
-          onBlur={handleApplyManualCode}
           placeholder="Ex: 1000CX"
           className="h-7 bg-neutral-900 border-neutral-700 text-orange-300 font-bold text-[11px] uppercase focus:border-orange-400"
           data-testid="in-art-input-limit"
@@ -730,8 +685,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
             type="button"
             size="sm"
             onClick={() => {
-              handleApplyManualCode();
-              onClose();
+              void handleApplyManualCode().then(onClose);
             }}
             className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-xs cursor-pointer"
             data-testid="in-art-btn-done"

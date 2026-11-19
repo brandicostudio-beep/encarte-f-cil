@@ -301,7 +301,12 @@ export async function openEncarteSemanalFromComputer(): Promise<OpenFileResult> 
  */
 export async function readEncarteSemanalFromFile(file: File): Promise<OpenFileResult> {
   try {
-    const text = await file.text();
+    const text = typeof file.text === "function" ? await file.text() : await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(file);
+    });
     const res = deserializeEncarteSemanalProject(text);
     if (!res.ok || !res.project) {
       return { ok: false, error: res.error || "Arquivo de encarte semanal inválido." };

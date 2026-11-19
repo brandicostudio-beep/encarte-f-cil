@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import type { EncarteSemanalProduct, EncarteSemanalCellPosition } from "@/types/encarte-semanal";
 import { Edit2, ImageOff, Plus, Sparkles } from "lucide-react";
+import { SemanalPhoto } from "./SemanalPhoto";
+import { semanalCodes, semanalPhotos } from "@/lib/encarte-semanal-editing";
 import { resolveSemanalCellPhotos } from "@/lib/encarte-semanal-layout";
 
 export interface EncarteSemanalCellProps {
@@ -10,6 +12,7 @@ export interface EncarteSemanalCellProps {
   isSelected?: boolean;
   onEdit?: (product: EncarteSemanalProduct) => void;
   onClickSlot?: () => void;
+  onTransform?: (product: EncarteSemanalProduct) => void;
 }
 
 export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
@@ -19,6 +22,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
   isSelected = false,
   onEdit,
   onClickSlot,
+  onTransform,
 }) => {
   const { width, height, photoAreaHeight, barHeight } = cell;
 
@@ -141,9 +145,8 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
   const overlapY = product.overlapY ?? 4;
 
   const hasTwoPhotos = Boolean(cleanPhoto1 && cleanPhoto2);
-  const displayCode = product.secondaryCode
-    ? `${product.code} / ${product.secondaryCode}`
-    : product.code;
+  const displayCode = semanalCodes(product).join(" / ");
+  const photos = semanalPhotos(product);
 
   return (
     <div
@@ -199,64 +202,10 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
         className="absolute left-0 right-0 top-0 flex items-end justify-center pointer-events-none px-2 pt-2"
         style={{ height: `${photoAreaHeight}px`, zIndex: 10 }}
       >
-        {hasTwoPhotos ? (
-          <div className="relative w-full h-full flex items-end justify-center pointer-events-none">
-            {/* Foto 1 (Esquerda) com proporção 100% preservada */}
-            <img
-              src={cleanPhoto1}
-              alt={product.description}
-              draggable={false}
-              className="absolute object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.50)] pointer-events-none"
-              style={{
-                maxWidth: `${(width - 16) * 0.54 * scale}px`,
-                maxHeight: `${(photoAreaHeight - 16) * scale}px`,
-                left: `${(width - 16) * 0.04 + offsetX}px`,
-                bottom: `${-overlapY - offsetY}px`,
-                zIndex: 11,
-              }}
-            />
-            {/* Foto 2 (Direita / Variação / Duplicata escalonada) com proporção 100% preservada */}
-            <img
-              src={cleanPhoto2}
-              alt={product.description}
-              draggable={false}
-              className="absolute object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.55)] pointer-events-none"
-              style={{
-                maxWidth: `${(width - 16) * 0.54 * scale}px`,
-                maxHeight: `${(photoAreaHeight - 16) * scale}px`,
-                right: `${(width - 16) * 0.04 - offsetX}px`,
-                bottom: `${-overlapY - offsetY}px`,
-                zIndex: 12,
-              }}
-            />
-          </div>
-        ) : cleanPhoto1 ? (
-          /* Foto Única e Centralizada: ampla, proporção natural, espaçosa e sem espremer */
-          <div className="relative w-full h-full flex items-end justify-center pointer-events-none pb-1">
-            <img
-              src={cleanPhoto1}
-              alt={product.description}
-              draggable={false}
-              className="object-contain drop-shadow-[0_5px_12px_rgba(0,0,0,0.50)] pointer-events-none"
-              style={{
-                maxWidth: `${(width - 24) * 0.88 * scale}px`,
-                maxHeight: `${(photoAreaHeight - 16) * scale}px`,
-                transform: `translate(${offsetX}px, ${overlapY + offsetY}px)`,
-                zIndex: 11,
-              }}
-            />
-          </div>
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span
-              className="inline-flex items-center gap-1 bg-black/60 border border-amber-500/40 text-amber-300 px-2 py-0.5 rounded text-[10px] font-bold tracking-wide"
-              data-testid="semanal-cell-no-photo"
-            >
-              <ImageOff className="h-3 w-3" />
-              Sem foto
-            </span>
-          </div>
-        )}
+        {photos.length > 0 ? photos.map((src, index) => (
+          <SemanalPhoto key={`${index}-${src}`} product={product} src={src} index={index} count={photos.length}
+            width={width} height={photoAreaHeight} interactive={interactive} selected={isSelected} onChange={onTransform} />
+        )) : <span data-testid="semanal-cell-no-photo" className="text-muted-foreground">Sem foto</span>}
       </div>
 
       {/* Barra Inferior Bege (#F6E0A6) com COD e DESCRIÇÃO: zIndex: 20 com respiro horizontal */}
@@ -283,7 +232,8 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
             <span
               className="shrink-0 font-black font-mono border-r border-[#7A0D12]/30 pr-1.5 leading-tight"
               style={{
-                fontSize: displayCode.length > 7 ? "10px" : "13px",
+                fontSize: product.codeFontSize ?? 13,
+                maxWidth: "45%", overflowWrap: "anywhere",
               }}
               data-testid="semanal-cell-code"
             >
@@ -291,7 +241,8 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
             </span>
           )}
           <span
-            className="line-clamp-2 flex-1 text-[12px] font-black"
+            className="min-w-0 flex-1 whitespace-pre-wrap break-words font-black"
+            style={{ fontSize: product.descriptionFontSize ?? 12 }}
             data-testid="semanal-cell-desc"
             title={product.description}
           >

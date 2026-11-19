@@ -14,6 +14,7 @@ import {
   calculateEncarteSemanalGridCells,
   resolveSemanalCellPhotos,
 } from "./encarte-semanal-layout";
+import { semanalCodes, semanalPhotos, semanalPhotoBounds } from "./encarte-semanal-editing";
 import { removeWhiteBackground } from "./colecoes-image-processor";
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -21,9 +22,15 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
-    img.onerror = () => {
-      // Se falhar o carregamento, rejeita suavemente
-      reject(new Error(`Falha ao carregar imagem: ${src.slice(0, 50)}...`));
+    img.onerror = async () => {
+      if (src.startsWith("https://")) {
+        try {
+          const { fetchImage } = await import("./product.functions");
+          const result = await fetchImage({ data: { url: src } });
+          if (result.image) { resolve(await loadImage(result.image)); return; }
+        } catch { /* Apresentar falha ao exportador. */ }
+      }
+      reject(new Error("Não foi possível carregar uma foto para exportação."));
     };
     img.src = src;
   });
@@ -35,36 +42,17 @@ function wrapText(
   maxWidth: number,
   maxLines = 2
 ): string[] {
-  const words = text.split(" ");
   const lines: string[] = [];
-  let currentLine = "";
-
-  for (const word of words) {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    const width = ctx.measureText(testLine).width;
-
-    if (width <= maxWidth) {
-      currentLine = testLine;
-    } else {
-      if (currentLine) lines.push(currentLine);
-      currentLine = word;
-      if (lines.length === maxLines - 1) break;
+  for (const paragraph of text.split("\n")) {
+    let current = "";
+    for (const word of paragraph.split(/\s+/)) {
+      const next = current ? `${current} ${word}` : word;
+      if (current && ctx.measureText(next).width > maxWidth) { lines.push(current); current = word; }
+      else current = next;
     }
+    lines.push(current);
   }
-
-  if (currentLine && lines.length < maxLines) {
-    lines.push(currentLine);
-  }
-
-  // Se exceder maxLines, adiciona ellipsis
-  if (lines.length === maxLines && words.length > 0) {
-    const last = lines[lines.length - 1];
-    if (ctx.measureText(last).width > maxWidth - 10) {
-      lines[lines.length - 1] = last.slice(0, -3) + "...";
-    }
-  }
-
-  return lines;
+  return lines.slice(0, Math.max(1, maxLines));
 }
 
 function roundRect(
@@ -143,98 +131,16 @@ export async function renderEncarteSemanalPageToCanvas(
     const barY = cell.barY;
     const barH = cell.barHeight || 54;
 
-    // A. DESENHAR FOTO(S) (mantendo 100% da proporção original e sem deformar embalagens)
-    const { photo1, photo2, hasTwoPhotos } = resolveSemanalCellPhotos(product);
-    const scale = (product.scale || 1.0) > 10 ? (product.scale || 100) / 100 : product.scale || 1.0;
-    const overlapY = product.overlapY ?? 2;
-    const offsetX = product.offsetX || 0;
-    const offsetY = product.offsetY || 0;
-
-    // Área útil da foto com folga de 16px no topo para respiração ampla entre linhas de boxes
-    const availableW = barW;
-    const availableH = cell.photoAreaHeight - 16;
-
-    if (hasTwoPhotos && photo1 && photo2) {
+    // Todas as fotos usam a mesma geometria da prévia; transformações são independentes.
+    const photos = semanalPhotos(product);
+    for (let index = 0; index < photos.length; index++) {
       try {
-        const [img1, img2] = await Promise.all([
-          loadImage(photo1),
-          loadImage(photo2),
-        ]);
-
-        const aspect1 = (img1.naturalWidth || img1.width) / (img1.naturalHeight || img1.height);
-        const aspect2 = (img2.naturalWidth || img2.width) / (img2.naturalHeight || img2.height);
-
-        // Cada produto ocupa até 54% da largura do box, com altura contida
-        const maxItemW = availableW * 0.54 * scale;
-        const maxItemH = availableH * scale;
-
-        // Foto 1 com proporção nativa
-        let drawW1 = maxItemW;
-        let drawH1 = drawW1 / aspect1;
-        if (drawH1 > maxItemH) {
-          drawH1 = maxItemH;
-          drawW1 = drawH1 * aspect1;
-        }
-
-        // Foto 2 com proporção nativa
-        let drawW2 = maxItemW;
-        let drawH2 = drawW2 / aspect2;
-        if (drawH2 > maxItemH) {
-          drawH2 = maxItemH;
-          drawW2 = drawH2 * aspect2;
-        }
-
-        // Posicionamento elegante lado a lado, contido estritamente dentro do box
-        const x1 = barX + Math.max(0, (barW * 0.48 - drawW1) / 2) + offsetX;
-        const y1 = barY - drawH1 + overlapY + offsetY;
-
-        const x2 = barX + barW - drawW2 - Math.max(0, (barW * 0.48 - drawW2) / 2) + offsetX;
-        const y2 = barY - drawH2 + overlapY + offsetY;
-
-        // Foto 1 (Esquerda / Trás)
-        ctx.save();
-        ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
-        ctx.shadowBlur = 10;
-        ctx.shadowOffsetY = 4;
-        ctx.drawImage(img1, x1, y1, drawW1, drawH1);
-        ctx.restore();
-
-        // Foto 2 (Direita / Frente)
-        ctx.save();
-        ctx.shadowColor = "rgba(0, 0, 0, 0.50)";
-        ctx.shadowBlur = 12;
-        ctx.shadowOffsetY = 5;
-        ctx.drawImage(img2, x2, y2, drawW2, drawH2);
-        ctx.restore();
-      } catch (err) {
-        console.warn(`Aviso ao desenhar fotos do produto ${product.code}:`, err);
-      }
-    } else if (photo1) {
-      try {
-        const photoImg = await loadImage(photo1);
-
-        const aspect = (photoImg.naturalWidth || photoImg.width) / (photoImg.naturalHeight || photoImg.height);
-        const maxW = availableW * 0.88 * scale;
-        const maxH = availableH * scale;
-
-        let drawW = maxW;
-        let drawH = drawW / aspect;
-        if (drawH > maxH) {
-          drawH = maxH;
-          drawW = drawH * aspect;
-        }
-
-        const drawX = barX + (barW - drawW) / 2 + offsetX;
-        const drawY = barY - drawH + overlapY + offsetY;
-
-        ctx.save();
-        ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
-        ctx.shadowBlur = 12;
-        ctx.shadowOffsetY = 5;
-        ctx.drawImage(photoImg, drawX, drawY, drawW, drawH);
-        ctx.restore();
-      } catch (err) {
-        console.warn(`Aviso ao desenhar foto do produto ${product.code}:`, err);
+        const img = await loadImage(photos[index] || "");
+        const aspect = img.naturalWidth / img.naturalHeight;
+        const bounds = semanalPhotoBounds(product, index, photos.length, cell.width, cell.photoAreaHeight, aspect);
+        ctx.drawImage(img, cell.x + bounds.x, cell.y + bounds.y, bounds.width, bounds.height);
+      } catch {
+        throw new Error(`A foto ${index + 1} do box ${i + 1} não pôde ser exportada. Troque a foto e tente novamente.`);
       }
     }
 
@@ -266,18 +172,14 @@ export async function renderEncarteSemanalPageToCanvas(
     // Textos da barra: COD (à esquerda) e DESCRIÇÃO (ao centro/direita)
     // Produtos classificados como Principal ficam SEM CÓDIGO na barra
     const isPrincipal = Boolean(product.isPrincipal || (!product.code && !product.secondaryCode));
-    const displayCode = isPrincipal
-      ? ""
-      : product.secondaryCode
-      ? `${product.code || ""} / ${product.secondaryCode}`.trim()
-      : (product.code ? product.code.trim() : "");
+    const displayCode = isPrincipal ? "" : semanalCodes(product).join(" / ");
     const desc = product.description ? product.description.trim().toUpperCase() : "";
 
     let textStartX = barX + 8;
     let availableDescWidth = barW - 16;
 
     if (displayCode) {
-      const codeFontSize = displayCode.length > 10 ? 9 : displayCode.length > 6 ? 11 : 13;
+      const codeFontSize = product.codeFontSize ?? 13;
       ctx.font = `900 ${codeFontSize}px 'Inter', monospace, sans-serif`;
       const codeWidth = ctx.measureText(displayCode).width;
       const codeBoxW = Math.min(codeWidth + 10, barW * 0.42);
@@ -285,7 +187,8 @@ export async function renderEncarteSemanalPageToCanvas(
       ctx.fillStyle = gridConfig.barTextColor || "#7A0D12";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(displayCode, barX + codeBoxW / 2, barY + barH / 2);
+      const codeLines = wrapText(ctx, displayCode, codeBoxW - 8, Math.floor(barH / (codeFontSize * 1.2)));
+      codeLines.forEach((line, index) => ctx.fillText(line, barX + codeBoxW / 2, barY + barH / 2 + (index - (codeLines.length - 1) / 2) * codeFontSize * 1.2));
 
       // Linha divisória vertical suave
       ctx.strokeStyle = "rgba(122, 13, 18, 0.3)";
@@ -301,20 +204,14 @@ export async function renderEncarteSemanalPageToCanvas(
 
     // Descrição do Produto
     if (desc) {
-      ctx.font = "900 11px 'Inter', sans-serif";
+      const fontSize = product.descriptionFontSize ?? 12;
+      ctx.font = `900 ${fontSize}px 'Barlow', sans-serif`;
       ctx.fillStyle = gridConfig.barTextColor || "#7A0D12";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-
-      const lines = wrapText(ctx, desc, availableDescWidth, 2);
+      const lines = wrapText(ctx, desc, availableDescWidth, Math.max(1, Math.floor(barH / (fontSize * 1.2))));
       const descCenterX = textStartX + availableDescWidth / 2;
-
-      if (lines.length === 1) {
-        ctx.fillText(lines[0], descCenterX, barY + barH / 2);
-      } else if (lines.length >= 2) {
-        ctx.fillText(lines[0], descCenterX, barY + barH / 2 - 7);
-        ctx.fillText(lines[1], descCenterX, barY + barH / 2 + 7);
-      }
+      lines.forEach((line, index) => ctx.fillText(line, descCenterX, barY + barH / 2 + (index - (lines.length - 1) / 2) * fontSize * 1.2));
     }
     ctx.restore();
   }
@@ -401,7 +298,8 @@ export async function exportEncarteSemanalPageAsPng(
  */
 export async function exportAllEncarteSemanalPagesAsZip(
   pages: EncarteSemanalProduct[][],
-  config: EncarteSemanalConfig
+  config: EncarteSemanalConfig,
+  onProgress?: (current: number, total: number) => void
 ): Promise<void> {
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
@@ -409,6 +307,7 @@ export async function exportAllEncarteSemanalPagesAsZip(
 
   for (let i = 0; i < pages.length; i++) {
     const pageNum = i + 1;
+    onProgress?.(pageNum, pages.length);
     const pageProducts = pages[i];
     const canvas = await renderEncarteSemanalPageToCanvas(pageProducts, config);
     const blob = await canvasToBlob(canvas);

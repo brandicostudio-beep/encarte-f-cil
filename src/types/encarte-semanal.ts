@@ -12,6 +12,10 @@ export interface EncarteSemanalProduct {
   image?: string;                 // URL ou DataURL da foto 1 / principal (PNG com transparência)
   secondaryImage?: string;        // Foto 2 opcional / variação de sabor, fragrância ou 2º produto no box
   secondaryCode?: string;         // Segundo código opcional (ex: "17585" em "14352 / 17585")
+  additionalProducts?: Array<{ code: string; image?: string }>;
+  photoTransforms?: Array<{ x: number; y: number; scale: number }>;
+  codeFontSize?: number;
+  descriptionFontSize?: number;
   duplicatePhoto?: boolean;       // Se true, repete a mesma foto lado a lado quando não houver foto secundária (padrão true para o visual clássico do encarte)
   alternativePhotos?: Array<{
     filename: string;
