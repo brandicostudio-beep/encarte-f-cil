@@ -16,8 +16,64 @@ import {
  * Respeita a configuração de topo (yStart), base (yEnd), margens e divisórias.
  */
 export function calculateEncarteSemanalGridCells(
-  gridConfig: EncarteSemanalGridConfig = DEFAULT_ENCARTE_SEMANAL_GRID
+  gridConfig: EncarteSemanalGridConfig = DEFAULT_ENCARTE_SEMANAL_GRID,
+  productCount?: number
 ): EncarteSemanalCellPosition[] {
+  const {
+    xStart,
+    xEnd,
+    yStart,
+    yEnd,
+    columns,
+    columnsCount = 4,
+    rowsCount = 5,
+    barHeight = 54,
+  } = gridConfig;
+
+  // Determine dynamic columns/rows if productCount provided
+  let dynColumns = columnsCount;
+  let dynRows = rowsCount;
+  if (typeof productCount === 'number' && productCount > 0) {
+    // Limit columns to a reasonable max (e.g., 6) to keep cells readable
+    const maxColumns = 6;
+    dynColumns = Math.min(productCount, maxColumns);
+    dynRows = Math.ceil(productCount / dynColumns);
+  }
+
+  const totalWidth = xEnd - xStart;
+  const totalHeight = yEnd - yStart;
+  const cellWidth = totalWidth / dynColumns;
+  const cellHeight = totalHeight / dynRows;
+
+  // Center the grid within canvas
+  const offsetX = xStart + (totalWidth - cellWidth * dynColumns) / 2;
+  const offsetY = yStart + (totalHeight - cellHeight * dynRows) / 2;
+
+  const cells: EncarteSemanalCellPosition[] = [];
+  let index = 0;
+  for (let r = 0; r < dynRows; r++) {
+    const y = offsetY + r * cellHeight;
+    for (let c = 0; c < dynColumns; c++) {
+      const x = offsetX + c * cellWidth;
+      const photoAreaHeight = cellHeight - barHeight;
+      const barY = y + photoAreaHeight;
+      cells.push({
+        index,
+        colIndex: c,
+        rowIndex: r,
+        x,
+        y,
+        width: cellWidth,
+        height: cellHeight,
+        photoAreaHeight,
+        barY,
+        barHeight,
+      });
+      index++;
+    }
+  }
+  return cells;
+}
   const {
     xStart,
     xEnd,

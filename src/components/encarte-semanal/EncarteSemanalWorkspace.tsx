@@ -95,24 +95,9 @@ export const EncarteSemanalWorkspace: React.FC = () => {
     loadEncarteSemanalGridConfig()
   );
   const [footerText, setFooterText] = useState<string>(() => loadEncarteSemanalFooterText());
-  const [history, setHistory] = useState(() => ({ past: [] as EncarteSemanalProduct[][], present: loadEncarteSemanalProducts(), future: [] as EncarteSemanalProduct[][] }));
-  const products = history.present;
-  const setProducts = useCallback((update: React.SetStateAction<EncarteSemanalProduct[]>) => {
-    setHistory(previous => changeSemanalHistory(previous, typeof update === "function" ? update(previous.present) : update));
-  }, []);
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      const target = event.target;
-      if (target instanceof HTMLElement && (target.closest("input, textarea, [contenteditable=true]") || target.closest('[role="dialog"]'))) return;
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
-        event.preventDefault(); setHistory(event.shiftKey ? redoSemanalHistory : undoSemanalHistory);
-      } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
-        event.preventDefault(); setHistory(redoSemanalHistory);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  const [products, setProducts] = useState<EncarteSemanalProduct[]>(() =>
+    loadEncarteSemanalProducts()
+  );
   const [storedCatalog, setStoredCatalog] = useState<EncarteSemanalProduct[]>(() => {
     const loaded = loadStoredCatalog();
     if (loaded.length > 0) return loaded;
@@ -1205,8 +1190,8 @@ export const EncarteSemanalWorkspace: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-1">
-                <Button variant="outline" size="icon" disabled={!history.past.length} onClick={() => setHistory(undoSemanalHistory)} title="Desfazer (Ctrl+Z)" aria-label="Desfazer"><RotateCcw className="h-4 w-4" /></Button>
-                <Button variant="outline" size="icon" disabled={!history.future.length} onClick={() => setHistory(redoSemanalHistory)} title="Refazer (Ctrl+Y)" aria-label="Refazer"><RotateCcw className="h-4 w-4 -scale-x-100" /></Button>
+                <Button variant="outline" size="icon" disabled={historyIndex <= 0} onClick={handleUndo} title="Desfazer (Ctrl+Z)" aria-label="Desfazer"><Undo2 className="h-4 w-4" /></Button>
+                <Button variant="outline" size="icon" disabled={historyIndex >= history.length - 1} onClick={handleRedo} title="Refazer (Ctrl+Y)" aria-label="Refazer"><Redo2 className="h-4 w-4" /></Button>
               </div>
               {/* Controles de Zoom */}
               <div className="flex items-center gap-2">
