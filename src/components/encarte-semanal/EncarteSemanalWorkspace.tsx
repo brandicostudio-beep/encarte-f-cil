@@ -1076,6 +1076,8 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                         cell={cell}
                         interactive={true}
                         isSelected={isSelected}
+                        previewZoom={previewZoom}
+                        onUpdateProduct={(updated) => handleSaveSlotProduct(idx, updated)}
                         onClickSlot={() => {
                           setSelectedSlotIndex(selectedSlotIndex === idx ? null : idx);
                         }}

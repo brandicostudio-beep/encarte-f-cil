@@ -79,12 +79,19 @@ describe("ReviewTable - Edição rápida de estoque e preço", () => {
   });
 
   it("Exibe badges administrativas quando produto estiver próximo do vencimento ou sem giro", () => {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 5);
+    const day = String(futureDate.getDate()).padStart(2, "0");
+    const month = String(futureDate.getMonth() + 1).padStart(2, "0");
+    const year = futureDate.getFullYear();
+    const validityStr = `${day}/${month}/${year}`;
+
     const criticalProduct: EncarteProduct = {
       id: "prod-critico",
       code: "99999",
       name: "IOGURTE NATURAL 170G",
       packaging: "UNIDADE 1X170 GR",
-      validity: "22/11/2026", // Faltam 5 dias
+      validity: validityStr, // Faltam 5 dias
       price: "3,50",
       unit: "UND",
       stock: "40 UND",

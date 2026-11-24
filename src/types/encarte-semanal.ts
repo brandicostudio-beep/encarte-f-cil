@@ -19,7 +19,12 @@ export interface EncarteSemanalProduct {
     source?: string;
   }>;
   limit?: string;                // Opcional: Faixa de limite (ex.: "1000CX", "10 UN")
+  limitFontSize?: number;        // Tamanho da fonte do limite em px (padrão 9, opções: 9, 11, 13, 15)
+  limitWidthPercent?: number;    // Largura da faixa de limite em % do box (padrão 75, opções: 75, 90, 100)
   scale?: number;                // Escala da foto (padrão 1.15 ou 115%)
+  scale2?: number;               // Escala independente da foto 2 (padrão igual a scale)
+  offsetX2?: number;             // Ajuste horizontal em px da foto 2
+  offsetY2?: number;             // Ajuste vertical em px da foto 2
   offsetX?: number;              // Ajuste horizontal em px
   offsetY?: number;              // Ajuste vertical em px
   overlapY?: number;              // Sobreposição sobre a barra inferior em px

@@ -176,11 +176,17 @@ export async function renderEncarteSemanalPageToCanvas(
           drawW1 = drawH1 * aspect1;
         }
 
-        // Foto 2 com proporção nativa
-        let drawW2 = maxItemW;
+        // Foto 2 com proporção nativa e escala independente
+        const scale2 = product.scale2
+          ? (product.scale2 > 10 ? product.scale2 / 100 : product.scale2)
+          : scale;
+        const offsetX2 = product.offsetX2 ?? offsetX;
+        const offsetY2 = product.offsetY2 ?? offsetY;
+
+        let drawW2 = availableW * 0.54 * scale2;
         let drawH2 = drawW2 / aspect2;
-        if (drawH2 > maxItemH) {
-          drawH2 = maxItemH;
+        if (drawH2 > availableH * scale2) {
+          drawH2 = availableH * scale2;
           drawW2 = drawH2 * aspect2;
         }
 
@@ -188,8 +194,8 @@ export async function renderEncarteSemanalPageToCanvas(
         const x1 = barX + Math.max(0, (barW * 0.48 - drawW1) / 2) + offsetX;
         const y1 = barY - drawH1 + overlapY + offsetY;
 
-        const x2 = barX + barW - drawW2 - Math.max(0, (barW * 0.48 - drawW2) / 2) + offsetX;
-        const y2 = barY - drawH2 + overlapY + offsetY;
+        const x2 = barX + barW - drawW2 - Math.max(0, (barW * 0.48 - drawW2) / 2) + offsetX2;
+        const y2 = barY - drawH2 + overlapY + offsetY2;
 
         // Foto 1 (Esquerda / Trás)
         ctx.save();
@@ -245,10 +251,12 @@ export async function renderEncarteSemanalPageToCanvas(
     roundRect(ctx, barX, barY, barW, barH, 7);
     ctx.fill();
 
-    // Faixa laranja de Limite (se houver, ex: "LIMITE: 1000CX")
+    // Faixa laranja de Limite com tamanho de fonte e largura configuráveis (ex: "LIMITE: 1000CX")
     if (product.limit) {
-      const limitW = barW * 0.75;
-      const limitH = 14;
+      const fontSize = product.limitFontSize || 9;
+      const widthPct = (product.limitWidthPercent || 75) / 100;
+      const limitW = barW * widthPct;
+      const limitH = Math.max(14, fontSize + 5);
       const limitX = barX + (barW - limitW) / 2;
       const limitY = barY - limitH + 1;
 
@@ -256,7 +264,7 @@ export async function renderEncarteSemanalPageToCanvas(
       roundRect(ctx, limitX, limitY, limitW, limitH, 3);
       ctx.fill();
 
-      ctx.font = "900 9px 'Inter', sans-serif";
+      ctx.font = `900 ${fontSize}px 'Inter', sans-serif`;
       ctx.fillStyle = "#ffffff";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";

@@ -28,6 +28,7 @@ import {
   Star,
   Copy,
   Layers,
+  Move,
 } from "lucide-react";
 
 export interface EncarteSemanalInArtEditorProps {
@@ -63,6 +64,9 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     Boolean(product?.duplicatePhoto)
   );
   const [scale, setScale] = useState(product?.scale ?? 1.15);
+  const [scale2, setScale2] = useState(product?.scale2 ?? (product?.scale ?? 1.15));
+  const [limitFontSize, setLimitFontSize] = useState<number>(product?.limitFontSize || 9);
+  const [limitWidthPercent, setLimitWidthPercent] = useState<number>(product?.limitWidthPercent || 75);
   const [suggestions, setSuggestions] = useState<ProductSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoadingPhoto, setIsLoadingPhoto] = useState(false);
@@ -211,10 +215,15 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       secondaryImage: photo2 || undefined,
       duplicatePhoto,
       limit: limit.trim() || undefined,
+      limitFontSize,
+      limitWidthPercent,
       scale,
+      scale2,
       offsetX: product?.offsetX ?? 0,
       offsetY: product?.offsetY ?? 0,
-      overlapY: product?.overlapY ?? 4,
+      offsetX2: product?.offsetX2 ?? 0,
+      offsetY2: product?.offsetY2 ?? 0,
+      overlapY: product?.overlapY ?? 2,
       included: true,
       originalCode: product?.originalCode || primaryCode,
       originalDescription: product?.originalDescription || newDesc,
@@ -270,14 +279,48 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     reader.readAsDataURL(file);
   };
 
-  // Ajuste rápido de zoom da foto (+ / -)
+  // Ajuste rápido de zoom da foto 1 (+ / -)
   const handleAdjustScale = (delta: number) => {
-    const newScale = Math.max(0.5, Math.min(2.5, Number((scale + delta).toFixed(2))));
+    const newScale = Math.max(0.4, Math.min(2.5, Number((scale + delta).toFixed(2))));
     setScale(newScale);
     if (product) {
       onSaveProduct({
         ...product,
         scale: newScale,
+      });
+    }
+  };
+
+  // Ajuste rápido de zoom da foto 2 (+ / -)
+  const handleAdjustScale2 = (delta: number) => {
+    const newScale = Math.max(0.4, Math.min(2.5, Number((scale2 + delta).toFixed(2))));
+    setScale2(newScale);
+    if (product) {
+      onSaveProduct({
+        ...product,
+        scale2: newScale,
+      });
+    }
+  };
+
+  // Centralizar / resetar posição da foto 1
+  const handleResetPhoto1Pos = () => {
+    if (product) {
+      onSaveProduct({
+        ...product,
+        offsetX: 0,
+        offsetY: 0,
+      });
+    }
+  };
+
+  // Centralizar / resetar posição da foto 2
+  const handleResetPhoto2Pos = () => {
+    if (product) {
+      onSaveProduct({
+        ...product,
+        offsetX2: 0,
+        offsetY2: 0,
       });
     }
   };
@@ -497,8 +540,8 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
         />
       </div>
 
-      {/* 3. CAMPO LIMITE (OPCIONAL) */}
-      <div className="space-y-1">
+      {/* 3. CAMPO LIMITE (OPCIONAL) COM FONTE E BARRA AJUSTÁVEIS */}
+      <div className="space-y-1.5">
         <Label htmlFor="inArtLimit" className="text-[11px] font-bold text-neutral-300 flex items-center justify-between">
           <span>Faixa de Limite (Opcional):</span>
           <span className="text-[10px] text-orange-400">Ex: 1000CX ou 10 UN</span>
@@ -507,11 +550,14 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
           id="inArtLimit"
           value={limit}
           onChange={(e) => {
-            setLimit(e.target.value.toUpperCase());
+            const val = e.target.value.toUpperCase();
+            setLimit(val);
             if (product) {
               onSaveProduct({
                 ...product,
-                limit: e.target.value.trim() ? e.target.value.toUpperCase() : undefined,
+                limit: val.trim() ? val : undefined,
+                limitFontSize,
+                limitWidthPercent,
               });
             }
           }}
@@ -520,6 +566,71 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
           className="h-7 bg-neutral-900 border-neutral-700 text-orange-300 font-bold text-[11px] uppercase focus:border-orange-400"
           data-testid="in-art-input-limit"
         />
+
+        {/* Ajustes Visuais de Tamanho da Fonte e Barra de Limite */}
+        {limit.trim().length > 0 && (
+          <div className="bg-black/50 border border-orange-500/30 p-2 rounded-md space-y-1.5 animate-in fade-in duration-100">
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="font-bold text-neutral-300">Tamanho Fonte:</span>
+              <div className="flex items-center gap-1">
+                {[9, 11, 13, 15].map((sz) => (
+                  <button
+                    key={sz}
+                    type="button"
+                    onClick={() => {
+                      setLimitFontSize(sz);
+                      if (product) {
+                        onSaveProduct({
+                          ...product,
+                          limitFontSize: sz,
+                        });
+                      }
+                    }}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                      limitFontSize === sz
+                        ? "bg-orange-500 text-white font-black"
+                        : "bg-neutral-800 text-neutral-400 hover:text-white"
+                    }`}
+                  >
+                    {sz}px
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="font-bold text-neutral-300">Largura Barra:</span>
+              <div className="flex items-center gap-1">
+                {[
+                  { label: "75%", val: 75 },
+                  { label: "90%", val: 90 },
+                  { label: "100%", val: 100 },
+                ].map((item) => (
+                  <button
+                    key={item.val}
+                    type="button"
+                    onClick={() => {
+                      setLimitWidthPercent(item.val);
+                      if (product) {
+                        onSaveProduct({
+                          ...product,
+                          limitWidthPercent: item.val,
+                        });
+                      }
+                    }}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                      limitWidthPercent === item.val
+                        ? "bg-orange-500 text-white font-black"
+                        : "bg-neutral-800 text-neutral-400 hover:text-white"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 4. CONTROLES DE FOTOS E VARIAÇÕES (2 FOTOS NO BOX / FIGMA-CANVA) */}
@@ -529,7 +640,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
           <span className="font-mono text-amber-300 text-[10px]">Zoom: {Math.round(scale * 100)}%</span>
         </div>
 
-        {/* Linha das Duas Fotos (Foto 1 + Foto 2/Variação) */}
+        {/* Linha das Duas Fotos (Foto 1 + Foto 2/Variação com ajustes independentes) */}
         <div className="grid grid-cols-2 gap-2">
           {/* Card Foto 1 */}
           <div className="bg-black/40 border border-neutral-800 rounded-md p-1.5 flex flex-col items-center">
@@ -555,14 +666,45 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoadingPhoto}
               className="h-6 w-full px-1 bg-neutral-800 border-neutral-700 text-amber-300 hover:text-white text-[10px]"
-              title="Trocar Foto 1 (recorta fundo branco automaticamente)"
+              title="Trocar Foto 1 (PNG transparente)"
             >
               <Upload className="h-2.5 w-2.5 mr-1" />
               Trocar
             </Button>
+
+            {/* Ajustes Rápidos Foto 1 */}
+            <div className="w-full flex items-center justify-between mt-1 text-[9px] text-neutral-400 pt-1 border-t border-neutral-800/80">
+              <span className="font-mono text-amber-300 font-bold">{Math.round(scale * 100)}%</span>
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => handleAdjustScale(-0.05)}
+                  className="h-4.5 w-4.5 bg-neutral-800 hover:bg-neutral-700 text-white rounded flex items-center justify-center font-bold text-[10px] cursor-pointer"
+                  title="Diminuir tamanho Foto 1"
+                >
+                  -
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAdjustScale(0.05)}
+                  className="h-4.5 w-4.5 bg-neutral-800 hover:bg-neutral-700 text-white rounded flex items-center justify-center font-bold text-[10px] cursor-pointer"
+                  title="Aumentar tamanho Foto 1"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetPhoto1Pos}
+                  className="h-4.5 px-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded text-[9px] cursor-pointer"
+                  title="Centralizar posição da Foto 1"
+                >
+                  ↺
+                </button>
+              </div>
+            </div>
           </div>
 
-          {/* Card Foto 2 (Variação / 2º Produto) */}
+          {/* Card Foto 2 (Variação / 2º Produto ajustável de forma independente) */}
           <div className="bg-black/40 border border-neutral-800 rounded-md p-1.5 flex flex-col items-center">
             <span className="text-[9px] font-bold uppercase text-neutral-400 mb-1">Foto 2 (Variação)</span>
             <div className="h-12 w-full bg-[#200408] rounded flex items-center justify-center overflow-hidden mb-1 relative border border-neutral-700">
@@ -611,17 +753,58 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
                       });
                     }
                   }}
-                  className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                  className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer"
                   title="Remover Foto 2"
                 >
                   <X className="h-3 w-3" />
                 </Button>
               )}
             </div>
+
+            {/* Ajustes Rápidos Foto 2 (se houver 2ª foto ou duplicata) */}
+            {(secondaryImage || duplicatePhoto) && (
+              <div className="w-full flex items-center justify-between mt-1 text-[9px] text-neutral-400 pt-1 border-t border-neutral-800/80">
+                <span className="font-mono text-amber-300 font-bold">{Math.round(scale2 * 100)}%</span>
+                <div className="flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handleAdjustScale2(-0.05)}
+                    className="h-4.5 w-4.5 bg-neutral-800 hover:bg-neutral-700 text-white rounded flex items-center justify-center font-bold text-[10px] cursor-pointer"
+                    title="Diminuir tamanho Foto 2"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAdjustScale2(0.05)}
+                    className="h-4.5 w-4.5 bg-neutral-800 hover:bg-neutral-700 text-white rounded flex items-center justify-center font-bold text-[10px] cursor-pointer"
+                    title="Aumentar tamanho Foto 2"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetPhoto2Pos}
+                    className="h-4.5 px-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded text-[9px] cursor-pointer"
+                    title="Centralizar posição da Foto 2"
+                  >
+                    ↺
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Alternador de Duplicação e Controles de Zoom */}
+        {/* Dica Canva/Figma */}
+        <div className="text-[10px] text-amber-200/80 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded flex items-center gap-1.5">
+          <Move className="h-3 w-3 text-amber-400 shrink-0" />
+          <span>
+            <strong>Figma/Canva:</strong> Arraste a foto com o mouse para mover e puxe os 4 cantos amarelos para redimensionar!
+          </span>
+        </div>
+
+        {/* Alternador de Duplicação */}
         <div className="flex items-center justify-between pt-1 border-t border-neutral-800 gap-1.5">
           {/* Toggle Duplicar Foto quando só tem 1 */}
           <button
@@ -646,43 +829,6 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
             <Copy className="h-3 w-3" />
             <span>{duplicatePhoto ? "2 Unidades (Ativo)" : "1 Foto Única"}</span>
           </button>
-
-          {/* Zoom - / 115% / + */}
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => handleAdjustScale(-0.05)}
-              className="h-6 w-6 p-0 bg-neutral-800 border-neutral-700 text-neutral-300 hover:text-white text-xs"
-              title="Reduzir tamanho da foto"
-            >
-              <ZoomOut className="h-3 w-3" />
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setScale(1.15);
-                if (product) onSaveProduct({ ...product, scale: 1.15 });
-              }}
-              className="h-6 px-1.5 text-[10px] text-neutral-400 hover:text-white"
-              title="Restaurar tamanho padrão (115%)"
-            >
-              115%
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => handleAdjustScale(0.05)}
-              className="h-6 w-6 p-0 bg-neutral-800 border-neutral-700 text-neutral-300 hover:text-white text-xs"
-              title="Aumentar tamanho da foto"
-            >
-              <ZoomIn className="h-3 w-3" />
-            </Button>
-          </div>
         </div>
       </div>
 
