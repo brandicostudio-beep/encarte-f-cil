@@ -536,4 +536,54 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  // =========================================================================
+  // Teste 15: Inteligência de Catálogo - Busca de Variações para Foto 2
+  // =========================================================================
+  it("Teste 15: Encontra variações da mesma base/marca para a Foto 2", async () => {
+    const { findSemanalVariations } = await import("./encarte-semanal-catalog");
+
+    const catalog = [
+      { code: "101", description: "ALVEJANTE Q BOA FLORAL - 12X1 LT", image: "data:img101" },
+      { code: "102", description: "ALVEJANTE Q BOA LAVANDA - 12X1 LT", image: "data:img102" },
+      { code: "103", description: "ALVEJANTE Q BOA ORIGINAL - 12X1 LT", image: "data:img103" },
+      { code: "201", description: "SABÃO EM PÓ OMO 1KG", image: "data:img201" },
+    ];
+
+    const variations = findSemanalVariations("ALVEJANTE Q BOA", "101", catalog);
+    expect(variations.length).toBeGreaterThanOrEqual(2);
+    expect(variations.some((v) => v.code === "102")).toBe(true);
+    expect(variations.some((v) => v.code === "103")).toBe(true);
+    expect(variations.some((v) => v.code === "101")).toBe(false); // Não inclui ele mesmo
+    expect(variations.some((v) => v.code === "201")).toBe(false); // Não inclui outra marca
+  });
+
+  // =========================================================================
+  // Teste 16: Recursos Visuais - Selos Promocionais e Espelhamento Horizontal
+  // =========================================================================
+  it("Teste 16: Suporte a espelhamento horizontal, selo promocional e limites customizados", () => {
+    const prod: EncarteSemanalProduct = {
+      id: "prod-selo-1",
+      code: "19396",
+      description: "AMEIXA EM CALDA LATA PREDILECTA",
+      image: "data:imgAmeixa",
+      secondaryImage: "data:imgAmeixaVar",
+      flipHorizontal: true,
+      flipHorizontal2: false,
+      badge: "LANÇAMENTO",
+      badgeColor: "amber",
+      limit: "1000CX",
+      limitFontSize: 11,
+      limitWidthPercent: 90,
+      scale: 1.2,
+      scale2: 1.1,
+    };
+
+    expect(prod.flipHorizontal).toBe(true);
+    expect(prod.badge).toBe("LANÇAMENTO");
+    expect(prod.badgeColor).toBe("amber");
+    expect(prod.limitFontSize).toBe(11);
+    expect(prod.limitWidthPercent).toBe(90);
+    expect(prod.scale2).toBe(1.1);
+  });
 });

@@ -21,6 +21,10 @@ export interface EncarteSemanalProduct {
   limit?: string;                // Opcional: Faixa de limite (ex.: "1000CX", "10 UN")
   limitFontSize?: number;        // Tamanho da fonte do limite em px (padrão 9, opções: 9, 11, 13, 15)
   limitWidthPercent?: number;    // Largura da faixa de limite em % do box (padrão 75, opções: 75, 90, 100)
+  badge?: string;                // Selo promocional opcional (ex: "LANÇAMENTO", "OFERTA", "DESTAQUE", "LEVE +")
+  badgeColor?: "red" | "amber" | "green" | "purple" | "blue"; // Cor de fundo do selo promocional
+  flipHorizontal?: boolean;      // Espelha Foto 1 horizontalmente
+  flipHorizontal2?: boolean;     // Espelha Foto 2 horizontalmente
   scale?: number;                // Escala da foto (padrão 1.15 ou 115%)
   scale2?: number;               // Escala independente da foto 2 (padrão igual a scale)
   offsetX2?: number;             // Ajuste horizontal em px da foto 2

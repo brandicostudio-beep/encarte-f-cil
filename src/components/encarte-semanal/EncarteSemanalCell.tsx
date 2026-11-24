@@ -451,6 +451,26 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
         </>
       )}
 
+      {/* Selo Promocional (Badge de Varejo) */}
+      {product?.badge && (
+        <div
+          className={`absolute top-1.5 left-1.5 z-25 px-2 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider shadow-md pointer-events-none flex items-center gap-1 border ${
+            product.badgeColor === "green"
+              ? "bg-emerald-600 text-white border-emerald-400"
+              : product.badgeColor === "purple"
+              ? "bg-purple-600 text-white border-purple-400"
+              : product.badgeColor === "blue"
+              ? "bg-blue-600 text-white border-blue-400"
+              : product.badgeColor === "amber"
+              ? "bg-amber-400 text-neutral-950 border-amber-300 font-extrabold"
+              : "bg-red-600 text-white border-red-400"
+          }`}
+        >
+          <span className="text-[7px]">★</span>
+          <span>{product.badge}</span>
+        </div>
+      )}
+
       {/* Botão de edição rápida em hover */}
       {interactive && !isSelected && (
         <button
@@ -501,6 +521,9 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
                 src={cleanPhoto1}
                 alt={product.description}
                 draggable={false}
+                style={{
+                  transform: product.flipHorizontal ? "scaleX(-1)" : undefined,
+                }}
                 className="w-full h-full object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.50)] pointer-events-none"
               />
             </div>
@@ -528,6 +551,9 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
                 src={cleanPhoto2}
                 alt={product.description}
                 draggable={false}
+                style={{
+                  transform: product.flipHorizontal2 ? "scaleX(-1)" : undefined,
+                }}
                 className="w-full h-full object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.55)] pointer-events-none"
               />
             </div>
@@ -551,7 +577,9 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
               style={{
                 maxWidth: `${(width - 24) * 0.88 * scale1}px`,
                 maxHeight: `${(photoAreaHeight - 16) * scale1}px`,
-                transform: `translate(${curOffsetX1}px, ${overlapY + curOffsetY1}px)`,
+                transform: `translate(${curOffsetX1}px, ${overlapY + curOffsetY1}px) ${
+                  product.flipHorizontal ? "scaleX(-1)" : ""
+                }`,
                 zIndex: 11,
               }}
             />

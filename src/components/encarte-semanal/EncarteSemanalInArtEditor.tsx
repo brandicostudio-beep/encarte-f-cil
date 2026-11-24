@@ -29,26 +29,34 @@ import {
   Copy,
   Layers,
   Move,
+  FlipHorizontal,
+  ArrowLeftRight,
+  Tag,
 } from "lucide-react";
+import { findSemanalVariations } from "@/lib/encarte-semanal-catalog";
 
 export interface EncarteSemanalInArtEditorProps {
   cell: EncarteSemanalCellPosition;
   product: EncarteSemanalProduct | null;
   cellIndex: number; // 0 a 19
+  allProducts?: EncarteSemanalProduct[];
   onSaveProduct: (updated: EncarteSemanalProduct) => void;
   onClearProduct: () => void;
   onClose: () => void;
   onOpenAdvancedModal?: (product: EncarteSemanalProduct) => void;
+  onSwapSlots?: (targetSlotIndex: number) => void;
 }
 
 export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps> = ({
   cell,
   product,
   cellIndex,
+  allProducts,
   onSaveProduct,
   onClearProduct,
   onClose,
   onOpenAdvancedModal,
+  onSwapSlots,
 }) => {
   // Se houver secondaryCode, compõe o texto inicial (ex: "14352 / 17585")
   const initialCode = product?.secondaryCode
@@ -67,6 +75,16 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   const [scale2, setScale2] = useState(product?.scale2 ?? (product?.scale ?? 1.15));
   const [limitFontSize, setLimitFontSize] = useState<number>(product?.limitFontSize || 9);
   const [limitWidthPercent, setLimitWidthPercent] = useState<number>(product?.limitWidthPercent || 75);
+  const [flipHorizontal, setFlipHorizontal] = useState<boolean>(Boolean(product?.flipHorizontal));
+  const [flipHorizontal2, setFlipHorizontal2] = useState<boolean>(Boolean(product?.flipHorizontal2));
+  const [badge, setBadge] = useState<string>(product?.badge || "");
+  const [badgeColor, setBadgeColor] = useState<"red" | "amber" | "green" | "purple" | "blue">(
+    product?.badgeColor || "red"
+  );
+  const [swapTargetBox, setSwapTargetBox] = useState<number>(
+    cellIndex === 0 ? 1 : 0
+  );
+  const [variations, setVariations] = useState<Array<{ code: string; description: string; image?: string }>>([]);
   const [suggestions, setSuggestions] = useState<ProductSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoadingPhoto, setIsLoadingPhoto] = useState(false);
@@ -113,6 +131,20 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       active = false;
     };
   }, [codeQuery]);
+
+  // Busca variações inteligentes para sugerir como Foto 2
+  useEffect(() => {
+    const descToUse = description || product?.description || "";
+    if (!descToUse || descToUse.length < 3) {
+      setVariations([]);
+      return;
+    }
+
+    const vars = findSemanalVariations(descToUse, product?.code, allProducts);
+    // Filtra variações que já tenham a mesma foto que a Foto 1
+    const filtered = vars.filter((v) => v.image && v.image !== image);
+    setVariations(filtered);
+  }, [description, product?.description, product?.code, image, allProducts]);
 
   // Aplica uma sugestão selecionada com predição de texto
   const handleSelectSuggestion = (suggestion: ProductSuggestion) => {
@@ -217,6 +249,10 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       limit: limit.trim() || undefined,
       limitFontSize,
       limitWidthPercent,
+      flipHorizontal,
+      flipHorizontal2,
+      badge: badge.trim() || undefined,
+      badgeColor,
       scale,
       scale2,
       offsetX: product?.offsetX ?? 0,
@@ -321,6 +357,56 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
         ...product,
         offsetX2: 0,
         offsetY2: 0,
+      });
+    }
+  };
+
+  // Alternar espelhamento horizontal Foto 1
+  const handleToggleFlip1 = () => {
+    const nextVal = !flipHorizontal;
+    setFlipHorizontal(nextVal);
+    if (product) {
+      onSaveProduct({
+        ...product,
+        flipHorizontal: nextVal,
+      });
+    }
+  };
+
+  // Alternar espelhamento horizontal Foto 2
+  const handleToggleFlip2 = () => {
+    const nextVal = !flipHorizontal2;
+    setFlipHorizontal2(nextVal);
+    if (product) {
+      onSaveProduct({
+        ...product,
+        flipHorizontal2: nextVal,
+      });
+    }
+  };
+
+  // Igualar tamanho da Foto 2 com a Foto 1
+  const handleMatchScale2With1 = () => {
+    setScale2(scale);
+    if (product) {
+      onSaveProduct({
+        ...product,
+        scale2: scale,
+      });
+    }
+  };
+
+  // Aplicar uma variação inteligente na Foto 2
+  const handleSelectVariation = (variation: { code: string; description: string; image?: string }) => {
+    if (!variation.image) return;
+    setSecondaryImage(variation.image);
+    setDuplicatePhoto(false);
+    if (product) {
+      onSaveProduct({
+        ...product,
+        secondaryImage: variation.image,
+        secondaryCode: variation.code,
+        duplicatePhoto: false,
       });
     }
   };
@@ -700,6 +786,18 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
                 >
                   ↺
                 </button>
+                <button
+                  type="button"
+                  onClick={handleToggleFlip1}
+                  className={`h-4.5 px-1 rounded text-[9px] cursor-pointer flex items-center justify-center ${
+                    flipHorizontal
+                      ? "bg-amber-400 text-neutral-950 font-bold"
+                      : "bg-neutral-800 hover:bg-neutral-700 text-neutral-300"
+                  }`}
+                  title="Espelhar Foto 1 horizontalmente"
+                >
+                  <FlipHorizontal className="h-2.5 w-2.5" />
+                </button>
               </div>
             </div>
           </div>
@@ -790,11 +888,166 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
                   >
                     ↺
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleToggleFlip2}
+                    className={`h-4.5 px-1 rounded text-[9px] cursor-pointer flex items-center justify-center ${
+                      flipHorizontal2
+                        ? "bg-amber-400 text-neutral-950 font-bold"
+                        : "bg-neutral-800 hover:bg-neutral-700 text-neutral-300"
+                    }`}
+                    title="Espelhar Foto 2 horizontalmente"
+                  >
+                    <FlipHorizontal className="h-2.5 w-2.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleMatchScale2With1}
+                    className="h-4.5 px-1 bg-neutral-800 hover:bg-neutral-700 text-amber-300 rounded text-[9px] font-bold cursor-pointer"
+                    title="Igualar zoom com Foto 1"
+                  >
+                    =
+                  </button>
                 </div>
               </div>
             )}
           </div>
         </div>
+
+        {/* Sugestões de Variações Inteligentes para Foto 2 */}
+        {variations.length > 0 && (
+          <div className="bg-black/50 border border-amber-500/30 rounded-md p-2 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-amber-300 flex items-center gap-1">
+                <Sparkles className="h-3 w-3 text-amber-400" />
+                Variações da mesma linha para Foto 2:
+              </span>
+              <span className="text-[9px] text-neutral-400">{variations.length} encontrada(s)</span>
+            </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+              {variations.map((v) => (
+                <button
+                  key={v.code}
+                  type="button"
+                  onClick={() => handleSelectVariation(v)}
+                  className="flex flex-col items-center p-1 bg-neutral-800/90 hover:bg-neutral-700 border border-neutral-700 hover:border-amber-400/80 rounded transition-all shrink-0 w-16 group cursor-pointer"
+                  title={`Adicionar ${v.description} como Foto 2`}
+                >
+                  <div className="h-9 w-9 bg-neutral-900 rounded flex items-center justify-center overflow-hidden mb-0.5">
+                    <img src={v.image} alt={v.description} className="max-h-full max-w-full object-contain" />
+                  </div>
+                  <span className="text-[7.5px] font-bold text-neutral-300 group-hover:text-amber-300 line-clamp-1 truncate w-full text-center">
+                    {v.description}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Selo Promocional (Badge de Varejo) */}
+        <div className="bg-black/40 border border-neutral-800 p-2 rounded-lg space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-neutral-300 flex items-center gap-1">
+              <Tag className="h-3 w-3 text-amber-400" />
+              Selo Promocional no Box:
+            </span>
+            {badge && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBadge("");
+                  if (product) onSaveProduct({ ...product, badge: undefined });
+                }}
+                className="text-[9px] text-red-400 hover:underline cursor-pointer"
+              >
+                Remover Selo
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {["LANÇAMENTO", "OFERTA", "DESTAQUE", "LEVE +", "NOVO"].map((b) => (
+              <button
+                key={b}
+                type="button"
+                onClick={() => {
+                  const next = badge === b ? "" : b;
+                  setBadge(next);
+                  if (product) onSaveProduct({ ...product, badge: next || undefined, badgeColor });
+                }}
+                className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all cursor-pointer ${
+                  badge === b
+                    ? "bg-amber-400 text-neutral-950 border border-amber-300 shadow"
+                    : "bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-700"
+                }`}
+              >
+                {b}
+              </button>
+            ))}
+          </div>
+          {badge && (
+            <div className="flex items-center gap-1.5 pt-1 border-t border-neutral-800">
+              <span className="text-[9px] text-neutral-400">Cor do Selo:</span>
+              {(["red", "amber", "green", "purple", "blue"] as const).map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => {
+                    setBadgeColor(color);
+                    if (product) onSaveProduct({ ...product, badgeColor: color });
+                  }}
+                  className={`h-4.5 w-4.5 rounded-full border transition-all cursor-pointer ${
+                    color === "red"
+                      ? "bg-red-600"
+                      : color === "amber"
+                      ? "bg-amber-500"
+                      : color === "green"
+                      ? "bg-emerald-600"
+                      : color === "purple"
+                      ? "bg-purple-600"
+                      : "bg-blue-600"
+                  } ${badgeColor === color ? "ring-2 ring-white scale-110" : "border-neutral-600 opacity-60"}`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Trocar de Posição com outro Box (Swap) */}
+        {onSwapSlots && (
+          <div className="bg-black/30 border border-neutral-800 px-2 py-1.5 rounded-lg flex items-center justify-between text-[10px]">
+            <div className="flex items-center gap-1 text-neutral-400">
+              <ArrowLeftRight className="h-3 w-3 text-amber-400" />
+              <span>Trocar com:</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <select
+                value={swapTargetBox}
+                onChange={(e) => setSwapTargetBox(Number(e.target.value))}
+                className="bg-neutral-800 border border-neutral-700 text-amber-300 font-bold rounded px-1.5 py-0.5 text-[10px] cursor-pointer"
+              >
+                {Array.from({ length: 20 }, (_, i) => (
+                  <option key={i} value={i} disabled={i === cellIndex}>
+                    Box {i + 1}
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  onSwapSlots(swapTargetBox);
+                  onClose();
+                }}
+                className="h-5 px-2 bg-neutral-800 border-neutral-700 text-amber-300 hover:text-white text-[9px] font-bold cursor-pointer"
+                title={`Trocar conteúdo do Box ${cellIndex + 1} com o Box ${swapTargetBox + 1}`}
+              >
+                Trocar
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Dica Canva/Figma */}
         <div className="text-[10px] text-amber-200/80 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded flex items-center gap-1.5">

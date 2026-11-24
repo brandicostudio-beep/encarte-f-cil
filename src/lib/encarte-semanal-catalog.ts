@@ -407,3 +407,55 @@ export function cleanPrincipalDescription(raw: string): string {
 
   return s.toUpperCase();
 }
+
+/**
+ * Encontra variações (outros sabores, fragrâncias ou aromas) da mesma marca/família
+ * para serem sugeridos como Foto 2 no Encarte Semanal.
+ */
+export function findSemanalVariations(
+  targetDescription: string,
+  targetCode?: string,
+  catalogProducts?: Array<{ code: string; description: string; image?: string }>
+): Array<{ code: string; description: string; image?: string }> {
+  if (!targetDescription) return [];
+  const baseTarget = cleanPrincipalDescription(targetDescription);
+  if (!baseTarget || baseTarget.length < 3) return [];
+
+  const candidates: Array<{ code: string; description: string; image?: string }> = [];
+  const seenCodes = new Set<string>();
+  if (targetCode) seenCodes.add(targetCode.trim());
+
+  // Combina lista fornecida com o catálogo padrão da Cescom
+  const allItems: Array<{ code: string; description: string; image?: string }> = [
+    ...(catalogProducts || []),
+    ...CESCOM_STANDARD_CATALOG,
+  ];
+
+  for (const item of allItems) {
+    const code = (item.code || "").trim();
+    if (!code || seenCodes.has(code)) continue;
+
+    const desc = item.description || "";
+    const baseItem = cleanPrincipalDescription(desc);
+
+    // Verifica se a base bate (ex: ambos são "ALVEJANTE Q BOA" ou compartilham a base principal)
+    const matchesBase =
+      baseItem.includes(baseTarget) ||
+      baseTarget.includes(baseItem) ||
+      (baseTarget.length > 5 && desc.toUpperCase().includes(baseTarget));
+
+    if (matchesBase) {
+      seenCodes.add(code);
+      const img = item.image || findKnownPhotoForCode(code);
+      candidates.push({
+        code,
+        description: desc,
+        image: img,
+      });
+    }
+
+    if (candidates.length >= 8) break;
+  }
+
+  return candidates;
+}

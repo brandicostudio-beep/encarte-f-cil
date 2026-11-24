@@ -77,6 +77,11 @@ import {
   Star,
   MousePointerClick,
   Zap,
+  Undo2,
+  Redo2,
+  CheckCheck,
+  ArrowLeftRight,
+  Tag,
 } from "lucide-react";
 
 export const EncarteSemanalWorkspace: React.FC = () => {
@@ -144,6 +149,53 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   const [gridModalOpen, setGridModalOpen] = useState<boolean>(false);
   const [editingProduct, setEditingProduct] = useState<EncarteSemanalProduct | null>(null);
   const [productModalOpen, setProductModalOpen] = useState<boolean>(false);
+  const [qualityModalOpen, setQualityModalOpen] = useState<boolean>(false);
+
+  // Histórico de Desfazer / Refazer (Ctrl + Z / Ctrl + Y)
+  const [history, setHistory] = useState<EncarteSemanalProduct[][]>(() => [loadEncarteSemanalProducts()]);
+  const [historyIndex, setHistoryIndex] = useState<number>(0);
+  const isUndoRedoActionRef = useRef<boolean>(false);
+
+  const pushHistoryState = (newProducts: EncarteSemanalProduct[]) => {
+    if (isUndoRedoActionRef.current) return;
+    setHistory((prev) => {
+      const sliced = prev.slice(0, historyIndex + 1);
+      const next = [...sliced, newProducts];
+      if (next.length > 25) next.shift();
+      return next;
+    });
+    setHistoryIndex((prev) => Math.min(prev + 1, 24));
+  };
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      isUndoRedoActionRef.current = true;
+      const targetState = history[historyIndex - 1];
+      setHistoryIndex(historyIndex - 1);
+      setProducts(targetState);
+      saveEncarteSemanalProducts(targetState);
+      setExportMessage("↶ Desfazer aplicado");
+      setTimeout(() => {
+        isUndoRedoActionRef.current = false;
+        setExportMessage(null);
+      }, 1500);
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      isUndoRedoActionRef.current = true;
+      const targetState = history[historyIndex + 1];
+      setHistoryIndex(historyIndex + 1);
+      setProducts(targetState);
+      saveEncarteSemanalProducts(targetState);
+      setExportMessage("↷ Refazer aplicado");
+      setTimeout(() => {
+        isUndoRedoActionRef.current = false;
+        setExportMessage(null);
+      }, 1500);
+    }
+  };
 
   // Estados de Salvamento na Pasta do Computador (File System Access)
   const [currentFileName, setCurrentFileName] = useState<string | null>(null);
@@ -350,6 +402,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
       }
 
       saveEncarteSemanalProducts(copy);
+      pushHistoryState(copy);
       return copy;
     });
   };
@@ -366,11 +419,99 @@ export const EncarteSemanalWorkspace: React.FC = () => {
         return true;
       });
       saveEncarteSemanalProducts(filtered);
+      pushHistoryState(filtered);
       return filtered;
     });
 
     setSelectedSlotIndex(null);
   };
+
+  // Troca rápida de posição entre dois boxes (Swap)
+  const handleSwapSlots = (fromSlotIdx: number, toSlotIdx: number) => {
+    if (fromSlotIdx === toSlotIdx) return;
+    const itemsPerPage = gridConfig.itemsPerPage || 20;
+    const globalFrom = (currentPage - 1) * itemsPerPage + fromSlotIdx;
+    const globalTo = (currentPage - 1) * itemsPerPage + toSlotIdx;
+
+    const prodFrom = getProductAtSlot(fromSlotIdx);
+    const prodTo = getProductAtSlot(toSlotIdx);
+
+    if (!prodFrom && !prodTo) return;
+
+    setProducts((prev) => {
+      const copy = [...prev];
+      const idxA = copy.findIndex((p, i) => (p.slotIndex !== undefined ? p.slotIndex === globalFrom : i === globalFrom));
+      const idxB = copy.findIndex((p, i) => (p.slotIndex !== undefined ? p.slotIndex === globalTo : i === globalTo));
+
+      if (idxA >= 0 && idxB >= 0) {
+        const temp = copy[idxA];
+        copy[idxA] = { ...copy[idxB], slotIndex: globalFrom };
+        copy[idxB] = { ...temp, slotIndex: globalTo };
+      } else if (idxA >= 0 && idxB < 0) {
+        copy[idxA] = { ...copy[idxA], slotIndex: globalTo };
+      } else if (idxA < 0 && idxB >= 0) {
+        copy[idxB] = { ...copy[idxB], slotIndex: globalFrom };
+      }
+
+      saveEncarteSemanalProducts(copy);
+      pushHistoryState(copy);
+      return copy;
+    });
+
+    setExportMessage(`↔️ Box ${fromSlotIdx + 1} e Box ${toSlotIdx + 1} invertidos com sucesso!`);
+    setTimeout(() => setExportMessage(null), 3000);
+  };
+
+  // Atalhos de Teclado Globais (Undo/Redo e Ajuste Fino de Posição com Setas)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeTag = (document.activeElement?.tagName || "").toLowerCase();
+      const isInput = activeTag === "input" || activeTag === "textarea" || activeTag === "select";
+
+      // Atalhos de Undo / Redo (Ctrl + Z e Ctrl + Y / Ctrl + Shift + Z)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        if (!isInput) {
+          e.preventDefault();
+          handleUndo();
+        }
+      } else if (
+        (e.ctrlKey || e.metaKey) &&
+        (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))
+      ) {
+        if (!isInput) {
+          e.preventDefault();
+          handleRedo();
+        }
+      }
+
+      // Ajuste fino por setas direcionais para o box selecionado
+      if (selectedSlotIndex !== null && !isInput) {
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+          e.preventDefault();
+          const step = e.shiftKey ? 5 : 1;
+          const currentProd = getProductAtSlot(selectedSlotIndex);
+          if (!currentProd) return;
+
+          let newOffsetX = currentProd.offsetX || 0;
+          let newOffsetY = currentProd.offsetY || 0;
+
+          if (e.key === "ArrowLeft") newOffsetX -= step;
+          if (e.key === "ArrowRight") newOffsetX += step;
+          if (e.key === "ArrowUp") newOffsetY -= step;
+          if (e.key === "ArrowDown") newOffsetY += step;
+
+          handleSaveSlotProduct(selectedSlotIndex, {
+            ...currentProd,
+            offsetX: newOffsetX,
+            offsetY: newOffsetY,
+          });
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedSlotIndex, historyIndex, history, products]);
 
   // Edição de um produto
   const handleEditProduct = (product: EncarteSemanalProduct) => {
@@ -822,9 +963,49 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                 <Trash2 className="h-3 w-3 mr-1 text-red-400/80" />
                 Limpar Grade
               </Button>
+
+              {/* Botões Desfazer / Refazer (Ctrl + Z / Ctrl + Y) */}
+              <div className="flex items-center gap-0.5 border-l border-neutral-700/60 pl-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleUndo}
+                  disabled={historyIndex <= 0}
+                  className="text-neutral-300 hover:text-white disabled:opacity-30 text-xs h-7 px-1.5"
+                  title="Desfazer (Ctrl + Z)"
+                >
+                  <Undo2 className="h-3 w-3 mr-0.5" />
+                  <span className="hidden xl:inline text-[10px]">Desfazer</span>
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleRedo}
+                  disabled={historyIndex >= history.length - 1}
+                  className="text-neutral-300 hover:text-white disabled:opacity-30 text-xs h-7 px-1.5"
+                  title="Refazer (Ctrl + Y)"
+                >
+                  <Redo2 className="h-3 w-3 mr-0.5" />
+                  <span className="hidden xl:inline text-[10px]">Refazer</span>
+                </Button>
+              </div>
             </div>
 
             {/* GRUPO DE EXPORTAÇÃO */}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setQualityModalOpen(true)}
+              className="bg-neutral-900 border-neutral-700 text-amber-300 hover:text-white text-xs h-8 px-2.5"
+              title="Abrir checklist de qualidade pré-impressão"
+            >
+              <CheckCheck className="h-3.5 w-3.5 mr-1 text-emerald-400" />
+              Checklist
+            </Button>
+
             <Button
               type="button"
               size="sm"
@@ -1092,6 +1273,8 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                           cell={cell}
                           product={product}
                           cellIndex={idx}
+                          allProducts={products}
+                          onSwapSlots={(targetSlotIdx) => handleSwapSlots(idx, targetSlotIdx)}
                           onSaveProduct={(updated) => handleSaveSlotProduct(idx, updated)}
                           onClearProduct={() => handleClearSlotProduct(idx)}
                           onClose={() => setSelectedSlotIndex(null)}
@@ -1481,6 +1664,136 @@ export const EncarteSemanalWorkspace: React.FC = () => {
         product={editingProduct}
         onSave={handleSaveProduct}
       />
+
+      {/* Modal de Checagem de Qualidade Pré-Exportação */}
+      {qualityModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-[#181818] border border-neutral-700 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl text-white">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
+                  <CheckCheck className="h-4 w-4 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Checklist de Qualidade Pré-Impressão</h3>
+                  <p className="text-[11px] text-neutral-400">Verificação automática da Página {currentPage} (Ofertas da Semana)</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQualityModalOpen(false)}
+                className="text-neutral-400 hover:text-white p-1 rounded-md"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Métricas da Página Atual */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-black/40 border border-neutral-800 rounded-lg p-2.5 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-neutral-400">Preenchimento da Tela</span>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xl font-black text-amber-300">
+                    {currentProducts.filter(Boolean).length}/20
+                  </span>
+                  <span className="text-[10px] text-neutral-400">boxes ocupados</span>
+                </div>
+                <div className="w-full bg-neutral-800 h-1.5 rounded-full overflow-hidden mt-1">
+                  <div
+                    className="bg-amber-400 h-full rounded-full transition-all"
+                    style={{
+                      width: `${(currentProducts.filter(Boolean).length / 20) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="bg-black/40 border border-neutral-800 rounded-lg p-2.5 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-neutral-400">Fotos no Padrão</span>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xl font-black text-emerald-400">
+                    {currentProducts.filter((p) => p && p.image).length}
+                  </span>
+                  <span className="text-[10px] text-neutral-400">com foto PNG ativa</span>
+                </div>
+                <div className="text-[10px] text-neutral-400">
+                  {currentProducts.filter((p) => p && (p.secondaryImage || p.duplicatePhoto)).length} com 2 fotos/variação
+                </div>
+              </div>
+
+              <div className="bg-black/40 border border-neutral-800 rounded-lg p-2.5 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-neutral-400">Selos & Limites</span>
+                <div className="text-[11px] font-bold text-neutral-300 flex items-center justify-between">
+                  <span>Faixa de Limite:</span>
+                  <span className="text-amber-400">{currentProducts.filter((p) => p?.limit).length} produtos</span>
+                </div>
+                <div className="text-[11px] font-bold text-neutral-300 flex items-center justify-between">
+                  <span>Selos Promocionais:</span>
+                  <span className="text-purple-400">{currentProducts.filter((p) => p?.badge).length} produtos</span>
+                </div>
+              </div>
+
+              <div className="bg-black/40 border border-neutral-800 rounded-lg p-2.5 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-neutral-400">Resolução de Saída</span>
+                <div className="text-sm font-bold text-white">1080 × 1920 px</div>
+                <div className="text-[10px] text-neutral-400">Padrão Instagram / WhatsApp 9:16</div>
+              </div>
+            </div>
+
+            {/* Alertas e Recomendações */}
+            <div className="space-y-1.5 text-xs">
+              {currentProducts.filter(Boolean).length < 20 && (
+                <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-300 text-[11px] flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+                  <span>
+                    Atenção: Há {20 - currentProducts.filter(Boolean).length} box(es) vazio(s) na Tela {currentPage}. As guias vazias do modelo não serão cobertas.
+                  </span>
+                </div>
+              )}
+              {currentProducts.filter((p) => p && !p.image).length > 0 && (
+                <div className="p-2 bg-red-500/10 border border-red-500/30 rounded-lg text-red-300 text-[11px] flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
+                  <span>
+                    Aviso: {currentProducts.filter((p) => p && !p.image).length} produto(s) estão sem foto cadastrada.
+                  </span>
+                </div>
+              )}
+              {currentProducts.filter(Boolean).length === 20 && currentProducts.every((p) => p && p.image) && (
+                <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-300 text-[11px] flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                  <span>
+                    Tudo pronto! Todos os 20 boxes estão preenchidos com foto e descrições perfeitamente alinhadas.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Ações */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setQualityModalOpen(false)}
+                className="bg-neutral-800 border-neutral-700 text-neutral-300 hover:text-white text-xs"
+              >
+                Voltar à Edição
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setQualityModalOpen(false);
+                  handleExportCurrentPng();
+                }}
+                disabled={isExporting || (currentProducts.length === 0 && products.length === 0)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+              >
+                <Download className="h-3.5 w-3.5 mr-1.5" />
+                Exportar PNG (Tela {currentPage})
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

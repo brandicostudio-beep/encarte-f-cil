@@ -202,7 +202,13 @@ export async function renderEncarteSemanalPageToCanvas(
         ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
         ctx.shadowBlur = 10;
         ctx.shadowOffsetY = 4;
-        ctx.drawImage(img1, x1, y1, drawW1, drawH1);
+        if (product.flipHorizontal) {
+          ctx.translate(x1 + drawW1, y1);
+          ctx.scale(-1, 1);
+          ctx.drawImage(img1, 0, 0, drawW1, drawH1);
+        } else {
+          ctx.drawImage(img1, x1, y1, drawW1, drawH1);
+        }
         ctx.restore();
 
         // Foto 2 (Direita / Frente)
@@ -210,7 +216,13 @@ export async function renderEncarteSemanalPageToCanvas(
         ctx.shadowColor = "rgba(0, 0, 0, 0.50)";
         ctx.shadowBlur = 12;
         ctx.shadowOffsetY = 5;
-        ctx.drawImage(img2, x2, y2, drawW2, drawH2);
+        if (product.flipHorizontal2) {
+          ctx.translate(x2 + drawW2, y2);
+          ctx.scale(-1, 1);
+          ctx.drawImage(img2, 0, 0, drawW2, drawH2);
+        } else {
+          ctx.drawImage(img2, x2, y2, drawW2, drawH2);
+        }
         ctx.restore();
       } catch (err) {
         console.warn(`Aviso ao desenhar fotos do produto ${product.code}:`, err);
@@ -237,7 +249,13 @@ export async function renderEncarteSemanalPageToCanvas(
         ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
         ctx.shadowBlur = 12;
         ctx.shadowOffsetY = 5;
-        ctx.drawImage(photoImg, drawX, drawY, drawW, drawH);
+        if (product.flipHorizontal) {
+          ctx.translate(drawX + drawW, drawY);
+          ctx.scale(-1, 1);
+          ctx.drawImage(photoImg, 0, 0, drawW, drawH);
+        } else {
+          ctx.drawImage(photoImg, drawX, drawY, drawW, drawH);
+        }
         ctx.restore();
       } catch (err) {
         console.warn(`Aviso ao desenhar foto do produto ${product.code}:`, err);
@@ -325,6 +343,46 @@ export async function renderEncarteSemanalPageToCanvas(
       }
     }
     ctx.restore();
+
+    // D. DESENHAR SELO PROMOCIONAL (BADGE DE VAREJO)
+    if (product.badge && product.badge.trim()) {
+      ctx.save();
+      const badgeText = product.badge.trim().toUpperCase();
+      ctx.font = "900 10px 'Inter', Arial, sans-serif";
+      const textMetrics = ctx.measureText(badgeText);
+      const badgeW = Math.min(barW - 16, textMetrics.width + 20);
+      const badgeH = 20;
+      const badgeX = barX + 6;
+      const badgeY = cell.y + 6;
+
+      let bgBadge = "#DC2626"; // red padrão
+      let textBadgeColor = "#FFFFFF";
+      if (product.badgeColor === "amber") {
+        bgBadge = "#F59E0B";
+        textBadgeColor = "#000000";
+      } else if (product.badgeColor === "green") {
+        bgBadge = "#16A34A";
+      } else if (product.badgeColor === "purple") {
+        bgBadge = "#9333EA";
+      } else if (product.badgeColor === "blue") {
+        bgBadge = "#2563EB";
+      }
+
+      ctx.fillStyle = bgBadge;
+      ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetY = 2;
+      roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 4);
+      ctx.fill();
+
+      ctx.fillStyle = textBadgeColor;
+      ctx.shadowColor = "transparent";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "900 9.5px 'Inter', Arial, sans-serif";
+      ctx.fillText(`★ ${badgeText}`, badgeX + badgeW / 2, badgeY + badgeH / 2 + 1);
+      ctx.restore();
+    }
   }
 
   // 4. RODAPÉ DA OFERTA (COBRINDO A SETA E "TEXTO EDITÁVEL")
