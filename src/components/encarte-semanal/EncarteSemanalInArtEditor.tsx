@@ -33,7 +33,7 @@ import {
   ArrowLeftRight,
   Tag,
 } from "lucide-react";
-import { findSemanalVariations } from "@/lib/encarte-semanal-catalog";
+import { findSemanalVariations, getAllKnownProducts } from "@/lib/encarte-semanal-catalog";
 
 export interface EncarteSemanalInArtEditorProps {
   cell: EncarteSemanalCellPosition;
@@ -140,7 +140,14 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       return;
     }
 
-    const vars = findSemanalVariations(descToUse, product?.code, allProducts);
+    // Combina produtos da arte + catálogo completo (planilha, Winthor, Cescom, encarte principal)
+    const knownProducts = getAllKnownProducts();
+    const combinedCatalog = [
+      ...(allProducts || []),
+      ...knownProducts.map((p) => ({ code: p.code, description: p.description, image: p.image })),
+    ];
+
+    const vars = findSemanalVariations(descToUse, product?.code, combinedCatalog);
     // Filtra variações que já tenham a mesma foto que a Foto 1
     const filtered = vars.filter((v) => v.image && v.image !== image);
     setVariations(filtered);

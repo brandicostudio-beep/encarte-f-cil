@@ -74,67 +74,6 @@ export function calculateEncarteSemanalGridCells(
   }
   return cells;
 }
-  const {
-    xStart,
-    xEnd,
-    yStart,
-    yEnd,
-    columns,
-    columnsCount = 4,
-    rowsCount = 5,
-    barHeight = 54,
-  } = gridConfig;
-
-  const totalHeight = yEnd - yStart;
-  const rowHeight = totalHeight / rowsCount;
-  const cells: EncarteSemanalCellPosition[] = [];
-
-  const useDefaultExactColumns =
-    columnsCount === 4 &&
-    Array.isArray(columns) &&
-    columns.length === 5 &&
-    columns[0] === xStart &&
-    columns[4] === xEnd;
-
-  let index = 0;
-  for (let r = 0; r < rowsCount; r++) {
-    const y = yStart + r * rowHeight;
-
-    for (let c = 0; c < columnsCount; c++) {
-      let x: number;
-      let width: number;
-
-      if (useDefaultExactColumns) {
-        x = columns[c];
-        width = columns[c + 1] - x;
-      } else {
-        const colWidth = (xEnd - xStart) / columnsCount;
-        x = xStart + c * colWidth;
-        width = colWidth;
-      }
-
-      const photoAreaHeight = rowHeight - barHeight;
-      const barY = y + photoAreaHeight;
-
-      cells.push({
-        index,
-        colIndex: c,
-        rowIndex: r,
-        x,
-        y,
-        width,
-        height: rowHeight,
-        photoAreaHeight,
-        barY,
-        barHeight,
-      });
-
-      index++;
-    }
-  }
-
-  return cells;
-}
 
 export interface SemanalPhotosResolution {
   photo1: string;
