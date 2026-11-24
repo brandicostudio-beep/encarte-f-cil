@@ -1,5 +1,10 @@
 # Roadmap
 
+## Edição do Encarte Semanal — isolada da validade
+- [x] Um ou vários códigos por box, buscar a foto de cada código e fonte da barra ajustável
+- [x] Desfazer Ctrl+Z, arrastar e redimensionar fotos, sobrepor fotos e descrição com quebras de linha
+- [x] Verificar testes e prévia sem modificar editor, planilha, PDF ou dados da validade
+
 - [x] Fix build errors blocking publish (missing jspdf + strict TS errors)
 - [x] Link Google Drive connection to project + route app calls via connector gateway
 - [x] Fix last failing test + confirm build OK (62/62 tests pass, build OK)

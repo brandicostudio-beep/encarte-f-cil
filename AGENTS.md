@@ -10,3 +10,5 @@
 <!-- LOVABLE:END -->
 
 - Use Vitest imports and ES module imports in application tests; Bun-only imports and CommonJS require do not resolve TypeScript components in the configured test runner.
+
+- Keep weekly editor history and per-photo geometry in weekly-only modules shared by preview and PNG export; this prevents validity regressions and export drift.

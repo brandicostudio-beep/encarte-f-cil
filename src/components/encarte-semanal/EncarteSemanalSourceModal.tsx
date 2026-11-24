@@ -235,12 +235,13 @@ export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModa
         code: p.code,
         description: p.description,
         image: p.image || "",
-        currentPrice: 0,
+        name: p.description,
+    packaging: "", validity: "", price: "", badge: "nenhum",
         unit: "UN",
         included: true,
       }));
 
-      const crossing = crossLocalFolderWithCampaign(indexResult, tempEncarteProducts);
+      const crossing = crossLocalFolderWithCampaign(indexResult.files, tempEncarteProducts);
       const { loadedPhotos } = await loadCampaignPhotosFromFolder(crossing, tempEncarteProducts);
 
       const matchResult = matchPhotosWithSemanalProducts(loadedPhotos, stagedProducts, "folder");

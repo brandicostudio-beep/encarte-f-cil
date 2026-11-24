@@ -63,7 +63,7 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     const fakePhotos = parsed.products.map((p) => ({
       filename: `${p.code}.png`,
       dataUrl: `data:image/png;base64,fakePhotoData_${p.code}`,
-      code: p.code,
+      extractedCode: p.code,
     }));
 
     const matchResult = matchPhotosWithSemanalProducts(fakePhotos, parsed.products, "upload");
@@ -233,9 +233,9 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     ];
 
     const photos = [
-      { filename: "25573-2.png", dataUrl: "data:img2", code: "25573" },
-      { filename: "25573.png", dataUrl: "data:imgPrincipal", code: "25573" },
-      { filename: "25573-3.png", dataUrl: "data:img3", code: "25573" },
+      { filename: "25573-2.png", dataUrl: "data:img2", extractedCode: "25573" },
+      { filename: "25573.png", dataUrl: "data:imgPrincipal", extractedCode: "25573" },
+      { filename: "25573-3.png", dataUrl: "data:img3", extractedCode: "25573" },
     ];
 
     const result = matchPhotosWithSemanalProducts(photos, prods, "upload");

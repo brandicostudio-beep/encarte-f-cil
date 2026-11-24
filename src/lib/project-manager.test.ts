@@ -549,7 +549,7 @@ describe("Sistema de Salvamento de Projetos de Encarte", () => {
 
     const res = await saveProjectLocallyOnly(fastProject);
     expect(res.ok).toBe(true);
-    expect(res.project.name).toBe("Encarte Salvamento Rapido");
+    expect(res.project?.name).toBe("Encarte Salvamento Rapido");
 
     const loaded = await loadProjectLocal("proj-fast-save-01");
     expect(loaded.ok).toBe(true);
@@ -567,6 +567,7 @@ describe("Sistema de Salvamento de Projetos de Encarte", () => {
 
     const jsonContent = serializeProject(exportData);
     const mockFile = new File([jsonContent], "encarte_salvo.json", { type: "application/json" });
+    Object.defineProperty(mockFile, "text", { value: async () => jsonContent });
 
     const importRes = await importProjectFromFile(mockFile);
     expect(importRes.ok).toBe(true);

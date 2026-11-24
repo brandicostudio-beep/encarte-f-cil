@@ -266,7 +266,7 @@ export function optimizeDataUrl(
 
         ctx.drawImage(img, 0, 0, w, h);
         // NUNCA converter PNG para JPEG! Canvas JPEG converte transparência em fundo branco.
-        const mime = isPng ? "image/png" : "image/jpeg";
+        const mime = dataUrl.startsWith("data:image/png") ? "image/png" : "image/jpeg";
         const optimized = canvas.toDataURL(mime, quality);
         resolve(optimized);
       } catch {

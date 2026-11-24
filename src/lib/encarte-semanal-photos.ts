@@ -37,7 +37,8 @@ export function matchPhotosWithSemanalProducts(
     code: p.code,
     description: p.description,
     image: p.image || "",
-    currentPrice: 0,
+    name: p.description,
+    packaging: "", validity: "", price: "", badge: "nenhum",
     unit: "UN",
     included: p.included !== false,
   }));
@@ -52,9 +53,9 @@ export function matchPhotosWithSemanalProducts(
   const updatedProducts = products.map((product, idx) => {
     const updated = matchResult.updatedProducts[idx];
     if (updated && updated.image && updated.image.trim() !== "") {
-      const alternatives = (updated.alternativePhotos || []).map((alt) => ({
+      const alternatives = (updated.alternativePhotos || []).filter(alt => Boolean(alt.dataUrl)).map((alt) => ({
         filename: alt.filename,
-        dataUrl: alt.dataUrl,
+        dataUrl: alt.dataUrl || "",
         source: alt.source || defaultSource,
       }));
 
