@@ -15,6 +15,7 @@ import {
   processarListaLotes,
   normalizeProductCode,
   resolverFotoProduto,
+  enrichSnapshotWithPreviousComparison,
 } from "./painel-validade-analytics";
 import {
   listProjectsLocal,
@@ -439,12 +440,24 @@ export function refreshEncartePinsOnActiveSnapshot(): ValidadeSnapshot | null {
     lotes: updatedLotes,
   };
 
-  const all = loadSnapshotsList().map((s) =>
-    s.id === updatedSnapshot.id ? updatedSnapshot : s
+  const allSnapshots = loadSnapshotsList();
+  const activeIdx = allSnapshots.findIndex((s) => s.id === updatedSnapshot.id);
+  const previousSnapshot =
+    activeIdx >= 0 && activeIdx + 1 < allSnapshots.length
+      ? allSnapshots[activeIdx + 1]
+      : null;
+
+  const enrichedSnapshot = enrichSnapshotWithPreviousComparison(
+    updatedSnapshot,
+    previousSnapshot
+  );
+
+  const all = allSnapshots.map((s) =>
+    s.id === enrichedSnapshot.id ? enrichedSnapshot : s
   );
 
   saveSnapshotsList(all);
-  return updatedSnapshot;
+  return enrichedSnapshot;
 }
 
 /**

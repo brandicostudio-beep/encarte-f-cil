@@ -228,6 +228,197 @@ export function isVendaIrregular(m1: number, m2: number, m3: number): boolean {
 }
 
 /**
+ * Calcula métricas comparativas de ritmo recente pós-ação entre dois snapshots.
+ */
+export function computeRitmoRecenteComparativo(params: {
+  estoque: number;
+  diasParaVencer: number;
+  isSemEstoque: boolean;
+  isVencido: boolean;
+  noEncarte: boolean;
+  ritmoAtualDia: number;
+  ritmoNecessarioDia: number;
+  vendaMesAtual: number;
+  vendaMesAtualRaw?: number | null;
+  currentDate: Date;
+  previousLote: ValidadeLoteCalculado;
+  previousDate: Date;
+}): {
+  ritmoRecenteDia: number;
+  vendasNoIntervalo: number;
+  diasIntervaloSnapshots: number;
+  acelerouPosAcao: boolean;
+  diasParaZerarRitmoRecente?: number;
+} {
+  const {
+    estoque,
+    ritmoAtualDia,
+    vendaMesAtual,
+    vendaMesAtualRaw,
+    currentDate,
+    previousLote,
+    previousDate,
+  } = params;
+
+  const diffMs =
+    toLocalMidnight(currentDate).getTime() -
+    toLocalMidnight(previousDate).getTime();
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  const diasIntervaloSnapshots = Math.max(1, diffDays);
+
+  const hasQtvendmesConfiavel =
+    vendaMesAtualRaw !== undefined &&
+    vendaMesAtualRaw !== null &&
+    previousLote.vendaMesAtualRaw !== undefined &&
+    previousLote.vendaMesAtualRaw !== null &&
+    vendaMesAtual >= previousLote.vendaMesAtual;
+
+  let vendasNoIntervalo = 0;
+  if (hasQtvendmesConfiavel) {
+    const deltaMes = vendaMesAtual - previousLote.vendaMesAtual;
+    if (
+      deltaMes === 0 &&
+      vendaMesAtual === 0 &&
+      previousLote.vendaMesAtual === 0 &&
+      previousLote.estoque > estoque
+    ) {
+      vendasNoIntervalo = Math.max(0, previousLote.estoque - estoque);
+    } else {
+      vendasNoIntervalo = deltaMes;
+    }
+  } else {
+    vendasNoIntervalo = Math.max(0, previousLote.estoque - estoque);
+  }
+
+  const ritmoRecenteDia =
+    Math.round((vendasNoIntervalo / diasIntervaloSnapshots) * 100) / 100;
+  const acelerouPosAcao = ritmoRecenteDia > ritmoAtualDia && ritmoRecenteDia > 0;
+
+  let diasParaZerarRitmoRecente: number | undefined;
+  if (ritmoRecenteDia > 0 && estoque > 0) {
+    diasParaZerarRitmoRecente = Math.round((estoque / ritmoRecenteDia) * 10) / 10;
+  } else if (estoque === 0) {
+    diasParaZerarRitmoRecente = 0;
+  }
+
+  return {
+    ritmoRecenteDia,
+    vendasNoIntervalo,
+    diasIntervaloSnapshots,
+    acelerouPosAcao,
+    diasParaZerarRitmoRecente,
+  };
+}
+
+/**
+ * Enriquece um snapshot já salvo comparando seus lotes com os do snapshot anterior.
+ * Garante que importações feitas antes desta funcionalidade também exibam o ritmo recente pós-ação.
+ */
+export function enrichSnapshotWithPreviousComparison(
+  snapshot: ValidadeSnapshot,
+  previousSnapshot?: ValidadeSnapshot | null
+): ValidadeSnapshot {
+  if (!previousSnapshot || !Array.isArray(previousSnapshot.lotes)) {
+    return snapshot;
+  }
+
+  const prevMapById = new Map<string, ValidadeLoteCalculado>();
+  const prevMapByProdVal = new Map<string, ValidadeLoteCalculado>();
+  for (const prev of previousSnapshot.lotes) {
+    prevMapById.set(prev.id, prev);
+    const prodValKey = `${normalizeProductCode(prev.codprod)}_${prev.dtval}`;
+    if (!prevMapByProdVal.has(prodValKey)) {
+      prevMapByProdVal.set(prodValKey, prev);
+    }
+  }
+
+  const currentDate =
+    parseAnyDate(snapshot.referenceDate) ||
+    parseAnyDate(snapshot.criadoEm) ||
+    new Date();
+  const previousDate =
+    parseAnyDate(previousSnapshot.referenceDate) ||
+    parseAnyDate(previousSnapshot.criadoEm) ||
+    currentDate;
+
+  const updatedLotes = snapshot.lotes.map((lote) => {
+    const prodValKey = `${normalizeProductCode(lote.codprod)}_${lote.dtval}`;
+    const previousLote = prevMapById.get(lote.id) || prevMapByProdVal.get(prodValKey);
+    if (!previousLote) return lote;
+
+    const comp =
+      lote.ritmoRecenteDia !== undefined
+        ? {
+            ritmoRecenteDia: lote.ritmoRecenteDia,
+            vendasNoIntervalo: lote.vendasNoIntervalo ?? 0,
+            diasIntervaloSnapshots: lote.diasIntervaloSnapshots ?? 1,
+            acelerouPosAcao: Boolean(lote.acelerouPosAcao),
+            diasParaZerarRitmoRecente: lote.diasParaZerarRitmoRecente,
+          }
+        : computeRitmoRecenteComparativo({
+            estoque: lote.estoque,
+            diasParaVencer: lote.diasParaVencer,
+            isSemEstoque: lote.isSemEstoque,
+            isVencido: lote.isVencido,
+            noEncarte: lote.noEncarte,
+            ritmoAtualDia: lote.ritmoAtualDia,
+            ritmoNecessarioDia: lote.ritmoNecessarioDia,
+            vendaMesAtual: lote.vendaMesAtual,
+            vendaMesAtualRaw: lote.vendaMesAtualRaw,
+            currentDate,
+            previousLote,
+            previousDate,
+          });
+
+    const isAceleradoSucesso =
+      !lote.isSemEstoque &&
+      !lote.isVencido &&
+      comp.acelerouPosAcao &&
+      comp.diasParaZerarRitmoRecente !== undefined &&
+      comp.diasParaZerarRitmoRecente <= lote.diasParaVencer;
+
+    if (isAceleradoSucesso) {
+      return {
+        ...lote,
+        ...comp,
+        escoaTempoPercent: 100,
+        sobraPrevistaUnidades: 0,
+        valorEmRisco: 0,
+        prejuizoPrevistoSobra: 0,
+        faixaEscoaTempo: "escoa_tempo" as const,
+        nivelEsforco: "normal" as const,
+        recomendacaoComercial: `Ação comercial com sucesso! Ritmo recente de ${formatRitmoBR(comp.ritmoRecenteDia)} un/dia liquidará o estoque de ${lote.estoque} un em ~${Math.round(comp.diasParaZerarRitmoRecente!)} dias (antes dos ${lote.diasParaVencer} dias de validade).`,
+      };
+    }
+
+    if (
+      lote.noEncarte &&
+      !lote.isSemEstoque &&
+      !lote.isVencido &&
+      !comp.acelerouPosAcao &&
+      comp.ritmoRecenteDia < lote.ritmoNecessarioDia
+    ) {
+      return {
+        ...lote,
+        ...comp,
+        nivelEsforco: "critico_queima" as const,
+        recomendacaoComercial: `Mesmo após a ação/rebaixa, o ritmo recente (${formatRitmoBR(comp.ritmoRecenteDia)} un/dia) continua abaixo do necessário (${formatRitmoBR(lote.ritmoNecessarioDia)} un/dia). Recomenda-se corte de preço mais agressivo ou bonificação comercial.`,
+      };
+    }
+
+    return {
+      ...lote,
+      ...comp,
+    };
+  });
+
+  return {
+    ...snapshot,
+    lotes: updatedLotes,
+  };
+}
+
+/**
  * Processa um lote bruto da planilha aplicando todas as regras de negócio
  */
 export function processarLote(
@@ -355,53 +546,28 @@ export function processarLote(
     activeEncarteCodes.has(normalizeProductCode(codprod));
 
   // Comparativo entre Importações & Ritmo Recente Pós-Ação
-  let ritmoRecenteDia: number | undefined;
-  let vendasNoIntervalo: number | undefined;
-  let diasIntervaloSnapshots: number | undefined;
-  let acelerouPosAcao: boolean | undefined;
-  let diasParaZerarRitmoRecente: number | undefined;
+  const comparativo = previousLote
+    ? computeRitmoRecenteComparativo({
+        estoque,
+        diasParaVencer,
+        isSemEstoque,
+        isVencido,
+        noEncarte,
+        ritmoAtualDia,
+        ritmoNecessarioDia,
+        vendaMesAtual,
+        vendaMesAtualRaw,
+        currentDate: parseAnyDate(raw.datafinal) || parseAnyDate(raw.datainicial) || referenceDate,
+        previousLote,
+        previousDate: previousReferenceDate || referenceDate,
+      })
+    : undefined;
 
-  if (previousLote) {
-    const currentSnapshotDate =
-      parseAnyDate(raw.datafinal) || parseAnyDate(raw.datainicial) || referenceDate;
-    const prevSnapshotDate = previousReferenceDate || referenceDate;
-    const diffMs =
-      toLocalMidnight(currentSnapshotDate).getTime() -
-      toLocalMidnight(prevSnapshotDate).getTime();
-    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-    diasIntervaloSnapshots = Math.max(1, diffDays);
-
-    const hasQtvendmesConfiavel =
-      vendaMesAtualRaw !== null &&
-      previousLote.vendaMesAtualRaw !== undefined &&
-      previousLote.vendaMesAtualRaw !== null &&
-      vendaMesAtual >= previousLote.vendaMesAtual;
-
-    if (hasQtvendmesConfiavel) {
-      const deltaMes = vendaMesAtual - previousLote.vendaMesAtual;
-      if (
-        deltaMes === 0 &&
-        vendaMesAtual === 0 &&
-        previousLote.vendaMesAtual === 0 &&
-        previousLote.estoque > estoque
-      ) {
-        vendasNoIntervalo = Math.max(0, previousLote.estoque - estoque);
-      } else {
-        vendasNoIntervalo = deltaMes;
-      }
-    } else {
-      vendasNoIntervalo = Math.max(0, previousLote.estoque - estoque);
-    }
-
-    ritmoRecenteDia = Math.round((vendasNoIntervalo / diasIntervaloSnapshots) * 100) / 100;
-    acelerouPosAcao = ritmoRecenteDia > ritmoAtualDia && ritmoRecenteDia > 0;
-
-    if (ritmoRecenteDia > 0 && estoque > 0) {
-      diasParaZerarRitmoRecente = Math.round((estoque / ritmoRecenteDia) * 10) / 10;
-    } else if (estoque === 0) {
-      diasParaZerarRitmoRecente = 0;
-    }
-  }
+  const ritmoRecenteDia = comparativo?.ritmoRecenteDia;
+  const vendasNoIntervalo = comparativo?.vendasNoIntervalo;
+  const diasIntervaloSnapshots = comparativo?.diasIntervaloSnapshots;
+  const acelerouPosAcao = comparativo?.acelerouPosAcao;
+  const diasParaZerarRitmoRecente = comparativo?.diasParaZerarRitmoRecente;
 
   // Multiplicador de Esforço Comercial e Recomendação Acionável
   let multiplicadorEsforco: number | null = null;
