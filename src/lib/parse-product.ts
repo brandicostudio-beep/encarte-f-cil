@@ -516,11 +516,8 @@ export function parseCategoryHtml(html: string, baseUrl: string): EncarteProduct
     // Validação de embalagem: nunca preencher "1 UN" como valor padrão
     const packaging = (raw.packaging || "").trim();
 
-    let validity = (raw.validity || "").trim();
-    if (!validity) {
-      const valMatch = html.match(/(?:validade|vencimento|val|venc)[\s:.]*([0-9]{1,2}[/-][0-9]{1,2}[/-][0-9]{2,4})/i);
-      if (valMatch) validity = (valMatch[1] ?? "").replace(/-/g, "/");
-    }
+    // Validade: nunca inventar ou copiar validade global da página quando o produto não possuir data própria
+    const validity = (raw.validity || "").trim();
 
     let resolvedImg = "";
     if (raw.image) {

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import React from "react";
 import { renderToString } from "react-dom/server";
-import { ReviewTable } from "./ReviewTable";
+import { ReviewTable, formatStockWithUnit, formatValidityInput } from "./ReviewTable";
 import type { EncarteProduct } from "@/types/encarte";
 
 describe("ReviewTable - Edição rápida de estoque e preço", () => {
@@ -118,5 +118,41 @@ describe("ReviewTable - Edição rápida de estoque e preço", () => {
 
     expect(html).toContain("Vence em");
     expect(html).toContain("0 vendas (5d)");
+  });
+
+  it("Renderiza campo de edição rápida de validade em branco quando não houver validade", () => {
+    const noValidityProduct: EncarteProduct = {
+      ...mockProducts[0],
+      id: "prod-sem-val",
+      validity: "",
+    };
+    const html = renderToString(
+      React.createElement(ReviewTable, {
+        products: [noValidityProduct],
+        onPriceChange: vi.fn(),
+        onStockChange: vi.fn(),
+        onValidityChange: vi.fn(),
+        onUnitChange: vi.fn(),
+        onToggleIncluded: vi.fn(),
+        onEditProduct: vi.fn(),
+        onDeleteProduct: vi.fn(),
+      })
+    );
+
+    expect(html).toContain('id="validity-prod-sem-val"');
+    expect(html).toContain('placeholder="dd/mm/aaaa"');
+    expect(html).not.toContain("--/--/----");
+  });
+
+  it("Formata estoque numérico anexando a unidade do produto e formata validade rápida", () => {
+    expect(formatStockWithUnit("11", "CX")).toBe("11 CX");
+    expect(formatStockWithUnit("11", "DISP")).toBe("11 DISP");
+    expect(formatStockWithUnit("11", "UND")).toBe("11 UND");
+    expect(formatStockWithUnit("5+6", "CX")).toBe("11 CX");
+    expect(formatStockWithUnit("", "CX")).toBe("");
+
+    expect(formatValidityInput("05122026")).toBe("05/12/2026");
+    expect(formatValidityInput("5/12/26")).toBe("05/12/2026");
+    expect(formatValidityInput("")).toBe("");
   });
 });

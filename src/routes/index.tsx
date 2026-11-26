@@ -1165,6 +1165,13 @@ function EncarteApp() {
     updateProductsState(updated);
   };
 
+  const handleValidityChange = (id: string, newValidity: string) => {
+    const updated = products.map((p) =>
+      p.id === id ? { ...p, validity: newValidity } : p
+    );
+    updateProductsState(updated);
+  };
+
   const handleToggleIncluded = (id: string, included: boolean) => {
     const updated = products.map((p) =>
       p.id === id ? { ...p, included } : p
@@ -2139,6 +2146,7 @@ function EncarteApp() {
                     products={filteredProducts}
                     onPriceChange={handlePriceChange}
                     onStockChange={handleStockChange}
+                    onValidityChange={handleValidityChange}
                     onUnitChange={handleUnitChange}
                     onToggleIncluded={handleToggleIncluded}
                     onEditProduct={(p) => setEditProduct(p)}

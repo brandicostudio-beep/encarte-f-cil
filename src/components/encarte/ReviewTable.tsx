@@ -4,6 +4,7 @@ import { isDateExpired } from "@/lib/encarte-helpers";
 import {
   formatPrice,
   deriveSaleUnit,
+  normalizeSaleUnit,
   SALE_UNITS,
   evaluateStockExpression,
   previewStockCalculation,
@@ -30,6 +31,7 @@ interface ReviewTableProps {
   products: EncarteProduct[];
   onPriceChange: (id: string, price: string) => void;
   onStockChange?: (id: string, stock: string) => void;
+  onValidityChange?: (id: string, validity: string) => void;
   onUnitChange?: (id: string, unit: string) => void;
   onToggleIncluded: (id: string, included: boolean) => void;
   onEditProduct: (product: EncarteProduct) => void;
@@ -37,10 +39,39 @@ interface ReviewTableProps {
   onOpenStockAdmin?: () => void;
 }
 
+export function formatValidityInput(rawVal: string): string {
+  const clean = String(rawVal || "").trim();
+  if (!clean) return "";
+  const digitsOnly = clean.replace(/\D/g, "");
+  if (digitsOnly.length === 8) {
+    return `${digitsOnly.slice(0, 2)}/${digitsOnly.slice(2, 4)}/${digitsOnly.slice(4, 8)}`;
+  }
+  const match = clean.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (match) {
+    const d = match[1].padStart(2, "0");
+    const m = match[2].padStart(2, "0");
+    const y = match[3].length === 2 ? `20${match[3]}` : match[3];
+    return `${d}/${m}/${y}`;
+  }
+  return clean;
+}
+
+export function formatStockWithUnit(rawVal: string, unit?: string): string {
+  const val = String(rawVal || "").trim();
+  if (!val) return "";
+  let evaluated = evaluateStockExpression(val, unit);
+  if (unit && /^\d+(?:[.,]\d+)?$/.test(evaluated.trim())) {
+    const normalizedUnit = normalizeSaleUnit(unit);
+    evaluated = `${evaluated.trim()} ${normalizedUnit}`;
+  }
+  return evaluated;
+}
+
 export const ReviewTable: React.FC<ReviewTableProps> = ({
   products = [],
   onPriceChange,
   onStockChange,
+  onValidityChange,
   onUnitChange,
   onToggleIncluded,
   onEditProduct,
@@ -51,6 +82,8 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
   const priceInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   // Referências para os inputs de estoque para navegar com Enter
   const stockInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  // Referências para os inputs de validade para navegar com Enter
+  const validityInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   // Tratar formatação de preço com duas casas decimais
   const handlePriceBlur = (id: string, rawVal: string) => {
@@ -60,15 +93,56 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
     if (formatted) onPriceChange(id, formatted);
   };
 
-  // Tratar avaliação de estoque (ex: somas como 80+53)
+  // Tratar avaliação de estoque (ex: somas como 80+53 ou número simples como 11 -> 11 CX)
   const handleStockBlur = (id: string, rawVal: string, unit?: string) => {
-    const val = String(rawVal || "").trim();
-    if (!val) {
-      if (onStockChange) onStockChange(id, "");
-      return;
+    const evaluated = formatStockWithUnit(rawVal, unit);
+    if (onStockChange) {
+      onStockChange(id, evaluated);
+    } else {
+      const prod = products.find((item) => item.id === id);
+      if (prod) onEditProduct({ ...prod, stock: evaluated });
     }
-    const evaluated = evaluateStockExpression(val, unit);
-    if (onStockChange) onStockChange(id, evaluated);
+  };
+
+  // Tratar formatação rápida de validade
+  const handleValidityBlur = (id: string, rawVal: string) => {
+    const formatted = formatValidityInput(rawVal);
+    if (onValidityChange) {
+      onValidityChange(id, formatted);
+    } else {
+      const prod = products.find((item) => item.id === id);
+      if (prod) onEditProduct({ ...prod, validity: formatted });
+    }
+  };
+
+  // Tecla Enter na validade: formata e salta para a próxima validade
+  const handleValidityKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    currentIndex: number
+  ) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleValidityBlur(products[currentIndex].id, e.currentTarget.value);
+
+      for (let i = currentIndex + 1; i < products.length; i++) {
+        const nextProd = products[i];
+        const el = validityInputRefs.current.get(nextProd.id);
+        if (el) {
+          el.focus();
+          el.select();
+          return;
+        }
+      }
+      for (let i = 0; i < currentIndex; i++) {
+        const prevProd = products[i];
+        const el = validityInputRefs.current.get(prevProd.id);
+        if (el) {
+          el.focus();
+          el.select();
+          return;
+        }
+      }
+    }
   };
 
   // Tecla Enter no estoque: salva/avalia e salta automaticamente para o próximo estoque
@@ -466,35 +540,53 @@ export const ReviewTable: React.FC<ReviewTableProps> = ({
                             onEditProduct({ ...p, stock: val });
                           }
                         }}
-                        onBlur={(e) => handleStockBlur(p.id, e.target.value, p.unit)}
-                        onKeyDown={(e) => handleStockKeyDown(e, idx, p.unit)}
+                        onBlur={(e) => handleStockBlur(p.id, e.target.value, unitCheck.unit)}
+                        onKeyDown={(e) => handleStockKeyDown(e, idx, unitCheck.unit)}
                         className="w-full min-h-[44px] px-2.5 text-xs font-mono font-bold rounded-lg border border-neutral-300 bg-white text-neutral-900 focus:outline-hidden focus:ring-2 focus:ring-red-600 focus:border-red-600 transition-colors placeholder:text-neutral-400 placeholder:font-normal"
                         title="Digite a quantidade ou somas (ex: 80+53)"
                       />
-                      {previewStockCalculation(p.stock, p.unit) && (
+                      {previewStockCalculation(p.stock, unitCheck.unit) && (
                         <div className="absolute -bottom-2 right-1 z-10 pointer-events-none">
                           <span className="text-[9px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-1 py-0.2 rounded shadow-2xs">
-                            ={previewStockCalculation(p.stock, p.unit)}
+                            ={previewStockCalculation(p.stock, unitCheck.unit)}
                           </span>
                         </div>
                       )}
                     </div>
                   </td>
 
-                  {/* Validade com Semáforo de Urgência (Vermelho / Laranja / Amarelo) */}
+                  {/* Validade com Edição Rápida e Semáforo de Urgência */}
                   <td className="p-3 align-middle font-mono">
                     <div className="flex flex-col gap-1">
-                      <span
-                        className={`font-semibold ${
+                      <label htmlFor={`validity-${p.id}`} className="sr-only">
+                        Validade para {p.name}
+                      </label>
+                      <input
+                        id={`validity-${p.id}`}
+                        ref={(el) => {
+                          if (el) validityInputRefs.current.set(p.id, el);
+                          else validityInputRefs.current.delete(p.id);
+                        }}
+                        type="text"
+                        placeholder="dd/mm/aaaa"
+                        value={p.validity || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (onValidityChange) {
+                            onValidityChange(p.id, val);
+                          } else {
+                            onEditProduct({ ...p, validity: val });
+                          }
+                        }}
+                        onBlur={(e) => handleValidityBlur(p.id, e.target.value)}
+                        onKeyDown={(e) => handleValidityKeyDown(e, idx)}
+                        className={`w-full min-h-[44px] px-2 text-xs font-mono font-semibold rounded-lg border transition-colors focus:outline-hidden focus:ring-2 placeholder:text-neutral-400 placeholder:font-normal ${
                           isExpired
-                            ? "text-red-700 font-bold bg-red-50 px-1 py-0.5 rounded border border-red-200 inline-block"
-                            : urgency.level !== "normal"
-                            ? "text-neutral-900 font-bold"
-                            : "text-neutral-700"
+                            ? "bg-red-50 border-red-300 text-red-700 font-bold focus:ring-red-600"
+                            : "bg-white border-neutral-300 text-neutral-900 focus:ring-red-600 focus:border-red-600"
                         }`}
-                      >
-                        {p.validity || "--/--/----"}
-                      </span>
+                        title="Digite a validade (ex: 05/12/2026 ou 05122026) e pressione Enter"
+                      />
 
                       {/* Pill Colorida do Semáforo de Validade */}
                       {urgency.level !== "normal" && (
