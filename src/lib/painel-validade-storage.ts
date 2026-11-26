@@ -387,7 +387,8 @@ export function createSnapshotFromRaw(
     activeEncarteInfo.codes,
     previousBatchKeys,
     previousEncarteCodes,
-    activeEncarteInfo.photoByCode
+    activeEncarteInfo.photoByCode,
+    previousSnapshot
   );
 
   const uniqueProductCodes = new Set(rawLotes.map((l) => l.codprod));

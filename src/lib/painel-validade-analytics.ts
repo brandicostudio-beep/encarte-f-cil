@@ -14,6 +14,7 @@
 import type {
   ValidadeLoteRaw,
   ValidadeLoteCalculado,
+  ValidadeSnapshot,
   ValidadeFilterParams,
   ValidadeAlertCounts,
   ValidadeKpiCounts,
@@ -111,6 +112,17 @@ export function parseDateBR(dateStr?: string | null): Date | null {
  */
 export function toLocalMidnight(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+}
+
+/**
+ * Converte string de data brasileira (dd/mm/aaaa) ou ISO para Date
+ */
+export function parseAnyDate(dateStr?: string | null): Date | null {
+  if (!dateStr) return null;
+  const br = parseDateBR(dateStr);
+  if (br) return br;
+  const parsed = new Date(dateStr);
+  return isNaN(parsed.getTime()) ? null : parsed;
 }
 
 /**
@@ -224,7 +236,9 @@ export function processarLote(
   activeEncarteCodes: Set<string> = new Set(),
   previousBatchKeys?: Set<string>,
   previousEncarteBatchKeys?: Set<string>,
-  encartePhotoMap?: Map<string, string>
+  encartePhotoMap?: Map<string, string>,
+  previousLote?: ValidadeLoteCalculado,
+  previousReferenceDate?: Date
 ): ValidadeLoteCalculado {
   const codprod = String(raw.codprod).trim();
   const dtval = raw.dtval;
@@ -332,8 +346,62 @@ export function processarLote(
   const vendaIrregular = isVendaIrregular(vendaM1, vendaM2, vendaM3);
 
   // Valor financeiro em risco focado na sobra prevista
-  const valorEmRisco = Math.round(precoVenda * sobraPrevistaUnidades * 100) / 100;
-  const prejuizoPrevistoSobra = valorEmRisco;
+  let valorEmRisco = Math.round(precoVenda * sobraPrevistaUnidades * 100) / 100;
+  let prejuizoPrevistoSobra = valorEmRisco;
+
+  // Integração com Encarte (Pino NO ENCARTE considerando o último encarte feito)
+  const noEncarte =
+    activeEncarteCodes.has(codprod) ||
+    activeEncarteCodes.has(normalizeProductCode(codprod));
+
+  // Comparativo entre Importações & Ritmo Recente Pós-Ação
+  let ritmoRecenteDia: number | undefined;
+  let vendasNoIntervalo: number | undefined;
+  let diasIntervaloSnapshots: number | undefined;
+  let acelerouPosAcao: boolean | undefined;
+  let diasParaZerarRitmoRecente: number | undefined;
+
+  if (previousLote) {
+    const currentSnapshotDate =
+      parseAnyDate(raw.datafinal) || parseAnyDate(raw.datainicial) || referenceDate;
+    const prevSnapshotDate = previousReferenceDate || referenceDate;
+    const diffMs =
+      toLocalMidnight(currentSnapshotDate).getTime() -
+      toLocalMidnight(prevSnapshotDate).getTime();
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    diasIntervaloSnapshots = Math.max(1, diffDays);
+
+    const hasQtvendmesConfiavel =
+      vendaMesAtualRaw !== null &&
+      previousLote.vendaMesAtualRaw !== undefined &&
+      previousLote.vendaMesAtualRaw !== null &&
+      vendaMesAtual >= previousLote.vendaMesAtual;
+
+    if (hasQtvendmesConfiavel) {
+      const deltaMes = vendaMesAtual - previousLote.vendaMesAtual;
+      if (
+        deltaMes === 0 &&
+        vendaMesAtual === 0 &&
+        previousLote.vendaMesAtual === 0 &&
+        previousLote.estoque > estoque
+      ) {
+        vendasNoIntervalo = Math.max(0, previousLote.estoque - estoque);
+      } else {
+        vendasNoIntervalo = deltaMes;
+      }
+    } else {
+      vendasNoIntervalo = Math.max(0, previousLote.estoque - estoque);
+    }
+
+    ritmoRecenteDia = Math.round((vendasNoIntervalo / diasIntervaloSnapshots) * 100) / 100;
+    acelerouPosAcao = ritmoRecenteDia > ritmoAtualDia && ritmoRecenteDia > 0;
+
+    if (ritmoRecenteDia > 0 && estoque > 0) {
+      diasParaZerarRitmoRecente = Math.round((estoque / ritmoRecenteDia) * 10) / 10;
+    } else if (estoque === 0) {
+      diasParaZerarRitmoRecente = 0;
+    }
+  }
 
   // Multiplicador de Esforço Comercial e Recomendação Acionável
   let multiplicadorEsforco: number | null = null;
@@ -352,6 +420,27 @@ export function processarLote(
   } else if (isVencido || diasParaVencer < 0) {
     nivelEsforco = "critico_queima";
     recomendacaoComercial = "Lote vencido. Retirar da área de venda e providenciar descarte ou devolução.";
+  } else if (
+    acelerouPosAcao &&
+    ritmoRecenteDia !== undefined &&
+    diasParaZerarRitmoRecente !== undefined &&
+    diasParaZerarRitmoRecente <= diasParaVencer
+  ) {
+    // Ação comercial com sucesso: ritmo recente liquida todo o estoque antes do vencimento
+    escoaTempoPercent = 100;
+    sobraPrevistaUnidades = 0;
+    valorEmRisco = 0;
+    prejuizoPrevistoSobra = 0;
+    nivelEsforco = "normal";
+    recomendacaoComercial = `Ação comercial com sucesso! Ritmo recente de ${formatRitmoBR(ritmoRecenteDia)} un/dia liquidará o estoque de ${estoque} un em ~${Math.round(diasParaZerarRitmoRecente)} dias (antes dos ${diasParaVencer} dias de validade).`;
+  } else if (
+    noEncarte &&
+    ritmoRecenteDia !== undefined &&
+    !acelerouPosAcao &&
+    ritmoRecenteDia < ritmoNecessarioDia
+  ) {
+    nivelEsforco = "critico_queima";
+    recomendacaoComercial = `Mesmo após a ação/rebaixa, o ritmo recente (${formatRitmoBR(ritmoRecenteDia)} un/dia) continua abaixo do necessário (${formatRitmoBR(ritmoNecessarioDia)} un/dia). Recomenda-se corte de preço mais agressivo ou bonificação comercial.`;
   } else if (isSemVenda || mediaMensalFechada === 0) {
     nivelEsforco = "critico_queima";
     recomendacaoComercial = "Sem saída nos últimos 3 meses. Requer queima agressiva imediata no encarte ou negociação de devolução.";
@@ -380,11 +469,6 @@ export function processarLote(
   const faixaEscoaTempo = classifyFaixaEscoaTempo(escoaTempoPercent, estoque);
   const faixaGiroMes = classifyFaixaGiroMes(giroMesPercent);
   const faixaCobertura = classifyFaixaCobertura(coberturaMeses);
-
-  // Integração com Encarte (Pino NO ENCARTE considerando o último encarte feito)
-  const noEncarte =
-    activeEncarteCodes.has(codprod) ||
-    activeEncarteCodes.has(normalizeProductCode(codprod));
 
   // Foto do produto (Planilha > Último Encarte > Cache Drive > AgileCDN)
   const foto = resolverFotoProduto(codprod, raw.foto, encartePhotoMap);
@@ -449,6 +533,11 @@ export function processarLote(
     vendaEsperadaMesAtual,
     isNovoLote,
     saiuDoEncarte,
+    ritmoRecenteDia,
+    vendasNoIntervalo,
+    diasIntervaloSnapshots,
+    acelerouPosAcao,
+    diasParaZerarRitmoRecente,
   };
 }
 
@@ -461,18 +550,45 @@ export function processarListaLotes(
   activeEncarteCodes: Set<string> = new Set(),
   previousBatchKeys?: Set<string>,
   previousEncarteBatchKeys?: Set<string>,
-  encartePhotoMap?: Map<string, string>
+  encartePhotoMap?: Map<string, string>,
+  previousSnapshot?: ValidadeSnapshot | null
 ): ValidadeLoteCalculado[] {
-  return rawList.map((raw) =>
-    processarLote(
+  const prevMapById = new Map<string, ValidadeLoteCalculado>();
+  const prevMapByProdVal = new Map<string, ValidadeLoteCalculado>();
+  let prevRefDate: Date | undefined;
+
+  if (previousSnapshot && Array.isArray(previousSnapshot.lotes)) {
+    prevRefDate =
+      parseAnyDate(previousSnapshot.referenceDate) ||
+      parseAnyDate(previousSnapshot.criadoEm) ||
+      undefined;
+
+    for (const prev of previousSnapshot.lotes) {
+      prevMapById.set(prev.id, prev);
+      const prodValKey = `${normalizeProductCode(prev.codprod)}_${prev.dtval}`;
+      if (!prevMapByProdVal.has(prodValKey)) {
+        prevMapByProdVal.set(prodValKey, prev);
+      }
+    }
+  }
+
+  return rawList.map((raw) => {
+    const codprod = String(raw.codprod).trim();
+    const loteId = `${codprod}_${raw.dtval}_${raw.loteNumero || "0"}`;
+    const prodValKey = `${normalizeProductCode(codprod)}_${raw.dtval}`;
+    const prevLote = prevMapById.get(loteId) || prevMapByProdVal.get(prodValKey);
+
+    return processarLote(
       raw,
       referenceDate,
       activeEncarteCodes,
       previousBatchKeys,
       previousEncarteBatchKeys,
-      encartePhotoMap
-    )
-  );
+      encartePhotoMap,
+      prevLote,
+      prevRefDate
+    );
+  });
 }
 
 /**
@@ -763,6 +879,17 @@ export function gerarExplicacaoSobraLinha(lote: ValidadeLoteCalculado): string {
     return `Lote vencido há ${diasAtras} dia${diasAtras === 1 ? "" : "s"}. Todo o estoque de ${estoque} un sobrou.`;
   }
 
+  // 2b. Caso Ação Comercial com Sucesso (ritmo recente pós-ação liquida o estoque antes do vencimento)
+  if (
+    lote.acelerouPosAcao &&
+    lote.ritmoRecenteDia &&
+    lote.diasParaZerarRitmoRecente !== undefined &&
+    lote.diasParaZerarRitmoRecente <= dias
+  ) {
+    const diasZerarTxt = Math.round(lote.diasParaZerarRitmoRecente);
+    return `🚀 Vendas aceleradas pós-ação (${formatRitmoBR(lote.ritmoRecenteDia)} un/dia nos últimos ${lote.diasIntervaloSnapshots || 1}d): estoque zera em ~${diasZerarTxt}d (escoa 100%).`;
+  }
+
   // 3. Caso Venda Zero nos 3 meses fechados (sem venda)
   // Regra: "Lote com venda zero nos 3 meses mostra 'sem venda' e não divide por zero."
   if (lote.isSemVenda || lote.mediaMensalFechada === 0 || lote.ritmoAtualDia === 0) {
@@ -862,6 +989,14 @@ export function gerarDiagnosticoSobraCompleto(
     },
   ];
 
+  const isAceleradoSucesso =
+    !isSemEstoque &&
+    !lote.isVencido &&
+    Boolean(lote.acelerouPosAcao) &&
+    Boolean(lote.ritmoRecenteDia) &&
+    lote.diasParaZerarRitmoRecente !== undefined &&
+    lote.diasParaZerarRitmoRecente <= dias;
+
   // Cálculo escrito em frases simples, sem fórmulas
   let explicacaoSimples = "";
   if (isSemEstoque) {
@@ -869,6 +1004,10 @@ export function gerarDiagnosticoSobraCompleto(
   } else if (lote.isVencido) {
     const diasAtras = Math.abs(dias);
     explicacaoSimples = `Este lote venceu há ${diasAtras} dia${diasAtras === 1 ? "" : "s"}. Como a data de validade já expirou, todo o estoque restante de ${estoque} unidades no centro de distribuição sobrou e requer descarte ou devolução imediata.`;
+  } else if (isAceleradoSucesso && lote.ritmoRecenteDia && lote.diasParaZerarRitmoRecente !== undefined) {
+    const ritmoRecenteStr = formatRitmoBR(lote.ritmoRecenteDia);
+    const diasZerarArredondado = Math.round(lote.diasParaZerarRitmoRecente);
+    explicacaoSimples = `Com a rebaixa/ação recente, o ritmo saltou para ${ritmoRecenteStr} un/dia. Nesse ritmo atual de queima, o estoque de ${estoque} un será liquidado em ~${diasZerarArredondado} dias (bem antes dos ${dias} dias restantes de validade). Sobra prevista no vencimento: 0 unidades.`;
   } else if (isSemVenda) {
     explicacaoSimples = `Este produto não registrou nenhuma venda no histórico recente (sem venda). Com o ritmo diário zerado, todo o estoque atual de ${estoque} unidades deverá sobrar ao final dos ${dias} dias até o vencimento se nenhuma ação comercial for realizada.`;
   } else if (isEscoa100) {
@@ -883,6 +1022,8 @@ export function gerarDiagnosticoSobraCompleto(
 
   const titulo = isSemEstoque
     ? "Situação do Estoque"
+    : isAceleradoSucesso
+    ? "Ação Comercial com Sucesso"
     : isEscoa100
     ? "Previsão de Saída do Lote"
     : "Por que vai sobrar?";
@@ -896,19 +1037,24 @@ export function gerarDiagnosticoSobraCompleto(
     ritmoAtualDia: lote.ritmoAtualDia,
     estoque,
     diasParaVencer: dias,
-    vendaPrevista,
-    sobraPrevista,
-    escoaTempoPercent: isSemEstoque ? 0 : lote.escoaTempoPercent,
+    vendaPrevista: isAceleradoSucesso ? estoque : vendaPrevista,
+    sobraPrevista: isAceleradoSucesso ? 0 : sobraPrevista,
+    escoaTempoPercent: isSemEstoque ? 0 : isAceleradoSucesso ? 100 : lote.escoaTempoPercent,
     isSemVenda,
     isSemEstoque,
-    isEscoa100,
+    isEscoa100: isAceleradoSucesso || isEscoa100,
     isVencido: lote.isVencido,
     vendaIrregular: lote.vendaIrregular,
     avisoIrregularidade,
     multiplicadorEsforco: lote.multiplicadorEsforco ?? null,
     nivelEsforco: lote.nivelEsforco ?? "normal",
     recomendacaoComercial: lote.recomendacaoComercial || "",
-    prejuizoPrevistoSobra: lote.prejuizoPrevistoSobra ?? lote.valorEmRisco ?? 0,
+    prejuizoPrevistoSobra: isAceleradoSucesso ? 0 : (lote.prejuizoPrevistoSobra ?? lote.valorEmRisco ?? 0),
     vendaEsperadaMesAtual: lote.vendaEsperadaMesAtual ?? 0,
+    ritmoRecenteDia: lote.ritmoRecenteDia,
+    vendasNoIntervalo: lote.vendasNoIntervalo,
+    diasIntervaloSnapshots: lote.diasIntervaloSnapshots,
+    acelerouPosAcao: lote.acelerouPosAcao,
+    diasParaZerarRitmoRecente: lote.diasParaZerarRitmoRecente,
   };
 }

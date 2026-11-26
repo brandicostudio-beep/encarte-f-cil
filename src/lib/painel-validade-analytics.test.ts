@@ -8,6 +8,7 @@ import {
   evaluateRitmoMes,
   isVendaIrregular,
   processarLote,
+  processarListaLotes,
   calcularKpiCounts,
   calcularAlertCounts,
   filtrarLotes,
@@ -15,7 +16,7 @@ import {
   gerarExplicacaoSobraLinha,
   gerarDiagnosticoSobraCompleto,
 } from "./painel-validade-analytics";
-import type { ValidadeLoteRaw } from "@/types/painel-validade";
+import type { ValidadeLoteRaw, ValidadeSnapshot } from "@/types/painel-validade";
 
 describe("Painel de Validade - Motor de Análise e Métricas", () => {
   const fixedRefDate = new Date("2026-11-17T12:00:00"); // 17 de Novembro de 2026
@@ -498,6 +499,207 @@ describe("Painel de Validade - Motor de Análise e Métricas", () => {
       expect(diag.ritmoAtualDia).toBe(lote.ritmoAtualDia);
       expect(diag.sobraPrevista).toBe(Math.round(lote.sobraPrevistaUnidades));
       expect(diag.vendaPrevista).toBe(15);
+    });
+  });
+
+  describe("Ritmo Recente Pós-Ação e Comparativo entre Importações", () => {
+    it("reconhece aceleração de vendas do Café 3 Corações entre 16/11 e 19/11 (40 un em 3 dias) e zera a sobra prevista", () => {
+      const refDate1 = new Date("2026-11-16T10:00:00");
+      const rawSnap1: ValidadeLoteRaw[] = [
+        {
+          codprod: "8540",
+          descricao: "CAFE 3 CORACOES TRADICIONAL 500G",
+          embalagem: "PCT",
+          dtval: "25/12/2026", // 39 dias em 16/11, 36 dias em 19/11
+          qtdisp_wms: 135,
+          preco_venda: 18.9,
+          qtvendmes: 21,
+          qtvendmes1: 21,
+          qtvendmes2: 21,
+          qtvendmes3: 22, // Média 21.3 -> ritmo histórico 0.71 un/dia
+          datafinal: "16/11/2026",
+        },
+      ];
+
+      const lotesSnap1 = processarListaLotes(rawSnap1, refDate1);
+      expect(lotesSnap1[0].ritmoAtualDia).toBe(0.71);
+      expect(lotesSnap1[0].sobraPrevistaUnidades).toBeGreaterThan(0);
+
+      const previousSnapshot: ValidadeSnapshot = {
+        id: "snap_1",
+        criadoEm: "2026-11-16T10:00:00.000Z",
+        importadoPor: "Comprador",
+        nomeArquivo: "rotina_8230_16_11.xlsx",
+        totalLotes: lotesSnap1.length,
+        totalProdutosUnicos: 1,
+        lotes: lotesSnap1,
+        referenceDate: refDate1.toISOString(),
+      };
+
+      const refDate2 = new Date("2026-11-19T10:00:00");
+      const rawSnap2: ValidadeLoteRaw[] = [
+        {
+          codprod: "8540",
+          descricao: "CAFE 3 CORACOES TRADICIONAL 500G",
+          embalagem: "PCT",
+          dtval: "25/12/2026", // 36 dias restantes
+          qtdisp_wms: 95, // Caiu de 135 para 95
+          preco_venda: 14.9, // Rebaixa de preço
+          qtvendmes: 61, // Subiu de 21 para 61 (+40 unidades em 3 dias)
+          qtvendmes1: 21,
+          qtvendmes2: 21,
+          qtvendmes3: 22,
+          datafinal: "19/11/2026",
+        },
+      ];
+
+      const lotesSnap2 = processarListaLotes(
+        rawSnap2,
+        refDate2,
+        new Set(["8540"]),
+        undefined,
+        undefined,
+        undefined,
+        previousSnapshot
+      );
+
+      const cafe = lotesSnap2[0];
+      expect(cafe.diasIntervaloSnapshots).toBe(3);
+      expect(cafe.vendasNoIntervalo).toBe(40);
+      expect(cafe.ritmoRecenteDia).toBe(13.33); // 40 / 3 = 13.33 un/dia
+      expect(cafe.acelerouPosAcao).toBe(true);
+      expect(cafe.diasParaZerarRitmoRecente).toBe(7.1); // 95 / 13.33 = ~7.1 dias
+      expect(cafe.sobraPrevistaUnidades).toBe(0);
+      expect(cafe.escoaTempoPercent).toBe(100);
+      expect(cafe.faixaEscoaTempo).toBe("escoa_tempo");
+      expect(cafe.valorEmRisco).toBe(0);
+
+      const diag = gerarDiagnosticoSobraCompleto(cafe);
+      expect(diag.titulo).toBe("Ação Comercial com Sucesso");
+      expect(diag.isEscoa100).toBe(true);
+      expect(diag.sobraPrevista).toBe(0);
+      expect(diag.escoaTempoPercent).toBe(100);
+      expect(diag.explicacaoSimples).toContain("13,33 un/dia");
+      expect(diag.explicacaoSimples).toContain("Sobra prevista no vencimento: 0 unidades");
+    });
+
+    it("usa delta de estoque no CD como fallback quando qtvendmes está ausente", () => {
+      const refDate1 = new Date("2026-11-16T10:00:00");
+      const rawSnap1: ValidadeLoteRaw[] = [
+        {
+          codprod: "8540",
+          descricao: "CAFE 3 CORACOES",
+          embalagem: "PCT",
+          dtval: "25/12/2026",
+          qtdisp_wms: 135,
+          preco_venda: 18.9,
+          qtvendmes: null,
+          qtvendmes1: 20,
+          qtvendmes2: 20,
+          qtvendmes3: 20,
+        },
+      ];
+      const lotesSnap1 = processarListaLotes(rawSnap1, refDate1);
+      const previousSnapshot: ValidadeSnapshot = {
+        id: "snap_prev",
+        criadoEm: refDate1.toISOString(),
+        importadoPor: "Comprador",
+        nomeArquivo: "snap1.xlsx",
+        totalLotes: 1,
+        totalProdutosUnicos: 1,
+        lotes: lotesSnap1,
+        referenceDate: refDate1.toISOString(),
+      };
+
+      const refDate2 = new Date("2026-11-19T10:00:00");
+      const rawSnap2: ValidadeLoteRaw[] = [
+        {
+          codprod: "8540",
+          descricao: "CAFE 3 CORACOES",
+          embalagem: "PCT",
+          dtval: "25/12/2026",
+          qtdisp_wms: 95,
+          preco_venda: 14.9,
+          qtvendmes: null,
+          qtvendmes1: 20,
+          qtvendmes2: 20,
+          qtvendmes3: 20,
+        },
+      ];
+
+      const lotesSnap2 = processarListaLotes(
+        rawSnap2,
+        refDate2,
+        new Set(),
+        undefined,
+        undefined,
+        undefined,
+        previousSnapshot
+      );
+
+      expect(lotesSnap2[0].diasIntervaloSnapshots).toBe(3);
+      expect(lotesSnap2[0].vendasNoIntervalo).toBe(40);
+      expect(lotesSnap2[0].ritmoRecenteDia).toBe(13.33);
+      expect(lotesSnap2[0].sobraPrevistaUnidades).toBe(0);
+    });
+
+    it("alerta quando produto está no encarte mas ritmo recente não acelerou o suficiente", () => {
+      const refDate1 = new Date("2026-11-16T10:00:00");
+      const rawSnap1: ValidadeLoteRaw[] = [
+        {
+          codprod: "9910",
+          descricao: "PRODUTO LENTO NO ENCARTE",
+          embalagem: "UN",
+          dtval: "29/11/2026", // 10 dias em 19/11
+          qtdisp_wms: 100,
+          preco_venda: 10,
+          qtvendmes: 10,
+          qtvendmes1: 30,
+          qtvendmes2: 30,
+          qtvendmes3: 30, // Ritmo histórico 0.83 un/dia
+        },
+      ];
+      const lotesSnap1 = processarListaLotes(rawSnap1, refDate1);
+      const previousSnapshot: ValidadeSnapshot = {
+        id: "snap_prev2",
+        criadoEm: refDate1.toISOString(),
+        importadoPor: "Comprador",
+        nomeArquivo: "snap1.xlsx",
+        totalLotes: 1,
+        totalProdutosUnicos: 1,
+        lotes: lotesSnap1,
+        referenceDate: refDate1.toISOString(),
+      };
+
+      const refDate2 = new Date("2026-11-19T10:00:00");
+      const rawSnap2: ValidadeLoteRaw[] = [
+        {
+          codprod: "9910",
+          descricao: "PRODUTO LENTO NO ENCARTE",
+          embalagem: "UN",
+          dtval: "29/11/2026", // 10 dias -> ritmo necessário 9.9 un/dia
+          qtdisp_wms: 99,
+          preco_venda: 10,
+          qtvendmes: 11, // Vendeu só 1 un em 3 dias -> 0.33 un/dia
+          qtvendmes1: 30,
+          qtvendmes2: 30,
+          qtvendmes3: 30,
+        },
+      ];
+
+      const lotesSnap2 = processarListaLotes(
+        rawSnap2,
+        refDate2,
+        new Set(["9910"]),
+        undefined,
+        undefined,
+        undefined,
+        previousSnapshot
+      );
+
+      expect(lotesSnap2[0].acelerouPosAcao).toBe(false);
+      expect(lotesSnap2[0].recomendacaoComercial).toContain("Mesmo após a ação/rebaixa");
+      expect(lotesSnap2[0].recomendacaoComercial).toContain("corte de preço mais agressivo");
     });
   });
 });

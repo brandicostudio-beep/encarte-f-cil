@@ -93,6 +93,13 @@ export interface ValidadeDiagnosticoSobra {
   recomendacaoComercial: string;
   prejuizoPrevistoSobra: number; // sobraPrevista * precoVenda
   vendaEsperadaMesAtual: number; // Média mensal * (diaAtual / diasDoMes)
+
+  // Ritmo Recente Pós-Ação e Comparativo entre Importações
+  ritmoRecenteDia?: number;
+  vendasNoIntervalo?: number;
+  diasIntervaloSnapshots?: number;
+  acelerouPosAcao?: boolean;
+  diasParaZerarRitmoRecente?: number;
 }
 
 export interface ValidadeLoteCalculado {
@@ -162,6 +169,13 @@ export interface ValidadeLoteCalculado {
   // Status de Snapshot
   isNovoLote?: boolean;
   saiuDoEncarte?: boolean;
+
+  // Ritmo Recente Pós-Ação e Comparativo entre Importações
+  ritmoRecenteDia?: number;
+  vendasNoIntervalo?: number;
+  diasIntervaloSnapshots?: number;
+  acelerouPosAcao?: boolean;
+  diasParaZerarRitmoRecente?: number;
 }
 
 export interface ValidadeSnapshot {

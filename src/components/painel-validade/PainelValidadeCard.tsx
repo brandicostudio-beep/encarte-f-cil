@@ -318,14 +318,48 @@ export const PainelValidadeCard: React.FC<PainelValidadeCardProps> = ({
             </div>
 
             {/* 4. EXPLICAÇÃO EM FRASES SIMPLES EM EVIDÊNCIA DIRETA NO CARD (DESPOLUÍDO) */}
-            <div className="bg-amber-50/70 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-200/80 dark:border-amber-900/40 space-y-1">
-              <div className="text-[10px] uppercase font-black tracking-wider text-amber-800 dark:text-amber-300 flex items-center justify-between">
+            <div
+              className={`p-3 rounded-xl border space-y-1.5 ${
+                lote.acelerouPosAcao &&
+                lote.diasParaZerarRitmoRecente !== undefined &&
+                lote.diasParaZerarRitmoRecente <= lote.diasParaVencer
+                  ? "bg-emerald-50/80 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-900/50"
+                  : "bg-amber-50/70 dark:bg-amber-950/20 border-amber-200/80 dark:border-amber-900/40"
+              }`}
+            >
+              {lote.acelerouPosAcao && lote.ritmoRecenteDia !== undefined && (
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-black tracking-wide">
+                  <span>
+                    🚀 Vendas Aceleradas Pós-Ação: {formatRitmoBR(lote.ritmoRecenteDia)} un/dia nos últimos{" "}
+                    {lote.diasIntervaloSnapshots ?? 1} dias (vendeu {lote.vendasNoIntervalo ?? 0} un entre as importações)
+                  </span>
+                </div>
+              )}
+              {!lote.acelerouPosAcao &&
+                lote.noEncarte &&
+                lote.ritmoRecenteDia !== undefined && (
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-200/90 text-amber-950 text-[10px] font-bold">
+                    <span>
+                      📊 Comparativo ({lote.diasIntervaloSnapshots ?? 1}d): {formatRitmoBR(lote.ritmoRecenteDia)} un/dia
+                      {" "}(necessário: {formatRitmoBR(lote.ritmoNecessarioDia)} un/dia)
+                    </span>
+                  </div>
+                )}
+              <div
+                className={`text-[10px] uppercase font-black tracking-wider flex items-center justify-between ${
+                  lote.acelerouPosAcao &&
+                  lote.diasParaZerarRitmoRecente !== undefined &&
+                  lote.diasParaZerarRitmoRecente <= lote.diasParaVencer
+                    ? "text-emerald-800 dark:text-emerald-300"
+                    : "text-amber-800 dark:text-amber-300"
+                }`}
+              >
                 <span className="flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                  <Sparkles className="h-3.5 w-3.5 shrink-0" />
                   <span>Explicação em Frases Simples:</span>
                 </span>
                 {!isSemEstoque && (
-                  <span className="font-mono text-[11px] font-bold text-neutral-600 dark:text-neutral-400">
+                  <span className={`font-mono text-[11px] font-bold ${escoaBar.textClass}`}>
                     {Math.round(lote.escoaTempoPercent)}% escoa
                   </span>
                 )}

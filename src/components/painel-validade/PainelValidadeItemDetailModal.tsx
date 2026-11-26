@@ -241,6 +241,35 @@ export const PainelValidadeItemDetailContent: React.FC<PainelValidadeItemDetailC
             </span>
           </div>
 
+          {/* 1. DESTAQUE DE RITMO RECENTE PÓS-AÇÃO & COMPARATIVO ENTRE IMPORTAÇÕES */}
+          {diagnostico.acelerouPosAcao && diagnostico.ritmoRecenteDia !== undefined && (
+            <div className="p-3.5 rounded-xl bg-emerald-100/90 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 text-emerald-950 dark:text-emerald-200 space-y-1.5">
+              <div className="text-xs font-black flex items-center gap-1.5">
+                <span>
+                  🚀 Vendas Aceleradas Pós-Ação: {formatRitmoBR(diagnostico.ritmoRecenteDia)} un/dia nos últimos{" "}
+                  {diagnostico.diasIntervaloSnapshots ?? 1} dias (vendeu {diagnostico.vendasNoIntervalo ?? 0} un entre as importações)
+                </span>
+              </div>
+              {diagnostico.diasParaZerarRitmoRecente !== undefined && (
+                <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                  Comparativo: média histórica de {formatRitmoBR(diagnostico.ritmoAtualDia)} un/dia → ritmo recente de{" "}
+                  {formatRitmoBR(diagnostico.ritmoRecenteDia)} un/dia (estoque zera em ~
+                  {Math.round(diagnostico.diasParaZerarRitmoRecente)} dias vs {diagnostico.diasParaVencer} dias para vencer).
+                </div>
+              )}
+            </div>
+          )}
+
+          {!diagnostico.acelerouPosAcao &&
+            lote.noEncarte &&
+            diagnostico.ritmoRecenteDia !== undefined && (
+              <div className="p-3.5 rounded-xl bg-amber-100/90 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-950 dark:text-amber-200 text-xs font-semibold">
+                📊 Comparativo entre importações ({diagnostico.diasIntervaloSnapshots ?? 1} dias): vendeu{" "}
+                {diagnostico.vendasNoIntervalo ?? 0} un ({formatRitmoBR(diagnostico.ritmoRecenteDia)} un/dia vs{" "}
+                {formatRitmoBR(lote.ritmoNecessarioDia)} un/dia necessários).
+              </div>
+            )}
+
           {/* 1. EM EVIDÊNCIA MÁXIMA AO ABRIR O CARD: EXPLICAÇÃO EM FRASES SIMPLES */}
           <div className="bg-white/95 dark:bg-slate-800/95 p-4 rounded-xl border border-neutral-200/90 dark:border-slate-700 shadow-2xs space-y-2">
             <div className="text-xs font-black uppercase tracking-wider text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
