@@ -353,6 +353,25 @@ export async function searchCescomProductsOnline(
 }
 
 /**
+ * Extrai a gramatura/volume principal de uma descrição de produto (ex: "24X170 GR" -> "170G", "1X54G" -> "54G").
+ */
+export function extractProductGramatura(description: string): string | null {
+  if (!description) return null;
+  const upper = description.toUpperCase();
+
+  // Prioriza a unidade após multiplicador de caixa/fardo (ex: 24X170 GR, 12X1 LT, 1X54G)
+  const packMatch = upper.match(/\b\d+\s*[X×]\s*(\d+(?:[.,]\d+)?)\s*(KG|GR|G|ML|LT|L)\b/);
+  const rawMatch = packMatch || upper.match(/\b(\d+(?:[.,]\d+)?)\s*(KG|GR|G|ML|LT|L)\b/);
+  if (!rawMatch) return null;
+
+  const qty = rawMatch[1].replace(",", ".");
+  let unit = rawMatch[2];
+  if (unit === "GR") unit = "G";
+  if (unit === "LT") unit = "L";
+  return `${qty}${unit}`;
+}
+
+/**
  * Busca dados completos de um produto a partir de um código exato.
  * Se não existir no catálogo, verifica o cache online do site da Cescom.
  */

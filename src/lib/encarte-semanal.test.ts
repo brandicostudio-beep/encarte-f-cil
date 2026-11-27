@@ -897,4 +897,13 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     expect(cells[0].y).toBeGreaterThanOrEqual(customGrid.yStart);
     expect(lastCell.y + lastCell.height).toBeLessThanOrEqual(customGrid.yEnd + 0.5);
   });
+
+  it("Teste 25: extractProductGramatura extrai e normaliza gramatura para cruzar variações", async () => {
+    const { extractProductGramatura } = await import("./encarte-semanal-catalog");
+    expect(extractProductGramatura("MILHO VERDE LATA PREDILECTA - 24X170 GR")).toBe("170G");
+    expect(extractProductGramatura("SALGADINHO YOKITOS CONCHINHA PRESUNTO - 1X54G")).toBe("54G");
+    expect(extractProductGramatura("AZEITE EXTRA VIRGEM LIZA 500ML")).toBe("500ML");
+    expect(extractProductGramatura("ALVEJANTE Q BOA 12X1 LT")).toBe("1L");
+    expect(extractProductGramatura("ARROZ TIPO 1 5KG")).toBe("5KG");
+  });
 });

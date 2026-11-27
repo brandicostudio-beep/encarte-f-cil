@@ -7,6 +7,7 @@ import {
   cleanPrincipalDescription,
   fetchCescomProductOnline,
   searchCescomProductsOnline,
+  extractProductGramatura,
   type ProductSuggestion,
 } from "@/lib/encarte-semanal-catalog";
 import {
@@ -233,6 +234,8 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     };
   }, [codeQuery]);
 
+  const primaryGramatura = extractProductGramatura(description || product?.description || "");
+
   // Busca sugestões para a 2ª Foto / Variação por código ou descrição (local + site Cescom)
   useEffect(() => {
     let active = true;
@@ -244,7 +247,16 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       return;
     }
 
-    const localResults = searchProductSuggestions(cleanTerm, 8);
+    const sortByGramatura = (items: ProductSuggestion[]) => {
+      if (!primaryGramatura) return items;
+      return [...items].sort((a, b) => {
+        const matchA = extractProductGramatura(a.description) === primaryGramatura ? 1 : 0;
+        const matchB = extractProductGramatura(b.description) === primaryGramatura ? 1 : 0;
+        return matchB - matchA;
+      });
+    };
+
+    const localResults = sortByGramatura(searchProductSuggestions(cleanTerm, 8));
     setSecSuggestions(localResults);
 
     const timer = setTimeout(async () => {
@@ -260,7 +272,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
           merged.push(item);
         }
       }
-      setSecSuggestions(merged.slice(0, 10));
+      setSecSuggestions(sortByGramatura(merged).slice(0, 10));
       setIsSearchingSecCescom(false);
     }, 220);
 
@@ -268,7 +280,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       active = false;
       clearTimeout(timer);
     };
-  }, [secQuery]);
+  }, [secQuery, primaryGramatura]);
 
   // Busca variações inteligentes para sugerir como Foto 2
   useEffect(() => {
@@ -297,7 +309,8 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     setDescription(suggestion.description);
     setShowSuggestions(false);
 
-    // Puxa a foto priorizando Pasta Local > Validade/Encartes > Google Drive > Sugestão Cescom
+    // Puxa a foto priorizando Pasta Local > Validade/Encartes > Google Drive (evita foto com fundo do site quando houver na pasta/Drive)
+    setIsLoadingPhoto(true);
     let photo =
       (await fetchLocalFolderHandlePhotoForCode(suggestion.code)) ||
       findLocalOrCachedPhotoForCode(suggestion.code) ||
@@ -305,7 +318,13 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
 
     if (!photo) {
       photo = resolveBestPhotoForCode(suggestion.code, suggestion.image);
+      if (photo && (photo.includes("agilecdn.com.br") || photo.includes("cescom.com.br"))) {
+        setCopyToast(`Código ${suggestion.code}: foto não encontrada na Pasta/Drive — usando prévia do site.`);
+        if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+        copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 4000);
+      }
     }
+    setIsLoadingPhoto(false);
 
     if (photo) {
       setImage(photo);
@@ -349,6 +368,11 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
 
     if (!photo) {
       photo = resolveBestPhotoForCode(suggestion.code, suggestion.image);
+      if (photo && (photo.includes("agilecdn.com.br") || photo.includes("cescom.com.br"))) {
+        setCopyToast(`Variação ${suggestion.code}: foto não encontrada na Pasta/Drive — usando prévia do site.`);
+        if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+        copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 4000);
+      }
     }
 
     const trimmedPhoto = photo ? await trimEmptyMarginsSafe(photo) : "";
@@ -878,6 +902,11 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="font-mono font-black text-amber-300 text-xs">{item.code}</span>
+                    {extractProductGramatura(item.description) && (
+                      <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                        {extractProductGramatura(item.description)}
+                      </span>
+                    )}
                     <span className="text-[9px] font-semibold px-1 rounded bg-neutral-800 text-neutral-400 uppercase">
                       {item.source === "winthor" ? "Winthor" : "Cescom"}
                     </span>
@@ -894,11 +923,15 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
 
       {/* 1B. CAMPO 2ª FOTO / VARIAÇÃO (BUSCA POR CÓDIGO OU DESCRIÇÃO) */}
       <div className="space-y-1 relative">
-        <Label htmlFor="inArtSecondaryCode" className="text-[11px] font-bold text-neutral-300 flex items-center justify-between">
+        <Label htmlFor="inArtSecondaryCode" className="text-[11px] font-bold text-neutral-300 flex items-center justify-between gap-1">
           <span>2ª Foto / Variação (Código ou Descrição):</span>
           {isSearchingSecCescom ? (
             <span className="text-[10px] text-amber-300 font-bold flex items-center gap-1 animate-pulse">
               <Loader2 className="h-3 w-3 animate-spin" /> Buscando variação...
+            </span>
+          ) : primaryGramatura ? (
+            <span className="text-[9.5px] font-black px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
+              Foto 1: {primaryGramatura}
             </span>
           ) : (
             <span className="text-[10px] text-emerald-400/90 font-mono">Drive + Cescom</span>
@@ -953,7 +986,10 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
                 ×
               </button>
             </div>
-            {secSuggestions.map((item) => (
+            {secSuggestions.map((item) => {
+              const itemGram = extractProductGramatura(item.description);
+              const isSameGram = Boolean(primaryGramatura && itemGram && itemGram === primaryGramatura);
+              return (
               <button
                 key={`sec-${item.code}-${item.description}`}
                 type="button"
@@ -969,8 +1005,19 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="font-mono font-black text-emerald-300 text-xs">{item.code}</span>
+                    {itemGram && (
+                      <span
+                        className={`text-[9px] font-black px-1.5 py-0.2 rounded border ${
+                          isSameGram
+                            ? "bg-emerald-500/25 text-emerald-200 border-emerald-400/60"
+                            : "bg-neutral-800 text-neutral-300 border-neutral-700"
+                        }`}
+                      >
+                        {itemGram}{isSameGram ? " • MESMA" : ""}
+                      </span>
+                    )}
                     <span className="text-[9px] font-semibold px-1 rounded bg-neutral-800 text-neutral-400 uppercase">
                       {item.source === "winthor" ? "Winthor" : "Cescom"}
                     </span>
@@ -980,7 +1027,8 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
                   </div>
                 </div>
               </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

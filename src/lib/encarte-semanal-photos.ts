@@ -441,7 +441,14 @@ export async function syncSemanalPhotosFromDriveFolder(params: {
       };
     }
 
-    const wantedSet = new Set(cleanCodes.map((c) => c.toLowerCase()));
+    const wantedSet = new Set<string>();
+    for (const c of cleanCodes) {
+      const lower = c.toLowerCase();
+      wantedSet.add(lower);
+      if (/^\d+$/.test(lower)) {
+        wantedSet.add(String(parseInt(lower, 10)));
+      }
+    }
     const bestByCode = new Map<
       string,
       { id: string; code: string; filename: string; modifiedTime?: string; suffixOrder: number }
@@ -449,8 +456,10 @@ export async function syncSemanalPhotosFromDriveFolder(params: {
 
     for (const item of indexRes.indexedPhotos || []) {
       const codeLower = (item.code || "").trim().toLowerCase();
-      if (!codeLower || !wantedSet.has(codeLower)) continue;
-      const existing = bestByCode.get(codeLower);
+      const codeStripped = /^\d+$/.test(codeLower) ? String(parseInt(codeLower, 10)) : codeLower;
+      if (!codeLower || (!wantedSet.has(codeLower) && !wantedSet.has(codeStripped))) continue;
+      const targetKey = wantedSet.has(codeLower) ? codeLower : codeStripped;
+      const existing = bestByCode.get(targetKey);
       const itemOrder = item.suffixOrder ?? 0;
       const isPng = /\.png$/i.test(item.filename || "");
       const existingIsPng = existing ? /\.png$/i.test(existing.filename || "") : false;
@@ -460,7 +469,7 @@ export async function syncSemanalPhotosFromDriveFolder(params: {
         itemOrder < existing.suffixOrder ||
         (itemOrder === existing.suffixOrder && isPng && !existingIsPng)
       ) {
-        bestByCode.set(codeLower, {
+        bestByCode.set(targetKey, {
           id: item.id,
           code: item.code.trim(),
           filename: item.filename,
