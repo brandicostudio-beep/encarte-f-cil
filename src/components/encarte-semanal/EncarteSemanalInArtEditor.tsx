@@ -187,31 +187,99 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     };
   }, [cellIndex, product?.id, focusTrigger]);
 
+  const mergeSuggestionsWithCescomGramatura = (
+    localItems: ProductSuggestion[],
+    onlineItems: ProductSuggestion[]
+  ): ProductSuggestion[] => {
+    const onlineByCode = new Map<string, ProductSuggestion>();
+    for (const o of onlineItems) {
+      onlineByCode.set(o.code.trim(), o);
+    }
+    const merged: ProductSuggestion[] = localItems.map((local) => {
+      if (extractProductGramatura(local.description)) return local;
+      const online = onlineByCode.get(local.code.trim());
+      if (online) {
+        const gram = extractProductGramatura(online.description);
+        if (gram) {
+          return { ...local, description: `${local.description} - ${gram}` };
+        }
+      }
+      return local;
+    });
+    const seen = new Set(merged.map((r) => r.code.trim()));
+    for (const item of onlineItems) {
+      if (!seen.has(item.code.trim())) {
+        seen.add(item.code.trim());
+        merged.push(item);
+      }
+    }
+    return merged;
+  };
+
+  const [fetchedPrimaryGramatura, setFetchedPrimaryGramatura] = useState<string | null>(null);
+  const directPrimaryGramatura = extractProductGramatura(description || product?.description || "");
+  const primaryGramatura = directPrimaryGramatura || fetchedPrimaryGramatura;
+
+  useEffect(() => {
+    let active = true;
+    const targetCode = (product?.code || codeQuery.split(/[/,]+/)[0] || "").trim();
+    if (directPrimaryGramatura || !targetCode || !/^\d+$/.test(targetCode)) {
+      setFetchedPrimaryGramatura(null);
+      return;
+    }
+    fetchCescomProductOnline(targetCode).then((online) => {
+      if (!active || !online) return;
+      const gram = extractProductGramatura(online.description);
+      if (gram) setFetchedPrimaryGramatura(gram);
+    });
+    return () => {
+      active = false;
+    };
+  }, [directPrimaryGramatura, product?.code, codeQuery]);
+
   // Atualiza sugestões conforme digitação (busca local e consulta online no cescom.com.br)
   useEffect(() => {
     let active = true;
     const cleanTerm = codeQuery.split(/[/,]+/)[0]?.trim() || "";
     if (cleanTerm.length > 0) {
-      const results = searchProductSuggestions(cleanTerm, 6);
+      const results = searchProductSuggestions(cleanTerm, 8);
       setSuggestions(results);
       setShowSuggestions(results.length > 0);
 
-      // Se for código de 3+ dígitos, verifica também Pasta Local e Google Drive para garantir PNG sem fundo
+      const isTextSearch = cleanTerm.length >= 3 && !/^\d+$/.test(cleanTerm);
+      if (isTextSearch) {
+        const timer = setTimeout(async () => {
+          if (!active) return;
+          setIsSearchingCescom(true);
+          const onlineList = await searchCescomProductsOnline(cleanTerm, 8);
+          if (!active) return;
+          setSuggestions(mergeSuggestionsWithCescomGramatura(results, onlineList).slice(0, 10));
+          setShowSuggestions(true);
+          setIsSearchingCescom(false);
+        }, 220);
+        return () => {
+          active = false;
+          clearTimeout(timer);
+        };
+      }
+
+      // Se for código de 3+ dígitos, verifica também Pasta Local, Google Drive e gramatura no site Cescom
       if (cleanTerm.length >= 3) {
         const hasMissingOrCescomImg =
           results.length === 0 ||
           results.some((r) => !r.image || r.image.includes("agilecdn.com.br") || r.image.includes("cescom.com.br"));
+        const missingGramatura = results.some((r) => !extractProductGramatura(r.description));
 
-        if (results.length === 0 || hasMissingOrCescomImg) {
+        if (results.length === 0 || hasMissingOrCescomImg || missingGramatura) {
           setIsSearchingCescom(true);
           Promise.all([
-            results.length === 0 ? fetchCescomProductOnline(cleanTerm) : Promise.resolve(null),
+            results.length === 0 || missingGramatura ? fetchCescomProductOnline(cleanTerm) : Promise.resolve(null),
             fetchLocalFolderHandlePhotoForCode(cleanTerm).then(
               (p) => p || findLocalOrCachedPhotoForCode(cleanTerm) || fetchSingleDrivePhotoForCode(cleanTerm)
             ),
           ]).then(([online, priorityPhoto]) => {
             if (!active) return;
-            if (online) {
+            if (online && results.length === 0) {
               setSuggestions([
                 {
                   ...online,
@@ -219,14 +287,16 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
                 },
               ]);
               setShowSuggestions(true);
-            } else if (priorityPhoto && results.length > 0) {
-              setSuggestions(
-                results.map((r) =>
+            } else if (results.length > 0) {
+              let updated = online ? mergeSuggestionsWithCescomGramatura(results, [online]) : results;
+              if (priorityPhoto) {
+                updated = updated.map((r) =>
                   r.code.trim().toLowerCase() === cleanTerm.toLowerCase()
                     ? { ...r, image: priorityPhoto }
                     : r
-                )
-              );
+                );
+              }
+              setSuggestions(updated);
             }
             setIsSearchingCescom(false);
           });
@@ -241,8 +311,6 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       active = false;
     };
   }, [codeQuery]);
-
-  const primaryGramatura = extractProductGramatura(description || product?.description || "");
 
   // Busca sugestões para a 2ª Foto / Variação por código ou descrição (local + site Cescom)
   useEffect(() => {
@@ -272,14 +340,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       setIsSearchingSecCescom(true);
       const onlineResults = await searchCescomProductsOnline(cleanTerm, 8);
       if (!active) return;
-      const merged = [...localResults];
-      const seen = new Set(localResults.map((r) => r.code.trim()));
-      for (const item of onlineResults) {
-        if (!seen.has(item.code.trim())) {
-          seen.add(item.code.trim());
-          merged.push(item);
-        }
-      }
+      const merged = mergeSuggestionsWithCescomGramatura(localResults, onlineResults);
       setSecSuggestions(sortByGramatura(merged).slice(0, 10));
       setIsSearchingSecCescom(false);
     }, 220);
