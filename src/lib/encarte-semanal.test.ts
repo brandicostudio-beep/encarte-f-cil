@@ -968,4 +968,10 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     expect(calculateEncarteSemanalGridCells(page1)).toHaveLength(18);
     expect(calculateEncarteSemanalGridCells(page2)).toHaveLength(10);
   });
+
+  it("Teste 28: cleanPrincipalDescription remove variações compostas como AROMAS DO CAMPO e FLOR DE ROSAS", async () => {
+    const { cleanPrincipalDescription } = await import("./encarte-semanal-catalog");
+    expect(cleanPrincipalDescription("PEDRA SANITÁRIA AROMAS DO CAMPO TRIEX")).toBe("PEDRA SANITÁRIA TRIEX");
+    expect(cleanPrincipalDescription("PEDRA SANITÁRIA FLOR DE ROSAS TRIEX")).toBe("PEDRA SANITÁRIA TRIEX");
+  });
 });

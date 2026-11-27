@@ -458,8 +458,17 @@ export function cleanPrincipalDescription(raw: string): string {
   // Extrai o nome-base removendo fragrâncias, sabores e recheios
   s = extractGenericBaseName(s);
 
-  // Variações específicas comuns de limpeza e sub-linhas
-  s = s.replace(/\b(cozinha|banheiro)\b/gi, " ");
+  // Remove expressões compostas de fragrâncias/variações (ex: "AROMAS DO CAMPO", "FLOR DE ROSAS", "BRISA DO MAR")
+  s = s.replace(
+    /\b(?:aromas?|aroma|fragrância|fragrancia|essência|essencia|perfume|toque|brisa|campos?|flores?|flor|jardim)\s+(?:d[aoe]s?\s+)?[a-záàâãéêíóôõúç]+\b/gi,
+    " "
+  );
+
+  // Variações específicas comuns de limpeza, fragrâncias e sub-linhas
+  s = s.replace(
+    /\b(cozinha|banheiro|rosas|eucalipto|pinho|jasmim|orquídea|orquidea|cerejeira|hortelã|hortela|citronela|marinho|marine|oceano|camomila|talco|bambú|bambu)\b/gi,
+    " "
+  );
 
   // Remove sobras de traços, barras e espaços repetidos
   s = s

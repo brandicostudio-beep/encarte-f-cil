@@ -879,7 +879,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
         </div>
         <button
           type="button"
-          onClick={() => {
+          onClick={async () => {
             if (product?.isPrincipal) {
               const restoredCode = product.originalCode || "";
               const restoredDesc = product.originalDescription || description;
@@ -892,12 +892,13 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
                 description: restoredDesc,
               });
             } else {
-              const origCode = product?.originalCode || codeQuery;
-              const origDesc = product?.originalDescription || description;
-              const cleanDesc = cleanPrincipalDescription(description);
+              const origCode = (product?.originalCode || codeQuery).trim();
+              const origDesc = (product?.originalDescription || description).trim();
+              const cleanDesc = cleanPrincipalDescription(description || origDesc);
               setCodeQuery("");
               setDescription(cleanDesc);
-              onSaveProduct({
+
+              const baseUpdated: EncarteSemanalProduct = {
                 ...(product || {
                   id: `semanal-prod-${Date.now()}`,
                   image,
@@ -910,7 +911,73 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
                 code: "",
                 originalDescription: origDesc,
                 description: cleanDesc,
-              });
+              };
+              onSaveProduct(baseUpdated);
+
+              // Se ainda não houver uma 2ª foto distinta, busca automaticamente a variação do produto (mesma gramatura)
+              if (!secondaryImage && cleanDesc.length >= 3) {
+                setIsSearchingSecCescom(true);
+                try {
+                  const targetGram =
+                    extractProductGramatura(origDesc) ||
+                    (origCode
+                      ? extractProductGramatura((await fetchCescomProductOnline(origCode))?.description || "")
+                      : null);
+
+                  const localVars = findSemanalVariations(origDesc, origCode, [
+                    ...(allProducts || []),
+                    ...getAllKnownProducts().map((p) => ({
+                      code: p.code,
+                      description: p.description,
+                      image: p.image,
+                    })),
+                  ]);
+                  const onlineVars = await searchCescomProductsOnline(cleanDesc, 10);
+
+                  const candidates: Array<{ code: string; description: string; image?: string }> = [
+                    ...localVars,
+                    ...onlineVars.filter((o) => !localVars.some((l) => l.code.trim() === o.code.trim())),
+                  ].filter((c) => c.code.trim() && c.code.trim() !== origCode);
+
+                  if (candidates.length > 0) {
+                    const sorted = [...candidates].sort((a, b) => {
+                      const aSameBase = cleanPrincipalDescription(a.description) === cleanDesc ? 2 : 0;
+                      const bSameBase = cleanPrincipalDescription(b.description) === cleanDesc ? 2 : 0;
+                      const aSameGram = targetGram && extractProductGramatura(a.description) === targetGram ? 1 : 0;
+                      const bSameGram = targetGram && extractProductGramatura(b.description) === targetGram ? 1 : 0;
+                      return bSameBase + bSameGram - (aSameBase + aSameGram);
+                    });
+
+                    const bestVar = sorted[0];
+                    const varPhoto =
+                      (await fetchLocalFolderHandlePhotoForCode(bestVar.code)) ||
+                      findLocalOrCachedPhotoForCode(bestVar.code) ||
+                      (await fetchSingleDrivePhotoForCode(bestVar.code)) ||
+                      resolveBestPhotoForCode(bestVar.code, bestVar.image);
+
+                    if (varPhoto) {
+                      const trimmedVar = await trimEmptyMarginsSafe(varPhoto);
+                      if (trimmedVar) {
+                        setSecondaryImage(trimmedVar);
+                        setDuplicatePhoto(false);
+                        setSecQuery(bestVar.code);
+                        onSaveProduct({
+                          ...baseUpdated,
+                          secondaryCode: bestVar.code,
+                          secondaryImage: trimmedVar,
+                          duplicatePhoto: false,
+                          scale2: scale,
+                        });
+                        setCopyToast(`⭐ Principal ativo! Variação ${bestVar.code} aplicada na Foto 2.`);
+                        if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+                        copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 4000);
+                      }
+                    }
+                  }
+                } finally {
+                  setIsSearchingSecCescom(false);
+                }
+              }
             }
           }}
           className={`px-2 py-1 rounded text-[10px] font-black uppercase transition-all shrink-0 cursor-pointer ${
