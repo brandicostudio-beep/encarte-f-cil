@@ -44,8 +44,6 @@ import {
   loadCampaignPhotosFromFolder,
 } from "@/lib/local-folder-service";
 import type { EncarteProduct } from "@/types/encarte";
-import { changeSemanalHistory, undoSemanalHistory, redoSemanalHistory } from "@/lib/encarte-semanal-editing";
-import { cleanPrincipalDescription } from "@/lib/encarte-semanal-catalog";
 import {
   exportEncarteSemanalPageAsPng,
   exportAllEncarteSemanalPagesAsZip,
@@ -539,24 +537,22 @@ export const EncarteSemanalWorkspace: React.FC = () => {
       pageIndex: currentPage,
     };
 
-    setProducts((prev) => {
-      const copy = [...prev];
-      const existingIdx = copy.findIndex(
-        (p, i) =>
-          (p.slotIndex !== undefined ? p.slotIndex === targetGlobalIndex : i === targetGlobalIndex) ||
-          p.id === updated.id
-      );
+    const copy = [...products];
+    const existingIdx = copy.findIndex(
+      (p, i) =>
+        (p.slotIndex !== undefined ? p.slotIndex === targetGlobalIndex : i === targetGlobalIndex) ||
+        p.id === updated.id
+    );
 
-      if (existingIdx >= 0) {
-        copy[existingIdx] = productWithSlot;
-      } else {
-        copy.push(productWithSlot);
-      }
+    if (existingIdx >= 0) {
+      copy[existingIdx] = productWithSlot;
+    } else {
+      copy.push(productWithSlot);
+    }
 
-      saveEncarteSemanalProducts(copy);
-      pushHistoryState(copy);
-      return copy;
-    });
+    setProducts(copy);
+    saveEncarteSemanalProducts(copy);
+    pushHistoryState(copy);
   };
 
   // Limpa o produto do box selecionado (volta a ser slot vazio)
@@ -564,17 +560,15 @@ export const EncarteSemanalWorkspace: React.FC = () => {
     const targetGlobalIndex = (currentPage - 1) * (gridConfig.itemsPerPage || 20) + slotIdx;
     const currentProd = getProductAtSlot(slotIdx);
 
-    setProducts((prev) => {
-      const filtered = prev.filter((p) => {
-        if (currentProd && p.id === currentProd.id) return false;
-        if (p.slotIndex !== undefined && p.slotIndex === targetGlobalIndex) return false;
-        return true;
-      });
-      saveEncarteSemanalProducts(filtered);
-      pushHistoryState(filtered);
-      return filtered;
+    const filtered = products.filter((p) => {
+      if (currentProd && p.id === currentProd.id) return false;
+      if (p.slotIndex !== undefined && p.slotIndex === targetGlobalIndex) return false;
+      return true;
     });
 
+    setProducts(filtered);
+    saveEncarteSemanalProducts(filtered);
+    pushHistoryState(filtered);
     setSelectedSlotIndex(null);
   };
 
@@ -590,25 +584,23 @@ export const EncarteSemanalWorkspace: React.FC = () => {
 
     if (!prodFrom && !prodTo) return;
 
-    setProducts((prev) => {
-      const copy = [...prev];
-      const idxA = copy.findIndex((p, i) => (p.slotIndex !== undefined ? p.slotIndex === globalFrom : i === globalFrom));
-      const idxB = copy.findIndex((p, i) => (p.slotIndex !== undefined ? p.slotIndex === globalTo : i === globalTo));
+    const copy = [...products];
+    const idxA = copy.findIndex((p, i) => (p.slotIndex !== undefined ? p.slotIndex === globalFrom : i === globalFrom));
+    const idxB = copy.findIndex((p, i) => (p.slotIndex !== undefined ? p.slotIndex === globalTo : i === globalTo));
 
-      if (idxA >= 0 && idxB >= 0) {
-        const temp = copy[idxA];
-        copy[idxA] = { ...copy[idxB], slotIndex: globalFrom };
-        copy[idxB] = { ...temp, slotIndex: globalTo };
-      } else if (idxA >= 0 && idxB < 0) {
-        copy[idxA] = { ...copy[idxA], slotIndex: globalTo };
-      } else if (idxA < 0 && idxB >= 0) {
-        copy[idxB] = { ...copy[idxB], slotIndex: globalFrom };
-      }
+    if (idxA >= 0 && idxB >= 0) {
+      const temp = copy[idxA];
+      copy[idxA] = { ...copy[idxB], slotIndex: globalFrom };
+      copy[idxB] = { ...temp, slotIndex: globalTo };
+    } else if (idxA >= 0 && idxB < 0) {
+      copy[idxA] = { ...copy[idxA], slotIndex: globalTo };
+    } else if (idxA < 0 && idxB >= 0) {
+      copy[idxB] = { ...copy[idxB], slotIndex: globalFrom };
+    }
 
-      saveEncarteSemanalProducts(copy);
-      pushHistoryState(copy);
-      return copy;
-    });
+    setProducts(copy);
+    saveEncarteSemanalProducts(copy);
+    pushHistoryState(copy);
 
     setExportMessage(`↔️ Box ${fromSlotIdx + 1} e Box ${toSlotIdx + 1} invertidos com sucesso!`);
     setTimeout(() => setExportMessage(null), 3000);
@@ -1431,13 +1423,9 @@ export const EncarteSemanalWorkspace: React.FC = () => {
 
               {/* Informação do Modelo Atual */}
               <div className="text-[11px] text-neutral-400 hidden sm:block">
-                Grade: 4 colunas × 5 linhas • Barra: {gridConfig.barHeight}px • Resolução: 1080×1920
+                1080×1920 • {currentProducts.length} produto(s) nesta tela
               </div>
 
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="icon" disabled={historyIndex <= 0} onClick={handleUndo} title="Desfazer (Ctrl+Z)" aria-label="Desfazer"><Undo2 className="h-4 w-4" /></Button>
-                <Button variant="outline" size="icon" disabled={historyIndex >= history.length - 1} onClick={handleRedo} title="Refazer (Ctrl+Y)" aria-label="Refazer"><Redo2 className="h-4 w-4" /></Button>
-              </div>
               {/* Controles de Zoom */}
               <div className="flex items-center gap-2">
                 <Button

@@ -17,13 +17,11 @@ import {
   Upload,
   RotateCcw,
   Sparkles,
-  Scissors,
   Check,
   Image as ImageIcon,
   Search,
   Star,
 } from "lucide-react";
-import { removeWhiteBackground } from "@/lib/colecoes-image-processor";
 import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
 import {
   findKnownPhotoForCode,
@@ -133,20 +131,6 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
     }
   };
 
-  const handleRemoveBg = async () => {
-    if (!form.image) return;
-    setIsProcessingImg(true);
-    try {
-      const cleaned = await removeWhiteBackground(form.image);
-      const trimmed = await autoTrimImageWhitespace(cleaned);
-      setForm((prev) => (prev ? { ...prev, image: trimmed.trimmedSrc } : prev));
-    } catch (err) {
-      console.warn("Erro ao remover fundo:", err);
-    } finally {
-      setIsProcessingImg(false);
-    }
-  };
-
   const handleSelectAlternativePhoto = (altUrl: string) => {
     setForm((prev) => (prev ? { ...prev, image: altUrl } : prev));
   };
@@ -250,21 +234,6 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
                 <Upload className="h-3.5 w-3.5 mr-1 text-amber-300" />
                 Trocar Foto
               </Button>
-
-              {form.image && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleRemoveBg}
-                  disabled={isProcessingImg}
-                  className="bg-neutral-800 border-neutral-700 text-white hover:bg-neutral-700 text-xs h-8"
-                  title="Remove fundo branco da imagem"
-                >
-                  <Scissors className="h-3.5 w-3.5 mr-1 text-purple-400" />
-                  Remover Fundo
-                </Button>
-              )}
 
               <Button
                 type="button"
