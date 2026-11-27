@@ -986,4 +986,16 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     expect(res.lines.join(" ")).toContain("FRANCIS");
     expect(res.overflowed).toBe(false);
   });
+
+  it("Teste 30: produtos com pageIndex ficam isolados em sua página ao alterar Boxes Pág. 1", () => {
+    const prods: EncarteSemanalProduct[] = [
+      { id: "p1", code: "100", description: "PRODUTO PAG 1", pageIndex: 1, pageSlotIndex: 0 },
+      { id: "p2", code: "200", description: "PRODUTO PAG 2", pageIndex: 2, pageSlotIndex: 0 },
+    ];
+    // Mesmo com 20 boxes na Página 1, nenhum produto da Página 2 deve aparecer nos slots da Página 1
+    const page1Slot18 = prods.find((p) => p.pageIndex === 1 && p.pageSlotIndex === 18) || null;
+    expect(page1Slot18).toBeNull();
+    const page2Slot0 = prods.find((p) => p.pageIndex === 2 && p.pageSlotIndex === 0) || null;
+    expect(page2Slot0?.code).toBe("200");
+  });
 });

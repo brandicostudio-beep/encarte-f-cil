@@ -635,41 +635,68 @@ export const EncarteSemanalWorkspace: React.FC = () => {
     return calculateEncarteSemanalGridCells(currentPageGridConfig);
   }, [currentPageGridConfig]);
 
-  // Obtém o produto atribuído ao box na tela atual (considerando quantidades individuais por página)
-  const getProductAtSlot = (slotIdx: number): EncarteSemanalProduct | null => {
-    const pageOffset = getSemanalPageStartOffset(gridConfig, currentPage);
+  // Obtém o produto atribuído ao box em uma página específica, mantendo cada página 100% isolada
+  const getProductAtSlotForPage = (pageNum: number, slotIdx: number): EncarteSemanalProduct | null => {
+    const pageOffset = getSemanalPageStartOffset(gridConfig, pageNum);
     const targetGlobalIndex = pageOffset + slotIdx;
+    const pageItems = pages[pageNum - 1] || [];
 
-    // 1. Primeiro verifica por slotIndex explícito
-    const byExplicitSlot = products.find((p) => p.slotIndex === targetGlobalIndex);
+    // 1. Prioridade máxima: posição local exata na página (pageIndex + pageSlotIndex)
+    const byPageLocalSlot = products.find(
+      (p) => p.pageIndex === pageNum && p.pageSlotIndex === slotIdx
+    );
+    if (byPageLocalSlot) return byPageLocalSlot;
+
+    // 2. Produtos salvos com pageIndex explícito + slotIndex legado (nunca vaza para outra página!)
+    const pageOwnedWithLegacySlot = products.filter(
+      (p) => p.pageIndex === pageNum && p.pageSlotIndex === undefined
+    );
+    if (pageOwnedWithLegacySlot.length > 0) {
+      const byExactLegacy = pageOwnedWithLegacySlot.find((p) => p.slotIndex === targetGlobalIndex);
+      if (byExactLegacy) return byExactLegacy;
+      const sortedLegacy = [...pageOwnedWithLegacySlot].sort(
+        (a, b) => (a.slotIndex ?? 0) - (b.slotIndex ?? 0)
+      );
+      if (sortedLegacy[slotIdx]) return sortedLegacy[slotIdx];
+      return null;
+    }
+
+    // 3. Produtos legados sem pageIndex, mas com slotIndex global explícito
+    const byExplicitSlot = products.find(
+      (p) => p.pageIndex === undefined && p.slotIndex === targetGlobalIndex
+    );
     if (byExplicitSlot) return byExplicitSlot;
 
-    // 2. Depois por sequência nos produtos paginados da página
-    if (currentProducts[slotIdx] && currentProducts[slotIdx].slotIndex === undefined) {
-      return currentProducts[slotIdx];
+    // 4. Produtos importados via planilha sem pageIndex nem slotIndex (sequência da página)
+    const unpinned = pageItems[slotIdx];
+    if (unpinned && unpinned.pageIndex === undefined && unpinned.slotIndex === undefined) {
+      return unpinned;
     }
 
-    // 3. Fallback: índice global no array de produtos quando não há slotIndex conflitante
-    const atGlobal = products[targetGlobalIndex];
-    if (atGlobal && atGlobal.slotIndex === undefined) {
-      return atGlobal;
-    }
     return null;
+  };
+
+  // Obtém o produto atribuído ao box (slot 0..N-1) na tela atual
+  const getProductAtSlot = (slotIdx: number): EncarteSemanalProduct | null => {
+    return getProductAtSlotForPage(currentPage, slotIdx);
   };
 
   // Salva ou atualiza um produto digitado diretamente dentro da arte (Figma/Canva)
   const handleSaveSlotProduct = (slotIdx: number, updated: EncarteSemanalProduct) => {
     const targetGlobalIndex = getSemanalPageStartOffset(gridConfig, currentPage) + slotIdx;
+    const existingAtSlot = getProductAtSlot(slotIdx);
     const productWithSlot: EncarteSemanalProduct = {
       ...updated,
-      slotIndex: targetGlobalIndex,
       pageIndex: currentPage,
+      pageSlotIndex: slotIdx,
+      slotIndex: targetGlobalIndex,
     };
 
     const copy = [...products];
     const existingIdx = copy.findIndex(
-      (p, i) =>
-        (p.slotIndex !== undefined ? p.slotIndex === targetGlobalIndex : i === targetGlobalIndex) ||
+      (p) =>
+        (p.pageIndex === currentPage && p.pageSlotIndex === slotIdx) ||
+        (existingAtSlot && p.id === existingAtSlot.id) ||
         p.id === updated.id
     );
 
@@ -686,12 +713,11 @@ export const EncarteSemanalWorkspace: React.FC = () => {
 
   // Limpa o produto do box selecionado (volta a ser slot vazio)
   const handleClearSlotProduct = (slotIdx: number) => {
-    const targetGlobalIndex = getSemanalPageStartOffset(gridConfig, currentPage) + slotIdx;
     const currentProd = getProductAtSlot(slotIdx);
 
     const filtered = products.filter((p) => {
       if (currentProd && p.id === currentProd.id) return false;
-      if (p.slotIndex !== undefined && p.slotIndex === targetGlobalIndex) return false;
+      if (p.pageIndex === currentPage && p.pageSlotIndex === slotIdx) return false;
       return true;
     });
 
@@ -701,7 +727,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
     setSelectedSlotIndex(null);
   };
 
-  // Troca rápida de posição entre dois boxes (Swap)
+  // Troca rápida de posição entre dois boxes (Swap) na página atual
   const handleSwapSlots = (fromSlotIdx: number, toSlotIdx: number) => {
     if (fromSlotIdx === toSlotIdx) return;
     const pageOffset = getSemanalPageStartOffset(gridConfig, currentPage);
@@ -714,17 +740,17 @@ export const EncarteSemanalWorkspace: React.FC = () => {
     if (!prodFrom && !prodTo) return;
 
     const copy = [...products];
-    const idxA = copy.findIndex((p, i) => (p.slotIndex !== undefined ? p.slotIndex === globalFrom : i === globalFrom));
-    const idxB = copy.findIndex((p, i) => (p.slotIndex !== undefined ? p.slotIndex === globalTo : i === globalTo));
+    const idxA = prodFrom ? copy.findIndex((p) => p.id === prodFrom.id) : -1;
+    const idxB = prodTo ? copy.findIndex((p) => p.id === prodTo.id) : -1;
 
     if (idxA >= 0 && idxB >= 0) {
       const temp = copy[idxA];
-      copy[idxA] = { ...copy[idxB], slotIndex: globalFrom };
-      copy[idxB] = { ...temp, slotIndex: globalTo };
+      copy[idxA] = { ...copy[idxB], pageIndex: currentPage, pageSlotIndex: fromSlotIdx, slotIndex: globalFrom };
+      copy[idxB] = { ...temp, pageIndex: currentPage, pageSlotIndex: toSlotIdx, slotIndex: globalTo };
     } else if (idxA >= 0 && idxB < 0) {
-      copy[idxA] = { ...copy[idxA], slotIndex: globalTo };
+      copy[idxA] = { ...copy[idxA], pageIndex: currentPage, pageSlotIndex: toSlotIdx, slotIndex: globalTo };
     } else if (idxA < 0 && idxB >= 0) {
-      copy[idxB] = { ...copy[idxB], slotIndex: globalFrom };
+      copy[idxB] = { ...copy[idxB], pageIndex: currentPage, pageSlotIndex: fromSlotIdx, slotIndex: globalFrom };
     }
 
     setProducts(copy);
@@ -911,9 +937,23 @@ export const EncarteSemanalWorkspace: React.FC = () => {
     setSelectedSlotIndex(null);
   };
 
-  // Exportação ZIP de todas as páginas
+  // Exportação ZIP de todas as páginas (respeitando produtos e quantidade de boxes individuais de cada página)
   const handleExportAllZip = async () => {
-    if (pages.length === 0) {
+    const perPageLists: EncarteSemanalProduct[][] = [];
+    for (let p = 1; p <= effectiveTotalPages; p++) {
+      const pGrid = getSemanalPageGridConfig(gridConfig, p);
+      const count = pGrid.itemsPerPage || 20;
+      const pageSlots: EncarteSemanalProduct[] = [];
+      for (let s = 0; s < count; s++) {
+        const prod = getProductAtSlotForPage(p, s);
+        if (prod) pageSlots[s] = prod;
+      }
+      if (pageSlots.some(Boolean)) {
+        perPageLists.push(pageSlots);
+      }
+    }
+
+    if (perPageLists.length === 0) {
       alert("Nenhum produto válido para exportar.");
       return;
     }
@@ -924,12 +964,12 @@ export const EncarteSemanalWorkspace: React.FC = () => {
         name: "Encarte Semanal - Ofertas da Semana",
         templateImage,
         footerText,
-        gridConfig: currentPageGridConfig,
+        gridConfig,
         exportScale: 2,
       };
 
       await exportAllEncarteSemanalPagesAsZip(
-        pages,
+        perPageLists,
         config,
         (current, total) => {
           setExportMessage(`Renderizando página ${current} de ${total}...`);

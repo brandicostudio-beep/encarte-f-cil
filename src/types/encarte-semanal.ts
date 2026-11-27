@@ -37,8 +37,9 @@ export interface EncarteSemanalProduct {
   offsetY?: number;              // Ajuste vertical em px
   overlapY?: number;              // Sobreposição sobre a barra inferior em px
   included?: boolean;            // Se está ativo no encarte
-  pageIndex?: number;            // Índice da página em que está posicionado
-  slotIndex?: number;            // Posição na grade (0 a 19 por página)
+  pageIndex?: number;            // Índice da página em que está posicionado (1, 2, 3...)
+  pageSlotIndex?: number;        // Posição local dentro da página (0..N-1), independente de outras páginas
+  slotIndex?: number;            // Posição global legada na grade
 
   // Histórico para desfazer alterações de código
   originalCode?: string;
