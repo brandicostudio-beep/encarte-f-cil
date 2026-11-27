@@ -100,12 +100,18 @@ export async function renderEncarteSemanalPageToCanvas(
   const { gridConfig, templateImage, footerText } = config;
   const canvasWidth = gridConfig.canvasWidth || 1080;
   const canvasHeight = gridConfig.canvasHeight || 1920;
+  const exportScale = Math.max(1, config.exportScale || 2);
 
   const canvas = targetCanvas || document.createElement("canvas");
-  canvas.width = canvasWidth;
-  canvas.height = canvasHeight;
+  canvas.width = canvasWidth * exportScale;
+  canvas.height = canvasHeight * exportScale;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Contexto 2D do Canvas não disponível.");
+
+  ctx.save();
+  ctx.scale(exportScale, exportScale);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
 
   // 1. FUNDO: Desenhar o modelo de arte
   let templateLoaded = false;
@@ -389,24 +395,25 @@ export async function renderEncarteSemanalPageToCanvas(
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    // Se tiver quebra de linha ou o termo padrão de ofertas
     const cleanFooter = footerText.trim().toUpperCase();
-    const parts = cleanFooter.includes("OU ENQUANTO")
-      ? cleanFooter.split("OU ENQUANTO")
+    const rawLines = cleanFooter.includes("\n")
+      ? cleanFooter.split("\n").map((l) => l.trim()).filter(Boolean)
+      : cleanFooter.length > 62 && cleanFooter.includes("OU ENQUANTO")
+      ? [
+          cleanFooter.split("OU ENQUANTO")[0].trim(),
+          `OU ENQUANTO ${cleanFooter.split("OU ENQUANTO")[1].trim()}`,
+        ]
       : [cleanFooter];
 
-    if (parts.length > 1) {
-      ctx.font = "900 12.5px 'Inter', sans-serif";
-      ctx.fillText(parts[0].trim(), canvasWidth / 2, 1874);
-
-      ctx.font = "700 10.5px 'Inter', sans-serif";
-      ctx.fillStyle = "#e2e8f0";
-      ctx.fillText(`OU ENQUANTO ${parts[1].trim()}`, canvasWidth / 2, 1894);
+    ctx.font = "800 13px 'Segoe UI', Roboto, Arial, sans-serif";
+    if (rawLines.length >= 2) {
+      ctx.fillText(rawLines[0], canvasWidth / 2, 1877, canvasWidth - 48);
+      ctx.fillText(rawLines.slice(1).join(" "), canvasWidth / 2, 1897, canvasWidth - 48);
     } else {
-      ctx.font = "900 12px 'Inter', sans-serif";
-      ctx.fillText(cleanFooter, canvasWidth / 2, 1885);
+      ctx.fillText(rawLines[0], canvasWidth / 2, 1887, canvasWidth - 48);
     }
   }
+  ctx.restore();
   ctx.restore();
 
   return canvas;

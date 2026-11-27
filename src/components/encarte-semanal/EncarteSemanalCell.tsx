@@ -484,9 +484,9 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
         </button>
       )}
 
-      {/* Área da foto (zIndex: 10, com contenção, proporção perfeita sem cortar e com respiro no topo) */}
+      {/* Área da foto (zIndex: 10, alinhada 1:1 com a exportação PNG) */}
       <div
-        className="absolute left-0 right-0 top-0 flex items-end justify-center px-2 pt-2"
+        className="absolute left-0 right-0 top-0"
         style={{ height: `${photoAreaHeight}px`, zIndex: 10 }}
       >
         {hasTwoPhotos ? (

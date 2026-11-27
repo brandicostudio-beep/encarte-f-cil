@@ -91,7 +91,7 @@ export const DEFAULT_ENCARTE_SEMANAL_CONFIG: EncarteSemanalConfig = {
   templateImage: "/templates/template-encarte-semanal.jpg",
   footerText: "OFERTA VÁLIDA DO DIA 16/11 AO DIA 21/11 OU ENQUANTO DURAREM OS ESTOQUES PROMOCIONAIS.",
   gridConfig: DEFAULT_ENCARTE_SEMANAL_GRID,
-  exportScale: 1,
+  exportScale: 2,
 };
 
 export interface EncarteSemanalCellPosition {
