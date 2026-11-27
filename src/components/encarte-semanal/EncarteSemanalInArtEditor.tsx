@@ -135,12 +135,22 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       setSuggestions(results);
       setShowSuggestions(results.length > 0);
 
-      // Se for código de 3+ dígitos não encontrado na planilha/catálogo local, consulta o site da Cescom
+      // Se for código de 3+ dígitos não encontrado na planilha/catálogo local, consulta pasta local / Drive / site Cescom
       if (cleanTerm.length >= 3 && results.length === 0) {
         setIsSearchingCescom(true);
-        fetchCescomProductOnline(cleanTerm).then((online) => {
+        Promise.all([
+          fetchCescomProductOnline(cleanTerm),
+          fetchLocalFolderHandlePhotoForCode(cleanTerm).then(
+            (p) => p || findLocalOrCachedPhotoForCode(cleanTerm) || fetchSingleDrivePhotoForCode(cleanTerm)
+          ),
+        ]).then(([online, priorityPhoto]) => {
           if (active && online) {
-            setSuggestions([online]);
+            setSuggestions([
+              {
+                ...online,
+                image: priorityPhoto || resolveBestPhotoForCode(cleanTerm, online.image),
+              },
+            ]);
             setShowSuggestions(true);
           }
           if (active) setIsSearchingCescom(false);
@@ -179,13 +189,21 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   }, [description, product?.description, product?.code, image, allProducts]);
 
   // Aplica uma sugestão selecionada com predição de texto
-  const handleSelectSuggestion = (suggestion: ProductSuggestion) => {
+  const handleSelectSuggestion = async (suggestion: ProductSuggestion) => {
     setCodeQuery(suggestion.code);
     setDescription(suggestion.description);
     setShowSuggestions(false);
 
-    // Puxa a foto automaticamente priorizando Pasta Local > Validade/Encartes > Drive > Sugestão
-    const photo = resolveBestPhotoForCode(suggestion.code, suggestion.image);
+    // Puxa a foto priorizando Pasta Local > Validade/Encartes > Google Drive > Sugestão Cescom
+    let photo =
+      (await fetchLocalFolderHandlePhotoForCode(suggestion.code)) ||
+      findLocalOrCachedPhotoForCode(suggestion.code) ||
+      (await fetchSingleDrivePhotoForCode(suggestion.code));
+
+    if (!photo) {
+      photo = resolveBestPhotoForCode(suggestion.code, suggestion.image);
+    }
+
     if (photo) {
       setImage(photo);
     }
