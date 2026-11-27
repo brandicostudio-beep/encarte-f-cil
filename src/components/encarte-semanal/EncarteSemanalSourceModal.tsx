@@ -37,6 +37,8 @@ import {
   matchPhotosWithSemanalProducts,
   findKnownPhotoForCode,
   autoResolvePhotosForSemanalProducts,
+  registerLocalFolderPhotos,
+  getLocalFolderStatus,
 } from "@/lib/encarte-semanal-photos";
 import { processPhotoBankUpload } from "@/lib/photo-bank";
 import {
@@ -243,6 +245,7 @@ export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModa
 
       const crossing = crossLocalFolderWithCampaign(indexResult.files, tempEncarteProducts);
       const { loadedPhotos } = await loadCampaignPhotosFromFolder(crossing, tempEncarteProducts);
+      registerLocalFolderPhotos(loadedPhotos, indexResult.folderName || "Pasta Local");
 
       const matchResult = matchPhotosWithSemanalProducts(loadedPhotos, stagedProducts, "folder");
       setStagedProducts(matchResult.updatedProducts);
@@ -274,6 +277,7 @@ export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModa
         return;
       }
 
+      registerLocalFolderPhotos(loadedPhotos, "Pasta Local");
       const matchResult = matchPhotosWithSemanalProducts(loadedPhotos, stagedProducts, "folder");
       setStagedProducts(matchResult.updatedProducts);
       setPhotoMatchMessage(
@@ -752,6 +756,11 @@ export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModa
                   <p className="text-[11px] text-neutral-400 leading-relaxed">
                     Selecione a pasta onde estão as fotos dos produtos (PNG transparente ou JPG).
                   </p>
+                  {getLocalFolderStatus().connected && (
+                    <div className="text-[10px] font-bold text-emerald-300 bg-emerald-950/70 border border-emerald-700/60 rounded px-2 py-1">
+                      📁 Pasta Conectada: {getLocalFolderStatus().photoCount} fotos encontradas
+                    </div>
+                  )}
                 </div>
                 <Button
                   type="button"
@@ -762,7 +771,7 @@ export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModa
                   className="mt-3 bg-neutral-800 border-neutral-700 text-white hover:bg-neutral-700 text-xs w-full"
                 >
                   <FolderOpen className="h-3.5 w-3.5 mr-1 text-amber-300" />
-                  Selecionar Pasta
+                  {getLocalFolderStatus().connected ? "Reconectar Pasta de Fotos" : "Conectar Pasta de Fotos"}
                 </Button>
               </div>
 

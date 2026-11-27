@@ -26,6 +26,21 @@ import {
   calculateEncarteSemanalGridCells,
   paginateEncarteSemanalProducts,
 } from "@/lib/encarte-semanal-layout";
+import {
+  registerLocalFolderPhotos,
+  getLocalFolderStatus,
+  autoResolvePhotosForSemanalProducts,
+  processPhotoBankUpload,
+  type LocalFolderPhotoStatus,
+} from "@/lib/encarte-semanal-photos";
+import {
+  isFileSystemAccessSupported,
+  saveFolderHandle,
+  indexLocalFolder,
+  crossLocalFolderWithCampaign,
+  loadCampaignPhotosFromFolder,
+} from "@/lib/local-folder-service";
+import type { EncarteProduct } from "@/types/encarte";
 import { changeSemanalHistory, undoSemanalHistory, redoSemanalHistory } from "@/lib/encarte-semanal-editing";
 import { cleanPrincipalDescription } from "@/lib/encarte-semanal-catalog";
 import {
@@ -144,6 +159,89 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [isEditingFooter, setIsEditingFooter] = useState<boolean>(false);
+  const [localFolderStatus, setLocalFolderStatus] = useState<LocalFolderPhotoStatus>(() =>
+    getLocalFolderStatus()
+  );
+  const quickFolderInputRef = useRef<HTMLInputElement>(null);
+
+  const handleQuickFolderConnect = async () => {
+    if (!isFileSystemAccessSupported()) {
+      quickFolderInputRef.current?.click();
+      return;
+    }
+    try {
+      const dirHandle = await (window as any).showDirectoryPicker();
+      if (!dirHandle) return;
+      await saveFolderHandle(dirHandle);
+      const knownCodes = products.map((p) => p.code);
+      const indexResult = await indexLocalFolder(dirHandle, { knownCodes });
+      if (indexResult.files.length === 0) {
+        setExportMessage("Nenhuma imagem (.png, .jpg) encontrada na pasta selecionada.");
+        setTimeout(() => setExportMessage(null), 4000);
+        return;
+      }
+      const tempEncarteProducts: EncarteProduct[] = products.map((p) => ({
+        id: p.id,
+        code: p.code,
+        description: p.description,
+        image: p.image || "",
+        name: p.description,
+        packaging: "",
+        validity: "",
+        price: "",
+        badge: "nenhum",
+        unit: "UN",
+        included: true,
+      }));
+      const crossing = crossLocalFolderWithCampaign(indexResult.files, tempEncarteProducts);
+      const { loadedPhotos } = await loadCampaignPhotosFromFolder(crossing, tempEncarteProducts);
+      registerLocalFolderPhotos(loadedPhotos, indexResult.folderName || "Pasta Local");
+      setLocalFolderStatus(getLocalFolderStatus());
+
+      const { updatedProducts, resolvedCount } = autoResolvePhotosForSemanalProducts(products);
+      if (resolvedCount > 0) {
+        pushHistoryState(updatedProducts);
+        setProducts(updatedProducts);
+        saveEncarteSemanalProducts(updatedProducts);
+      }
+      setExportMessage(
+        `📁 Pasta Conectada: ${loadedPhotos.length} fotos encontradas${resolvedCount > 0 ? ` (${resolvedCount} aplicada(s))` : ""}.`
+      );
+      setTimeout(() => setExportMessage(null), 4500);
+    } catch (err: any) {
+      if (err?.name !== "AbortError") {
+        quickFolderInputRef.current?.click();
+      }
+    }
+  };
+
+  const handleQuickFolderInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    try {
+      const loadedPhotos = await processPhotoBankUpload(files);
+      if (loadedPhotos.length === 0) {
+        setExportMessage("Nenhuma imagem válida (.png, .jpg, .webp) encontrada na pasta.");
+        setTimeout(() => setExportMessage(null), 4000);
+        return;
+      }
+      registerLocalFolderPhotos(loadedPhotos, "Pasta Local");
+      setLocalFolderStatus(getLocalFolderStatus());
+
+      const { updatedProducts, resolvedCount } = autoResolvePhotosForSemanalProducts(products);
+      if (resolvedCount > 0) {
+        pushHistoryState(updatedProducts);
+        setProducts(updatedProducts);
+        saveEncarteSemanalProducts(updatedProducts);
+      }
+      setExportMessage(
+        `📁 Pasta Conectada: ${loadedPhotos.length} fotos encontradas${resolvedCount > 0 ? ` (${resolvedCount} aplicada(s))` : ""}.`
+      );
+      setTimeout(() => setExportMessage(null), 4500);
+    } finally {
+      e.target.value = "";
+    }
+  };
 
   // Modais
   const [sourceModalOpen, setSourceModalOpen] = useState<boolean>(false);
@@ -882,6 +980,35 @@ export const EncarteSemanalWorkspace: React.FC = () => {
 
             {/* GRUPO DE ARQUIVO LOCAL */}
             <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 p-0.5 rounded-lg">
+              <input
+                ref={quickFolderInputRef}
+                type="file"
+                multiple
+                // @ts-expect-error webkitdirectory is a non-standard browser attribute
+                webkitdirectory=""
+                directory=""
+                className="hidden"
+                onChange={handleQuickFolderInputChange}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={handleQuickFolderConnect}
+                className={`text-xs h-7 px-2.5 font-semibold ${
+                  localFolderStatus.connected
+                    ? "text-emerald-300 hover:text-emerald-200 bg-emerald-950/40"
+                    : "text-amber-300 hover:text-white"
+                }`}
+                title="Conectar pasta local de fotos (Fotos_Palm) com prioridade máxima para PNG transparente"
+                data-testid="btn-connect-photo-folder"
+              >
+                <FolderOpen className="h-3.5 w-3.5 mr-1 text-amber-400" />
+                {localFolderStatus.connected
+                  ? `📁 Pasta Conectada: ${localFolderStatus.photoCount} fotos encontradas`
+                  : "Conectar Pasta de Fotos"}
+              </Button>
+
               <Button
                 type="button"
                 size="sm"

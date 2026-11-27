@@ -25,7 +25,11 @@ import {
 } from "lucide-react";
 import { removeWhiteBackground } from "@/lib/colecoes-image-processor";
 import { autoTrimImageWhitespace } from "@/lib/image-normalizer";
-import { findKnownPhotoForCode } from "@/lib/encarte-semanal-photos";
+import {
+  findKnownPhotoForCode,
+  resolveBestPhotoForCode,
+  copyProductCodeToClipboard,
+} from "@/lib/encarte-semanal-photos";
 import { getActiveSnapshot } from "@/lib/painel-validade-storage";
 import { cleanPrincipalDescription, fetchCescomProductOnline } from "@/lib/encarte-semanal-catalog";
 
@@ -46,6 +50,7 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
   const [codeText, setCodeText] = useState("");
   const [isProcessingImg, setIsProcessingImg] = useState(false);
   const [codeChangedWarning, setCodeChangedWarning] = useState<string | null>(null);
+  const [copyToast, setCopyToast] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -78,8 +83,13 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
     if (!codes.length) return;
     setCodeChangedWarning("Buscando fotos dos códigos...");
     const resolved = await Promise.all(codes.map(async code => {
+      const localFirst = resolveBestPhotoForCode(code);
       const online = await fetchCescomProductOnline(code);
-      return { code, image: online?.image || findKnownPhotoForCode(code), description: online?.description };
+      return {
+        code,
+        image: resolveBestPhotoForCode(code, online?.image) || localFirst,
+        description: online?.description,
+      };
     }));
     setForm(prev => prev ? {
       ...prev,
@@ -201,6 +211,15 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
             </div>
 
             {/* Ações da Foto */}
+            {copyToast && (
+              <div
+                role="status"
+                data-testid="modal-copy-toast"
+                className="bg-emerald-950/90 border border-emerald-500/70 text-emerald-200 px-2.5 py-1.5 rounded text-[11px] font-semibold leading-snug"
+              >
+                {copyToast}
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-2">
               <input
                 ref={fileInputRef}
@@ -213,7 +232,18 @@ export const EncarteSemanalProductModal: React.FC<EncarteSemanalProductModalProp
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => fileInputRef.current?.click()}
+                data-testid="modal-btn-trocar-foto"
+                onClick={() => {
+                  const codeToCopy = (form.code || form.originalCode || parseSemanalCodes(codeText)[0] || "").trim();
+                  if (codeToCopy) {
+                    void copyProductCodeToClipboard(codeToCopy);
+                    setCopyToast(
+                      `Código ${codeToCopy} copiado! Na janela da pasta, aperte Ctrl+V e Enter para selecionar o PNG direto`
+                    );
+                    setTimeout(() => setCopyToast(null), 4500);
+                  }
+                  fileInputRef.current?.click();
+                }}
                 disabled={isProcessingImg}
                 className="bg-neutral-800 border-neutral-700 text-white hover:bg-neutral-700 text-xs h-8"
               >

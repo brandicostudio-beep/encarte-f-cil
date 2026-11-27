@@ -586,4 +586,98 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     expect(prod.limitWidthPercent).toBe(90);
     expect(prod.scale2).toBe(1.1);
   });
+
+  // =========================================================================
+  // Teste 17: Auto-cópia do código para o Clipboard (com fallback execCommand)
+  // =========================================================================
+  it("Teste 17: Copia automaticamente o código do produto para o clipboard e usa fallback seguro", async () => {
+    const { copyProductCodeToClipboard } = await import("./encarte-semanal-photos");
+
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    const originalClipboard = navigator.clipboard;
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: writeTextMock },
+      configurable: true,
+    });
+
+    try {
+      const ok = await copyProductCodeToClipboard(" 25710 ");
+      expect(ok).toBe(true);
+      expect(writeTextMock).toHaveBeenCalledWith("25710");
+
+      // Simular falha de permissão em navigator.clipboard -> aciona fallback document.execCommand('copy')
+      writeTextMock.mockRejectedValueOnce(new Error("Permission denied"));
+      const execSpy = vi.fn().mockReturnValue(true);
+      (document as any).execCommand = execSpy;
+
+      const okFallback = await copyProductCodeToClipboard("19396");
+      expect(okFallback).toBe(true);
+      expect(execSpy).toHaveBeenCalledWith("copy");
+
+      // Código vazio retorna false sem chamar clipboard
+      expect(await copyProductCodeToClipboard("   ")).toBe(false);
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        value: originalClipboard,
+        configurable: true,
+      });
+    }
+  });
+
+  // =========================================================================
+  // Teste 18: Prioridade Absoluta da Pasta Local (Fotos_Palm) sobre Cescom
+  // =========================================================================
+  it("Teste 18: Prioriza PNG da Pasta Local conectada sobre o site Cescom e AgileCDN", async () => {
+    const {
+      registerLocalFolderPhotos,
+      findKnownPhotoForCode,
+      resolveBestPhotoForCode,
+      getLocalFolderStatus,
+      clearLocalFolderPhotos,
+    } = await import("./encarte-semanal-photos");
+
+    clearLocalFolderPhotos();
+    try {
+      registerLocalFolderPhotos(
+        [
+          {
+            code: "25710",
+            filename: "25710.jpg",
+            dataUrl: "data:image/jpeg;base64,LOCAL_JPG",
+            source: "upload",
+            suffixOrder: 0,
+            suffixLabel: "",
+          },
+          {
+            code: "25710",
+            filename: "25710.png",
+            dataUrl: "data:image/png;base64,LOCAL_PNG_TRANSPARENTE",
+            source: "upload",
+            suffixOrder: 0,
+            suffixLabel: "",
+          },
+        ],
+        "Fotos_Palm"
+      );
+
+      const status = getLocalFolderStatus();
+      expect(status.connected).toBe(true);
+      expect(status.folderName).toBe("Fotos_Palm");
+      expect(status.photoCount).toBe(2);
+
+      // findKnownPhotoForCode deve retornar o PNG local com prioridade máxima
+      expect(findKnownPhotoForCode("25710")).toBe("data:image/png;base64,LOCAL_PNG_TRANSPARENTE");
+
+      // Mesmo quando a busca online da Cescom retorna URL com fundo branco, a Pasta Local vence
+      const best = resolveBestPhotoForCode("25710", "https://cescom.agilecdn.com.br/25710_thumb_1.jpg");
+      expect(best).toBe("data:image/png;base64,LOCAL_PNG_TRANSPARENTE");
+
+      // Quando não está na pasta local, usa a imagem online da Cescom se fornecida
+      expect(
+        resolveBestPhotoForCode("99999", "https://cescom.agilecdn.com.br/99999_thumb_1.jpg")
+      ).toBe("https://cescom.agilecdn.com.br/99999_thumb_1.jpg");
+    } finally {
+      clearLocalFolderPhotos();
+    }
+  });
 });

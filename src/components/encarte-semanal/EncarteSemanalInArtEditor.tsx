@@ -8,7 +8,11 @@ import {
   fetchCescomProductOnline,
   type ProductSuggestion,
 } from "@/lib/encarte-semanal-catalog";
-import { findKnownPhotoForCode } from "@/lib/encarte-semanal-photos";
+import {
+  findKnownPhotoForCode,
+  resolveBestPhotoForCode,
+  copyProductCodeToClipboard,
+} from "@/lib/encarte-semanal-photos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -89,6 +93,24 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoadingPhoto, setIsLoadingPhoto] = useState(false);
   const [isSearchingCescom, setIsSearchingCescom] = useState(false);
+  const [copyToast, setCopyToast] = useState<string | null>(null);
+  const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showCopyToastAndPickFile = (
+    rawCode: string,
+    inputRef: React.RefObject<HTMLInputElement | null>
+  ) => {
+    const cleanCode = rawCode.trim();
+    if (cleanCode) {
+      void copyProductCodeToClipboard(cleanCode);
+      setCopyToast(
+        `Código ${cleanCode} copiado! Na janela da pasta, aperte Ctrl+V e Enter para selecionar o PNG direto`
+      );
+      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+      copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 4500);
+    }
+    inputRef.current?.click();
+  };
 
   const codeInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -159,8 +181,8 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     setDescription(suggestion.description);
     setShowSuggestions(false);
 
-    // Puxa a foto automaticamente
-    const photo = suggestion.image || findKnownPhotoForCode(suggestion.code);
+    // Puxa a foto automaticamente priorizando Pasta Local > Validade/Encartes > Drive > Sugestão
+    const photo = resolveBestPhotoForCode(suggestion.code, suggestion.image);
     if (photo) {
       setImage(photo);
     }
@@ -211,10 +233,10 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       }
 
       if (!photo1) {
-        photo1 = lookedUp1.image || findKnownPhotoForCode(primaryCode);
+        photo1 = resolveBestPhotoForCode(primaryCode, lookedUp1.image);
       }
       if (!photo2) {
-        photo2 = lookedUp2.image || findKnownPhotoForCode(secCode);
+        photo2 = resolveBestPhotoForCode(secCode, lookedUp2.image);
       }
       if (!newDesc) {
         const d1 = lookedUp1.description;
@@ -237,7 +259,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
         setIsSearchingCescom(false);
       }
       if (!newDesc || newDesc.startsWith("PRODUTO ")) newDesc = lookedUp.description;
-      if (!photo1) photo1 = lookedUp.image || findKnownPhotoForCode(trimmed);
+      if (!photo1) photo1 = resolveBestPhotoForCode(trimmed, lookedUp.image);
     }
 
     setDescription(newDesc);
@@ -733,6 +755,16 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
           <span className="font-mono text-amber-300 text-[10px]">Zoom: {Math.round(scale * 100)}%</span>
         </div>
 
+        {copyToast && (
+          <div
+            role="status"
+            data-testid="in-art-copy-toast"
+            className="bg-emerald-950/90 border border-emerald-500/70 text-emerald-200 px-2.5 py-1.5 rounded text-[10px] font-semibold leading-snug"
+          >
+            {copyToast}
+          </div>
+        )}
+
         {/* Linha das Duas Fotos (Foto 1 + Foto 2/Variação com ajustes independentes) */}
         <div className="grid grid-cols-2 gap-2">
           {/* Card Foto 1 */}
@@ -756,7 +788,11 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => fileInputRef.current?.click()}
+              data-testid="btn-trocar-foto-1"
+              onClick={() => {
+                const primary = (codeQuery.split(/[/,]+/)[0] || product?.code || product?.originalCode || "").trim();
+                showCopyToastAndPickFile(primary, fileInputRef);
+              }}
               disabled={isLoadingPhoto}
               className="h-6 w-full px-1 bg-neutral-800 border-neutral-700 text-amber-300 hover:text-white text-[10px]"
               title="Trocar Foto 1 (PNG transparente)"
@@ -836,7 +872,12 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => secFileInputRef.current?.click()}
+                data-testid="btn-subir-foto-2"
+                onClick={() => {
+                  const parts = codeQuery.split(/[/,]+/).map((s) => s.trim()).filter(Boolean);
+                  const secCode = (product?.secondaryCode || parts[1] || parts[0] || product?.code || product?.originalCode || "").trim();
+                  showCopyToastAndPickFile(secCode, secFileInputRef);
+                }}
                 disabled={isLoadingPhoto}
                 className="h-6 flex-1 px-1 bg-neutral-800 border-neutral-700 text-amber-300 hover:text-white text-[10px]"
                 title="Subir Foto 2 de Variação ou Sabor diferente"
