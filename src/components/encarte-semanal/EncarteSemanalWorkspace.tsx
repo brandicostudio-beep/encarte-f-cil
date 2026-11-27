@@ -161,6 +161,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState<boolean>(false);
+  const [inspectorFocusTick, setInspectorFocusTick] = useState<number>(0);
   const canvasViewportRef = useRef<HTMLDivElement>(null);
 
   const handleFitToScreen = useCallback(() => {
@@ -1549,15 +1550,18 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                             setSelectedSlotIndex(idx);
                             if (!product) {
                               setInspectorOpen(true);
+                              setInspectorFocusTick((t) => t + 1);
                             }
                           }}
                           onDoubleClickSlot={() => {
                             setSelectedSlotIndex(idx);
                             setInspectorOpen(true);
+                            setInspectorFocusTick((t) => t + 1);
                           }}
                           onEdit={() => {
                             setSelectedSlotIndex(idx);
                             setInspectorOpen(true);
+                            setInspectorFocusTick((t) => t + 1);
                           }}
                         />
                       </div>
@@ -1635,6 +1639,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                     totalSlots={gridCells.length}
                     variant="sidebar"
                     allProducts={products}
+                    focusTrigger={inspectorFocusTick}
                     onSwapSlots={(targetSlotIdx) => handleSwapSlots(selectedSlotIndex, targetSlotIdx)}
                     onSaveProduct={(updated) => handleSaveSlotProduct(selectedSlotIndex, updated)}
                     onClearProduct={() => {

@@ -59,6 +59,7 @@ export interface EncarteSemanalInArtEditorProps {
   onSwapSlots?: (targetSlotIndex: number) => void;
   onSelectPrevSlot?: () => void;
   onSelectNextSlot?: () => void;
+  focusTrigger?: number;
 }
 
 export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps> = ({
@@ -75,6 +76,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   onSwapSlots,
   onSelectPrevSlot,
   onSelectNextSlot,
+  focusTrigger,
 }) => {
   // Se houver secondaryCode, compõe o texto inicial (ex: "14352 / 17585")
   const initialCode = product?.secondaryCode
@@ -152,9 +154,22 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     setBadgeColor(product?.badgeColor || "red");
     setSwapTargetBox(cellIndex === 0 ? 1 : 0);
     setShowSuggestions(false);
-    codeInputRef.current?.focus();
-    codeInputRef.current?.select();
   }, [cellIndex, product?.id]);
+
+  // Garante foco imediato no campo de código sempre que abrir ou der duplo clique no box
+  useEffect(() => {
+    const focusCode = () => {
+      codeInputRef.current?.focus();
+      codeInputRef.current?.select();
+    };
+    focusCode();
+    const rafId = requestAnimationFrame(focusCode);
+    const timerId = setTimeout(focusCode, 40);
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(timerId);
+    };
+  }, [cellIndex, product?.id, focusTrigger]);
 
   // Atualiza sugestões conforme digitação (busca local e consulta online no cescom.com.br)
   useEffect(() => {
