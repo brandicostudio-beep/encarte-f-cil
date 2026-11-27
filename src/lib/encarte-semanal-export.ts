@@ -308,15 +308,25 @@ export async function renderEncarteSemanalPageToCanvas(
     let availableDescWidth = barW - 16;
 
     if (displayCode) {
-      const codeFontSize = displayCode.length > 10 ? 11 : displayCode.length > 6 ? 13 : 15;
+      const codeLines =
+        product.code?.trim() && product.secondaryCode?.trim()
+          ? [product.code.trim(), product.secondaryCode.trim()]
+          : [displayCode];
+      const codeFontSize =
+        codeLines.length > 1 ? 13 : displayCode.length > 6 ? 13 : 15;
       ctx.font = `900 ${codeFontSize}px 'Segoe UI', Roboto, Arial, sans-serif`;
-      const codeWidth = ctx.measureText(displayCode).width;
-      const codeBoxW = Math.min(codeWidth + 12, barW * 0.42);
+      const maxCodeWidth = Math.max(...codeLines.map((c) => ctx.measureText(c).width));
+      const codeBoxW = Math.min(maxCodeWidth + 12, barW * 0.42);
 
       ctx.fillStyle = gridConfig.barTextColor || "#7A0D12";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(displayCode, barX + codeBoxW / 2, barY + barH / 2);
+      if (codeLines.length > 1) {
+        ctx.fillText(codeLines[0], barX + codeBoxW / 2, barY + barH / 2 - 7.5);
+        ctx.fillText(codeLines[1], barX + codeBoxW / 2, barY + barH / 2 + 7.5);
+      } else {
+        ctx.fillText(codeLines[0], barX + codeBoxW / 2, barY + barH / 2);
+      }
 
       // Linha divisória vertical suave
       ctx.strokeStyle = "rgba(122, 13, 18, 0.3)";

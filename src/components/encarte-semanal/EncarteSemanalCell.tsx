@@ -660,13 +660,24 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
         >
           {!product.isPrincipal && displayCode && (
             <span
-              className="shrink-0 font-black font-mono border-r border-[#7A0D12]/30 pr-1.5 leading-tight"
+              className="shrink-0 font-black font-mono border-r border-[#7A0D12]/30 pr-1.5 flex flex-col items-center justify-center leading-[1.08]"
               style={{
-                fontSize: displayCode.length > 10 ? "11px" : displayCode.length > 6 ? "13px" : "15px",
+                fontSize: product.secondaryCode
+                  ? "13px"
+                  : displayCode.length > 6
+                  ? "13px"
+                  : "15px",
               }}
               data-testid="semanal-cell-code"
             >
-              {displayCode}
+              {product.code && product.secondaryCode ? (
+                <>
+                  <span>{product.code}</span>
+                  <span>{product.secondaryCode}</span>
+                </>
+              ) : (
+                displayCode
+              )}
             </span>
           )}
           <span
