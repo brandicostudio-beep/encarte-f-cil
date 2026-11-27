@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import type { EncarteSemanalProduct, EncarteSemanalCellPosition } from "@/types/encarte-semanal";
 import { Edit2, ImageOff, Plus, Move, Maximize2 } from "lucide-react";
 import { resolveSemanalCellPhotos } from "@/lib/encarte-semanal-layout";
+import { computeSemanalTwoPhotoLayout } from "@/lib/encarte-semanal-editing";
 
 export interface EncarteSemanalCellProps {
   product?: EncarteSemanalProduct | null;
@@ -32,6 +33,8 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
 
   // Foto atualmente selecionada para ajuste (Foto 1 ou Foto 2)
   const [activeTarget, setActiveTarget] = useState<"photo1" | "photo2">("photo1");
+  const [aspect1, setAspect1] = useState<number>(1);
+  const [aspect2, setAspect2] = useState<number>(1);
 
   // Estados de arrastar para mover (Drag to Move)
   const [isDraggingPhoto, setIsDraggingPhoto] = useState<"photo1" | "photo2" | null>(null);
@@ -497,67 +500,104 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
         style={{ height: `${photoAreaHeight}px`, zIndex: 10 }}
       >
         {hasTwoPhotos ? (
-          <div className="relative w-full h-full flex items-end justify-center">
-            {/* Foto 1 (Esquerda) com arrastar e redimensionamento individual */}
-            <div
-              className={`absolute select-none ${
-                isSelected
-                  ? "cursor-grab active:cursor-grabbing hover:ring-1 hover:ring-amber-400/80 rounded"
-                  : "pointer-events-none"
-              } ${activeTarget === "photo1" && isSelected ? "ring-1 ring-amber-400/70" : ""}`}
-              style={{
-                maxWidth: `${(width - 16) * 0.54 * scale1}px`,
-                maxHeight: `${(photoAreaHeight - 16) * scale1}px`,
-                left: `${(width - 16) * 0.04 + curOffsetX1}px`,
-                bottom: `${-overlapY - curOffsetY1}px`,
-                zIndex: 11,
-              }}
-              onPointerDown={(e) => handlePhotoPointerDown("photo1", e)}
-              onPointerMove={handlePhotoPointerMove}
-              onPointerUp={handlePhotoPointerUp}
-              title={isSelected ? "Clique e arraste para mover a Foto 1" : undefined}
-            >
-              <img
-                src={cleanPhoto1}
-                alt={product.description}
-                draggable={false}
-                style={{
-                  transform: product.flipHorizontal ? "scaleX(-1)" : undefined,
-                }}
-                className="w-full h-full object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.50)] pointer-events-none"
-              />
-            </div>
+          (() => {
+            const twoLayout = computeSemanalTwoPhotoLayout({
+              boxX: 0,
+              boxWidth: width,
+              photoAreaHeight,
+              barY: photoAreaHeight,
+              aspect1,
+              aspect2: cleanPhoto2 === cleanPhoto1 ? aspect1 : aspect2,
+              scale1,
+              scale2,
+              overlapY,
+              offsetX1: curOffsetX1,
+              offsetY1: curOffsetY1,
+              offsetX2: curOffsetX2,
+              offsetY2: curOffsetY2,
+            });
+            return (
+              <div className="relative w-full h-full">
+                {/* Foto 1 (Esquerda / Trás) com arrastar 1:1 */}
+                <div
+                  className={`absolute select-none ${
+                    isSelected
+                      ? "cursor-grab active:cursor-grabbing hover:ring-1 hover:ring-amber-400/80 rounded"
+                      : "pointer-events-none"
+                  } ${activeTarget === "photo1" && isSelected ? "ring-1 ring-amber-400/70" : ""}`}
+                  style={{
+                    left: `${twoLayout.photo1.x}px`,
+                    top: `${twoLayout.photo1.y}px`,
+                    width: `${twoLayout.photo1.width}px`,
+                    height: `${twoLayout.photo1.height}px`,
+                    zIndex: 11,
+                  }}
+                  onPointerDown={(e) => handlePhotoPointerDown("photo1", e)}
+                  onPointerMove={handlePhotoPointerMove}
+                  onPointerUp={handlePhotoPointerUp}
+                  title={isSelected ? "Arraste para mover a Foto 1" : undefined}
+                >
+                  {isSelected && isDraggingPhoto === "photo1" && (
+                    <span className="absolute -top-4 left-0 bg-amber-400 text-neutral-950 text-[8px] font-black px-1 rounded shadow-xs pointer-events-none">
+                      Foto 1
+                    </span>
+                  )}
+                  <img
+                    src={cleanPhoto1}
+                    alt={product.description}
+                    draggable={false}
+                    onLoad={(e) => {
+                      const img = e.currentTarget;
+                      if (img.naturalHeight > 0) setAspect1(img.naturalWidth / img.naturalHeight);
+                    }}
+                    style={{
+                      transform: product.flipHorizontal ? "scaleX(-1)" : undefined,
+                    }}
+                    className="w-full h-full object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.50)] pointer-events-none"
+                  />
+                </div>
 
-            {/* Foto 2 (Direita / Variação / Duplicata escalonada) com arrastar e ajuste individual */}
-            <div
-              className={`absolute select-none ${
-                isSelected
-                  ? "cursor-grab active:cursor-grabbing hover:ring-1 hover:ring-amber-400/80 rounded"
-                  : "pointer-events-none"
-              } ${activeTarget === "photo2" && isSelected ? "ring-1 ring-amber-400/70" : ""}`}
-              style={{
-                maxWidth: `${(width - 16) * 0.54 * scale2}px`,
-                maxHeight: `${(photoAreaHeight - 16) * scale2}px`,
-                right: `${(width - 16) * 0.04 - curOffsetX2}px`,
-                bottom: `${-overlapY - curOffsetY2}px`,
-                zIndex: 12,
-              }}
-              onPointerDown={(e) => handlePhotoPointerDown("photo2", e)}
-              onPointerMove={handlePhotoPointerMove}
-              onPointerUp={handlePhotoPointerUp}
-              title={isSelected ? "Clique e arraste para mover a Foto 2" : undefined}
-            >
-              <img
-                src={cleanPhoto2}
-                alt={product.description}
-                draggable={false}
-                style={{
-                  transform: product.flipHorizontal2 ? "scaleX(-1)" : undefined,
-                }}
-                className="w-full h-full object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.55)] pointer-events-none"
-              />
-            </div>
-          </div>
+                {/* Foto 2 (Direita / Frente, sobreposta) com arrastar 1:1 */}
+                <div
+                  className={`absolute select-none ${
+                    isSelected
+                      ? "cursor-grab active:cursor-grabbing hover:ring-1 hover:ring-amber-400/80 rounded"
+                      : "pointer-events-none"
+                  } ${activeTarget === "photo2" && isSelected ? "ring-1 ring-amber-400/70" : ""}`}
+                  style={{
+                    left: `${twoLayout.photo2.x}px`,
+                    top: `${twoLayout.photo2.y}px`,
+                    width: `${twoLayout.photo2.width}px`,
+                    height: `${twoLayout.photo2.height}px`,
+                    zIndex: 12,
+                  }}
+                  onPointerDown={(e) => handlePhotoPointerDown("photo2", e)}
+                  onPointerMove={handlePhotoPointerMove}
+                  onPointerUp={handlePhotoPointerUp}
+                  title={isSelected ? "Arraste para mover a Foto 2" : undefined}
+                >
+                  {isSelected && isDraggingPhoto === "photo2" && (
+                    <span className="absolute -top-4 right-0 bg-amber-400 text-neutral-950 text-[8px] font-black px-1 rounded shadow-xs pointer-events-none">
+                      Foto 2
+                    </span>
+                  )}
+                  <img
+                    src={cleanPhoto2}
+                    alt={product.description}
+                    draggable={false}
+                    onLoad={(e) => {
+                      const img = e.currentTarget;
+                      if (img.naturalHeight > 0) setAspect2(img.naturalWidth / img.naturalHeight);
+                    }}
+                    style={{
+                      transform: product.flipHorizontal2 ? "scaleX(-1)" : undefined,
+                    }}
+                    className="w-full h-full object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.55)] pointer-events-none"
+                  />
+                </div>
+              </div>
+            );
+          })()
         ) : cleanPhoto1 ? (
           /* Foto Única e Centralizada: ampla, espaçosa e arrastável estilo Canva/Figma */
           <div

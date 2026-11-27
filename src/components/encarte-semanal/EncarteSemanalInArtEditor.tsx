@@ -1149,10 +1149,22 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
             onClick={() => {
               const nextVal = !duplicatePhoto;
               setDuplicatePhoto(nextVal);
+              if (nextVal) {
+                setScale2(scale);
+              }
               if (product) {
                 onSaveProduct({
                   ...product,
                   duplicatePhoto: nextVal,
+                  ...(nextVal
+                    ? {
+                        scale2: scale,
+                        offsetX: 0,
+                        offsetY: 0,
+                        offsetX2: 0,
+                        offsetY2: 0,
+                      }
+                    : {}),
                 });
               }
             }}

@@ -14,6 +14,7 @@ import {
   calculateEncarteSemanalGridCells,
   resolveSemanalCellPhotos,
 } from "./encarte-semanal-layout";
+import { computeSemanalTwoPhotoLayout } from "./encarte-semanal-editing";
 import { removeWhiteBackground } from "./colecoes-image-processor";
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -164,38 +165,30 @@ export async function renderEncarteSemanalPageToCanvas(
         const aspect1 = (img1.naturalWidth || img1.width) / (img1.naturalHeight || img1.height);
         const aspect2 = (img2.naturalWidth || img2.width) / (img2.naturalHeight || img2.height);
 
-        // Cada produto ocupa até 54% da largura do box, com altura contida
-        const maxItemW = availableW * 0.54 * scale;
-        const maxItemH = availableH * scale;
-
-        // Foto 1 com proporção nativa
-        let drawW1 = maxItemW;
-        let drawH1 = drawW1 / aspect1;
-        if (drawH1 > maxItemH) {
-          drawH1 = maxItemH;
-          drawW1 = drawH1 * aspect1;
-        }
-
-        // Foto 2 com proporção nativa e escala independente
         const scale2 = product.scale2
           ? (product.scale2 > 10 ? product.scale2 / 100 : product.scale2)
           : scale;
         const offsetX2 = product.offsetX2 ?? offsetX;
         const offsetY2 = product.offsetY2 ?? offsetY;
 
-        let drawW2 = availableW * 0.54 * scale2;
-        let drawH2 = drawW2 / aspect2;
-        if (drawH2 > availableH * scale2) {
-          drawH2 = availableH * scale2;
-          drawW2 = drawH2 * aspect2;
-        }
+        const twoLayout = computeSemanalTwoPhotoLayout({
+          boxX: barX,
+          boxWidth: barW,
+          photoAreaHeight: cell.photoAreaHeight,
+          barY,
+          aspect1,
+          aspect2,
+          scale1: scale,
+          scale2,
+          overlapY,
+          offsetX1: offsetX,
+          offsetY1: offsetY,
+          offsetX2,
+          offsetY2,
+        });
 
-        // Posicionamento elegante lado a lado, contido estritamente dentro do box
-        const x1 = barX + Math.max(0, (barW * 0.48 - drawW1) / 2) + offsetX;
-        const y1 = barY - drawH1 + overlapY + offsetY;
-
-        const x2 = barX + barW - drawW2 - Math.max(0, (barW * 0.48 - drawW2) / 2) + offsetX2;
-        const y2 = barY - drawH2 + overlapY + offsetY2;
+        const { x: x1, y: y1, width: drawW1, height: drawH1 } = twoLayout.photo1;
+        const { x: x2, y: y2, width: drawW2, height: drawH2 } = twoLayout.photo2;
 
         // Foto 1 (Esquerda / Trás)
         ctx.save();

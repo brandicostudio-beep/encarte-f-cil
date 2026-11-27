@@ -745,4 +745,36 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
       clearDrivePhotoCache();
     }
   });
+
+  // =========================================================================
+  // Teste 20: Geometria de 2 Fotos Proporcionais, Centralizadas e Sobrepostas
+  // =========================================================================
+  it("Teste 20: computeSemanalTwoPhotoLayout mantém mesmas proporções, centraliza o conjunto e sobrepõe Foto 2", async () => {
+    const { computeSemanalTwoPhotoLayout } = await import("./encarte-semanal-editing");
+
+    const layout = computeSemanalTwoPhotoLayout({
+      boxX: 0,
+      boxWidth: 250,
+      photoAreaHeight: 220,
+      barY: 220,
+      aspect1: 0.75,
+      aspect2: 0.75,
+      scale1: 1.0,
+      scale2: 1.0,
+    });
+
+    // Mesmas medidas proporcionais
+    expect(layout.photo1.width).toBeCloseTo(layout.photo2.width, 1);
+    expect(layout.photo1.height).toBeCloseTo(layout.photo2.height, 1);
+
+    // Sobreposição: Foto 2 inicia antes do término da Foto 1 (x2 < x1 + width1)
+    expect(layout.photo2.x).toBeLessThan(layout.photo1.x + layout.photo1.width);
+    expect(layout.photo2.x).toBeGreaterThan(layout.photo1.x);
+
+    // Conjunto centralizado com respiro nas laterais
+    const leftMargin = layout.photo1.x;
+    const rightMargin = 250 - (layout.photo2.x + layout.photo2.width);
+    expect(leftMargin).toBeGreaterThanOrEqual(8);
+    expect(leftMargin).toBeCloseTo(rightMargin, 1);
+  });
 });

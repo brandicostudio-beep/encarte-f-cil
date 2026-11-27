@@ -26,6 +26,100 @@ export function semanalPhotoBounds(product: EncarteSemanalProduct, index: number
   return { x: center - w / 2 + (product.offsetX ?? 0) + (transform?.x ?? 0), y: height - h + (product.overlapY ?? 4) + (product.offsetY ?? 0) + (transform?.y ?? 0), width: w, height: h };
 }
 
+export interface SemanalTwoPhotoLayout {
+  photo1: { x: number; y: number; width: number; height: number };
+  photo2: { x: number; y: number; width: number; height: number };
+}
+
+/**
+ * Calcula o layout proporcional, centralizado e com sobreposição natural para 2 fotos no mesmo box.
+ * Compartilhado entre o preview (EncarteSemanalCell) e o exportador PNG (encarte-semanal-export).
+ */
+export function computeSemanalTwoPhotoLayout(params: {
+  boxX?: number;
+  boxWidth: number;
+  photoAreaHeight: number;
+  barY: number;
+  aspect1: number;
+  aspect2: number;
+  scale1: number;
+  scale2: number;
+  overlapY?: number;
+  offsetX1?: number;
+  offsetY1?: number;
+  offsetX2?: number;
+  offsetY2?: number;
+  overlapRatio?: number;
+}): SemanalTwoPhotoLayout {
+  const {
+    boxX = 0,
+    boxWidth,
+    photoAreaHeight,
+    barY,
+    aspect1: rawAspect1,
+    aspect2: rawAspect2,
+    scale1: rawScale1,
+    scale2: rawScale2,
+    overlapY = 2,
+    offsetX1 = 0,
+    offsetY1 = 0,
+    offsetX2 = 0,
+    offsetY2 = 0,
+    overlapRatio = 0.28,
+  } = params;
+
+  const aspect1 = rawAspect1 > 0 && isFinite(rawAspect1) ? rawAspect1 : 1;
+  const aspect2 = rawAspect2 > 0 && isFinite(rawAspect2) ? rawAspect2 : aspect1;
+  const s1 = rawScale1 > 10 ? rawScale1 / 100 : rawScale1 || 1;
+  const s2 = rawScale2 > 10 ? rawScale2 / 100 : rawScale2 || s1;
+
+  const availableW = Math.max(20, boxWidth - 16);
+  const availableH = Math.max(20, photoAreaHeight - 14);
+
+  const fitSize = (aspect: number, scale: number) => {
+    const maxItemW = availableW * 0.62 * scale;
+    const maxItemH = availableH * 0.92 * scale;
+    let w = maxItemW;
+    let h = w / aspect;
+    if (h > maxItemH) {
+      h = maxItemH;
+      w = h * aspect;
+    }
+    return { w, h };
+  };
+
+  let size1 = fitSize(aspect1, s1);
+  let size2 = fitSize(aspect2, s2);
+
+  const overlapPx = Math.min(size1.w, size2.w) * overlapRatio;
+  let pairW = size1.w + size2.w - overlapPx;
+
+  const maxPairW = availableW * 0.96;
+  if (pairW > maxPairW && pairW > 0) {
+    const ratio = maxPairW / pairW;
+    size1 = { w: size1.w * ratio, h: size1.h * ratio };
+    size2 = { w: size2.w * ratio, h: size2.h * ratio };
+    pairW = size1.w + size2.w - Math.min(size1.w, size2.w) * overlapRatio;
+  }
+
+  const pairStartX = boxX + (boxWidth - pairW) / 2;
+
+  return {
+    photo1: {
+      x: pairStartX + offsetX1,
+      y: barY - size1.h + overlapY + offsetY1,
+      width: size1.w,
+      height: size1.h,
+    },
+    photo2: {
+      x: pairStartX + pairW - size2.w + offsetX2,
+      y: barY - size2.h + overlapY + offsetY2,
+      width: size2.w,
+      height: size2.h,
+    },
+  };
+}
+
 export interface SemanalHistory<T> { past: T[]; present: T; future: T[] }
 export function changeSemanalHistory<T>(state: SemanalHistory<T>, next: T): SemanalHistory<T> {
   return { past: [...state.past.slice(-49), state.present], present: next, future: [] };
