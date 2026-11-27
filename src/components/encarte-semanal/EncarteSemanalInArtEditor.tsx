@@ -18,6 +18,10 @@ import {
   resolveBestPhotoForCode,
   copyProductCodeToClipboard,
   trimEmptyMarginsSafe,
+  getBgRemovalConfig,
+  saveBgRemovalConfig,
+  removePhotoBackgroundViaApi,
+  type BgRemovalProvider,
 } from "@/lib/encarte-semanal-photos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -114,6 +118,10 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   const [showSecSuggestions, setShowSecSuggestions] = useState(false);
   const [isSearchingSecCescom, setIsSearchingSecCescom] = useState(false);
   const [isLoadingPhoto, setIsLoadingPhoto] = useState(false);
+  const [isRemovingBgTarget, setIsRemovingBgTarget] = useState<"photo1" | "photo2" | null>(null);
+  const [showBgConfig, setShowBgConfig] = useState(false);
+  const [bgProvider, setBgProvider] = useState<BgRemovalProvider>(() => getBgRemovalConfig().provider);
+  const [bgApiKey, setBgApiKey] = useState<string>(() => getBgRemovalConfig().apiKey);
   const [isSearchingCescom, setIsSearchingCescom] = useState(false);
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -643,6 +651,43 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     }
   };
 
+  // Remove fundo usando API profissional (remove.bg ou PhotoRoom)
+  const handleRemoveBackground = async (target: "photo1" | "photo2") => {
+    const src = target === "photo1" ? image : secondaryImage;
+    if (!src) return;
+    setIsRemovingBgTarget(target);
+    const res = await removePhotoBackgroundViaApi(src, {
+      provider: bgProvider,
+      apiKey: bgApiKey,
+    });
+    setIsRemovingBgTarget(null);
+
+    if (!res.ok || !res.dataUrl) {
+      if (res.needsApiKey) {
+        setShowBgConfig(true);
+      }
+      setCopyToast(res.error || "Configure a chave de API do remove.bg ou PhotoRoom.");
+      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+      copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 5000);
+      return;
+    }
+
+    if (target === "photo1") {
+      setImage(res.dataUrl);
+      if (product) {
+        onSaveProduct({ ...product, image: res.dataUrl });
+      }
+    } else {
+      setSecondaryImage(res.dataUrl);
+      if (product) {
+        onSaveProduct({ ...product, secondaryImage: res.dataUrl, duplicatePhoto: false });
+      }
+    }
+    setCopyToast("Fundo removido com sucesso!");
+    if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+    copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 3500);
+  };
+
   // Igualar tamanho da Foto 2 com a Foto 1
   const handleMatchScale2With1 = () => {
     setScale2(scale);
@@ -1155,8 +1200,69 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       <div className="bg-neutral-900/80 border border-neutral-800 p-2.5 rounded-lg space-y-2">
         <div className="flex items-center justify-between text-[11px] text-neutral-400 font-semibold">
           <span>Fotos do Box (2 Unidades):</span>
-          <span className="font-mono text-amber-300 text-[10px]">Zoom: {Math.round(scale * 100)}%</span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowBgConfig((v) => !v)}
+              className={`text-[9.5px] px-1.5 py-0.5 rounded border cursor-pointer transition-colors ${
+                bgApiKey
+                  ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
+                  : "bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white"
+              }`}
+              title="Configurar API remove.bg ou PhotoRoom para recorte profissional"
+            >
+              ✂️ API Recorte
+            </button>
+            <span className="font-mono text-amber-300 text-[10px]">Zoom: {Math.round(scale * 100)}%</span>
+          </div>
         </div>
+
+        {showBgConfig && (
+          <div className="bg-black/60 border border-purple-500/40 rounded-md p-2 space-y-1.5 text-[10px]">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-purple-300">Serviço de Recorte (remove.bg / PhotoRoom)</span>
+              <button
+                type="button"
+                onClick={() => setShowBgConfig(false)}
+                className="text-neutral-400 hover:text-white cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex gap-1">
+              {(["removebg", "photoroom"] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => {
+                    setBgProvider(p);
+                    saveBgRemovalConfig({ provider: p, apiKey: bgApiKey });
+                  }}
+                  className={`flex-1 py-1 rounded font-bold cursor-pointer border ${
+                    bgProvider === p
+                      ? "bg-purple-600 text-white border-purple-400"
+                      : "bg-neutral-900 text-neutral-400 border-neutral-700"
+                  }`}
+                >
+                  {p === "removebg" ? "remove.bg" : "PhotoRoom"}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1">
+              <Input
+                type="password"
+                value={bgApiKey}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setBgApiKey(val);
+                  saveBgRemovalConfig({ provider: bgProvider, apiKey: val });
+                }}
+                placeholder={`Cole sua API Key do ${bgProvider === "removebg" ? "remove.bg" : "PhotoRoom"}...`}
+                className="h-7 bg-neutral-900 border-neutral-700 text-white text-[10px]"
+              />
+            </div>
+          </div>
+        )}
 
         {copyToast && (
           <div
@@ -1187,22 +1293,42 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
               className="hidden"
               onChange={handleImageUpload}
             />
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              data-testid="btn-trocar-foto-1"
-              onClick={() => {
-                const primary = (codeQuery.split(/[/,]+/)[0] || product?.code || product?.originalCode || "").trim();
-                showCopyToastAndPickFile(primary, fileInputRef);
-              }}
-              disabled={isLoadingPhoto}
-              className="h-6 w-full px-1 bg-neutral-800 border-neutral-700 text-amber-300 hover:text-white text-[10px]"
-              title="Trocar Foto 1 (PNG transparente)"
-            >
-              <Upload className="h-2.5 w-2.5 mr-1" />
-              Trocar
-            </Button>
+            <div className="w-full flex gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                data-testid="btn-trocar-foto-1"
+                onClick={() => {
+                  const primary = (codeQuery.split(/[/,]+/)[0] || product?.code || product?.originalCode || "").trim();
+                  showCopyToastAndPickFile(primary, fileInputRef);
+                }}
+                disabled={isLoadingPhoto || isRemovingBgTarget === "photo1"}
+                className="h-6 flex-1 px-1 bg-neutral-800 border-neutral-700 text-amber-300 hover:text-white text-[10px]"
+                title="Trocar Foto 1 (PNG transparente)"
+              >
+                <Upload className="h-2.5 w-2.5 mr-1" />
+                Trocar
+              </Button>
+              {image && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleRemoveBackground("photo1")}
+                  disabled={isRemovingBgTarget !== null}
+                  className="h-6 px-1.5 bg-purple-950/60 border-purple-500/40 text-purple-200 hover:bg-purple-900/70 text-[10px] cursor-pointer"
+                  title="Remover fundo via remove.bg / PhotoRoom"
+                  data-testid="btn-remove-bg-foto-1"
+                >
+                  {isRemovingBgTarget === "photo1" ? (
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                  ) : (
+                    "✂️"
+                  )}
+                </Button>
+              )}
+            </div>
 
             {/* Ajustes Rápidos Foto 1 */}
             <div className="w-full flex items-center justify-between mt-1 text-[9px] text-neutral-400 pt-1 border-t border-neutral-800/80">
@@ -1289,24 +1415,42 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
                 Subir
               </Button>
               {secondaryImage && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setSecondaryImage("");
-                    if (product) {
-                      onSaveProduct({
-                        ...product,
-                        secondaryImage: undefined,
-                      });
-                    }
-                  }}
-                  className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer"
-                  title="Remover Foto 2"
-                >
-                  <X className="h-3 w-3" />
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void handleRemoveBackground("photo2")}
+                    disabled={isRemovingBgTarget !== null}
+                    className="h-6 px-1.5 bg-purple-950/60 border-purple-500/40 text-purple-200 hover:bg-purple-900/70 text-[10px] cursor-pointer"
+                    title="Remover fundo da Foto 2 via remove.bg / PhotoRoom"
+                    data-testid="btn-remove-bg-foto-2"
+                  >
+                    {isRemovingBgTarget === "photo2" ? (
+                      <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                    ) : (
+                      "✂️"
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setSecondaryImage("");
+                      if (product) {
+                        onSaveProduct({
+                          ...product,
+                          secondaryImage: undefined,
+                        });
+                      }
+                    }}
+                    className="h-6 w-6 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer"
+                    title="Remover Foto 2"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </>
               )}
             </div>
 

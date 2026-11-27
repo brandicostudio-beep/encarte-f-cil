@@ -906,4 +906,33 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     expect(extractProductGramatura("ALVEJANTE Q BOA 12X1 LT")).toBe("1L");
     expect(extractProductGramatura("ARROZ TIPO 1 5KG")).toBe("5KG");
   });
+
+  it("Teste 26: removePhotoBackgroundViaApi envia requisição para remove.bg/PhotoRoom e retorna PNG", async () => {
+    const { removePhotoBackgroundViaApi } = await import("./encarte-semanal-photos");
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const urlStr = typeof input === "string" ? input : input.toString();
+      if (urlStr.includes("/api/remove-bg")) {
+        const body = JSON.parse((init?.body as string) || "{}");
+        expect(body.provider).toBe("photoroom");
+        expect(body.apiKey).toBe("test-key-123");
+        return new Response(
+          JSON.stringify({ ok: true, dataUrl: "data:image/png;base64,cutout" }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      return new Response(JSON.stringify({ ok: false }), { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const res = await removePhotoBackgroundViaApi("data:image/png;base64,raw", {
+        provider: "photoroom",
+        apiKey: "test-key-123",
+      });
+      expect(res.ok).toBe(true);
+      expect(res.dataUrl).toContain("data:image/png;base64,cutout");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

@@ -620,4 +620,83 @@ export function autoResolvePhotosForSemanalProducts(products: EncarteSemanalProd
   };
 }
 
+export type BgRemovalProvider = "removebg" | "photoroom";
+
+export interface BgRemovalConfig {
+  provider: BgRemovalProvider;
+  apiKey: string;
+}
+
+const BG_REMOVAL_STORAGE_KEY = "encarte_semanal_bg_removal_config";
+
+export function getBgRemovalConfig(): BgRemovalConfig {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const raw = localStorage.getItem(BG_REMOVAL_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<BgRemovalConfig>;
+        return {
+          provider: parsed.provider === "photoroom" ? "photoroom" : "removebg",
+          apiKey: (parsed.apiKey || "").trim(),
+        };
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return { provider: "removebg", apiKey: "" };
+}
+
+export function saveBgRemovalConfig(config: BgRemovalConfig): void {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      localStorage.setItem(
+        BG_REMOVAL_STORAGE_KEY,
+        JSON.stringify({
+          provider: config.provider === "photoroom" ? "photoroom" : "removebg",
+          apiKey: (config.apiKey || "").trim(),
+        })
+      );
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function removePhotoBackgroundViaApi(
+  imageSrc: string,
+  override?: Partial<BgRemovalConfig>
+): Promise<{ ok: boolean; dataUrl?: string; error?: string; needsApiKey?: boolean }> {
+  if (!imageSrc || !imageSrc.trim()) {
+    return { ok: false, error: "Imagem não informada." };
+  }
+  const stored = getBgRemovalConfig();
+  const provider = override?.provider ?? stored.provider;
+  const apiKey = (override?.apiKey ?? stored.apiKey).trim();
+
+  try {
+    const res = await fetch("/api/remove-bg", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        imageDataUrl: imageSrc,
+        provider,
+        apiKey: apiKey || undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!data?.ok || !data?.dataUrl) {
+      return {
+        ok: false,
+        error: data?.error || "Não foi possível remover o fundo.",
+        needsApiKey: Boolean(data?.needsApiKey),
+      };
+    }
+    const trimmed = await trimEmptyMarginsSafe(data.dataUrl);
+    return { ok: true, dataUrl: trimmed };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "Erro de conexão ao remover fundo." };
+  }
+}
+
 export { processPhotoBankUpload };

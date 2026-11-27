@@ -86,6 +86,114 @@ export default {
         });
       }
 
+      // Remoção de fundo profissional via API (remove.bg ou PhotoRoom)
+      if (reqUrl.pathname === "/api/remove-bg" && request.method === "POST") {
+        try {
+          const body = (await request.json()) as {
+            imageDataUrl?: string;
+            provider?: "removebg" | "photoroom";
+            apiKey?: string;
+          };
+          const imageDataUrl = (body?.imageDataUrl || "").trim();
+          const provider = body?.provider === "photoroom" ? "photoroom" : "removebg";
+          const apiKey = (
+            body?.apiKey ||
+            (provider === "photoroom" ? process.env.PHOTOROOM_API_KEY : process.env.REMOVE_BG_API_KEY) ||
+            ""
+          ).trim();
+
+          if (!imageDataUrl) {
+            return new Response(JSON.stringify({ ok: false, error: "Imagem não informada." }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          if (!apiKey) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: `Chave de API do ${provider === "photoroom" ? "PhotoRoom" : "remove.bg"} não configurada.`,
+                needsApiKey: true,
+              }),
+              {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+              }
+            );
+          }
+
+          let imageBlob: Blob;
+          if (imageDataUrl.startsWith("data:")) {
+            const commaIdx = imageDataUrl.indexOf(",");
+            const header = imageDataUrl.slice(5, commaIdx);
+            const mime = header.split(";")[0] || "image/png";
+            const b64 = imageDataUrl.slice(commaIdx + 1);
+            const bytes = Buffer.from(b64, "base64");
+            imageBlob = new Blob([bytes], { type: mime });
+          } else {
+            const imgRes = await fetch(imageDataUrl);
+            if (!imgRes.ok) {
+              return new Response(JSON.stringify({ ok: false, error: "Falha ao baixar a imagem original." }), {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+            const arrBuf = await imgRes.arrayBuffer();
+            const contentType = imgRes.headers.get("content-type") || "image/png";
+            imageBlob = new Blob([arrBuf], { type: contentType });
+          }
+
+          const formData = new FormData();
+          formData.append("image_file", imageBlob, "product.png");
+
+          let apiRes: Response;
+          if (provider === "photoroom") {
+            apiRes = await fetch("https://sdk.photoroom.com/v1/segment", {
+              method: "POST",
+              headers: { "x-api-key": apiKey },
+              body: formData,
+            });
+          } else {
+            formData.append("size", "auto");
+            formData.append("format", "png");
+            apiRes = await fetch("https://api.remove.bg/v1.0/removebg", {
+              method: "POST",
+              headers: { "X-Api-Key": apiKey },
+              body: formData,
+            });
+          }
+
+          if (!apiRes.ok) {
+            const errText = await apiRes.text().catch(() => "");
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: `Erro ${apiRes.status} na API ${provider}: ${errText.slice(0, 180)}`,
+              }),
+              {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              }
+            );
+          }
+
+          const outBuf = Buffer.from(await apiRes.arrayBuffer());
+          const outDataUrl = `data:image/png;base64,${outBuf.toString("base64")}`;
+          return new Response(JSON.stringify({ ok: true, dataUrl: outDataUrl }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (err: any) {
+          return new Response(
+            JSON.stringify({ ok: false, error: err?.message || "Erro interno ao remover fundo." }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+      }
+
       // Leitura nativa da pasta local padrão (quando executado localmente no Windows)
       if (reqUrl.pathname === "/api/local-photos") {
         const code = reqUrl.searchParams.get("code")?.trim();
