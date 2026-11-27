@@ -302,10 +302,10 @@ export async function renderEncarteSemanalPageToCanvas(
     let availableDescWidth = barW - 16;
 
     if (displayCode) {
-      const codeFontSize = displayCode.length > 10 ? 9 : displayCode.length > 6 ? 11 : 13;
-      ctx.font = `900 ${codeFontSize}px 'Inter', monospace, sans-serif`;
+      const codeFontSize = displayCode.length > 10 ? 11 : displayCode.length > 6 ? 13 : 15;
+      ctx.font = `900 ${codeFontSize}px 'Segoe UI', Roboto, Arial, sans-serif`;
       const codeWidth = ctx.measureText(displayCode).width;
-      const codeBoxW = Math.min(codeWidth + 10, barW * 0.42);
+      const codeBoxW = Math.min(codeWidth + 12, barW * 0.42);
 
       ctx.fillStyle = gridConfig.barTextColor || "#7A0D12";
       ctx.textAlign = "center";
@@ -326,7 +326,7 @@ export async function renderEncarteSemanalPageToCanvas(
 
     // Descrição do Produto
     if (desc) {
-      ctx.font = "900 11px 'Inter', sans-serif";
+      ctx.font = "900 13.5px 'Segoe UI', Roboto, Arial, sans-serif";
       ctx.fillStyle = gridConfig.barTextColor || "#7A0D12";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -337,8 +337,8 @@ export async function renderEncarteSemanalPageToCanvas(
       if (lines.length === 1) {
         ctx.fillText(lines[0], descCenterX, barY + barH / 2);
       } else if (lines.length >= 2) {
-        ctx.fillText(lines[0], descCenterX, barY + barH / 2 - 7);
-        ctx.fillText(lines[1], descCenterX, barY + barH / 2 + 7);
+        ctx.fillText(lines[0], descCenterX, barY + barH / 2 - 8.5);
+        ctx.fillText(lines[1], descCenterX, barY + barH / 2 + 8.5);
       }
     }
     ctx.restore();
@@ -405,10 +405,10 @@ export async function renderEncarteSemanalPageToCanvas(
         ]
       : [cleanFooter];
 
-    ctx.font = "800 13px 'Segoe UI', Roboto, Arial, sans-serif";
+    ctx.font = "800 16px 'Segoe UI', Roboto, Arial, sans-serif";
     if (rawLines.length >= 2) {
-      ctx.fillText(rawLines[0], canvasWidth / 2, 1877, canvasWidth - 48);
-      ctx.fillText(rawLines.slice(1).join(" "), canvasWidth / 2, 1897, canvasWidth - 48);
+      ctx.fillText(rawLines[0], canvasWidth / 2, 1876, canvasWidth - 48);
+      ctx.fillText(rawLines.slice(1).join(" "), canvasWidth / 2, 1898, canvasWidth - 48);
     } else {
       ctx.fillText(rawLines[0], canvasWidth / 2, 1887, canvasWidth - 48);
     }

@@ -662,7 +662,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
             <span
               className="shrink-0 font-black font-mono border-r border-[#7A0D12]/30 pr-1.5 leading-tight"
               style={{
-                fontSize: displayCode.length > 7 ? "10px" : "13px",
+                fontSize: displayCode.length > 10 ? "11px" : displayCode.length > 6 ? "13px" : "15px",
               }}
               data-testid="semanal-cell-code"
             >
@@ -670,7 +670,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
             </span>
           )}
           <span
-            className="line-clamp-2 flex-1 text-[12px] font-black"
+            className="line-clamp-2 flex-1 text-[13.5px] font-black leading-tight"
             data-testid="semanal-cell-desc"
             title={product.description}
           >

@@ -163,6 +163,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   // Estados de navegação e visualização
   const [activeTab, setActiveTab] = useState<"preview" | "tabela" | "pendencias">("preview");
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [manualPagesCount, setManualPagesCount] = useState<number>(1);
   const [previewZoom, setPreviewZoom] = useState<number>(0.48);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
@@ -433,6 +434,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
     setCurrentFileName(null);
     setSelectedSlotIndex(null);
     setInspectorOpen(false);
+    setManualPagesCount(1);
     setCurrentPage(1);
     setActiveTab("preview");
     setExportMessage("✨ Novo encarte em branco pronto para edição.");
@@ -619,6 +621,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   }, [products, gridConfig.itemsPerPage]);
 
   const { pages, pendingProducts, totalPages } = pagination;
+  const effectiveTotalPages = Math.max(1, totalPages, manualPagesCount);
   const currentProducts = pages[currentPage - 1] || [];
 
   // Coordenadas calculadas das células da grade
@@ -1620,17 +1623,35 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <span className="font-bold text-white px-2">
-                  Tela {currentPage} de {Math.max(1, totalPages)} (
+                  Tela {currentPage} de {effectiveTotalPages} (
                   {currentProducts.length} produtos)
                 </span>
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={currentPage >= totalPages}
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= effectiveTotalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(effectiveTotalPages, p + 1))}
                   className="h-8 bg-neutral-800 border-neutral-700 text-white"
                 >
                   <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const nextPage = effectiveTotalPages + 1;
+                    setManualPagesCount(nextPage);
+                    setCurrentPage(nextPage);
+                    setSelectedSlotIndex(null);
+                    setInspectorOpen(false);
+                  }}
+                  className="h-8 bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25 hover:text-amber-200 font-bold text-xs px-2.5 cursor-pointer"
+                  title="Criar uma nova página (ex: Página 2) para montar outro encarte na mesma campanha"
+                  data-testid="btn-add-page"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Página {effectiveTotalPages + 1}
                 </Button>
               </div>
 
@@ -1806,7 +1827,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                   ) : (
                     <div className="relative w-full flex items-center justify-center">
                       <div
-                        className="text-center text-white font-black text-[12px] leading-tight tracking-wide drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] whitespace-pre-line uppercase select-none group-hover:text-amber-200 transition-colors"
+                        className="text-center text-white font-black text-[16px] leading-tight tracking-wide drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] whitespace-pre-line uppercase select-none group-hover:text-amber-200 transition-colors"
                         data-testid="semanal-rendered-footer"
                       >
                         {footerText ||
