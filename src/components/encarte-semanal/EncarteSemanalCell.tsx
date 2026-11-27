@@ -201,8 +201,11 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
 
   // --- ARRASTAR FOTO PARA MOVER (DRAG TO MOVE) ---
   const handlePhotoPointerDown = (photoKey: "photo1" | "photo2", e: React.PointerEvent) => {
-    if (!isSelected || !onUpdateProduct) return;
+    if (!interactive || !onUpdateProduct) return;
     e.stopPropagation();
+    if (!isSelected && onClickSlot) {
+      onClickSlot();
+    }
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
     setActiveTarget(photoKey);
@@ -268,18 +271,21 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
   // --- REDIMENSIONAR PELOS CANTOS (CORNER RESIZE HANDLES ESTILO FIGMA/CANVA) ---
   const handleCornerPointerDown = (
     corner: "nw" | "ne" | "se" | "sw",
+    targetPhoto: "photo1" | "photo2",
     e: React.PointerEvent
   ) => {
     if (!isSelected || !onUpdateProduct) return;
     e.stopPropagation();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
+    setActiveTarget(targetPhoto);
     setIsResizingCorner(corner);
-    const boxRect = cellRef.current?.getBoundingClientRect();
+    const parentRect = (e.currentTarget as HTMLElement).parentElement?.getBoundingClientRect();
+    const boxRect = parentRect || cellRef.current?.getBoundingClientRect();
     const centerX = boxRect ? boxRect.left + boxRect.width / 2 : e.clientX;
     const centerY = boxRect ? boxRect.top + boxRect.height / 2 : e.clientY;
     const initialDist = Math.hypot(e.clientX - centerX, e.clientY - centerY) || 1;
-    const initialScale = activeTarget === "photo2" ? scale2 : scale1;
+    const initialScale = targetPhoto === "photo2" ? scale2 : scale1;
 
     setResizeStartData({
       clientX: e.clientX,
@@ -288,7 +294,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
       centerY,
       initialDist,
       initialScale,
-      target: activeTarget,
+      target: targetPhoto,
     });
   };
 
@@ -344,6 +350,39 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
     setResizeStartData(null);
   };
 
+  const renderCornerHandles = (targetPhoto: "photo1" | "photo2") => (
+    <>
+      <div
+        className="absolute -top-2 -left-2 w-3.5 h-3.5 bg-amber-400 border-2 border-black rounded-xs z-50 cursor-nwse-resize shadow-md hover:scale-125 transition-transform"
+        onPointerDown={(e) => handleCornerPointerDown("nw", targetPhoto, e)}
+        onPointerMove={handleCornerPointerMove}
+        onPointerUp={handleCornerPointerUp}
+        title="Arraste para redimensionar"
+      />
+      <div
+        className="absolute -top-2 -right-2 w-3.5 h-3.5 bg-amber-400 border-2 border-black rounded-xs z-50 cursor-nesw-resize shadow-md hover:scale-125 transition-transform"
+        onPointerDown={(e) => handleCornerPointerDown("ne", targetPhoto, e)}
+        onPointerMove={handleCornerPointerMove}
+        onPointerUp={handleCornerPointerUp}
+        title="Arraste para redimensionar"
+      />
+      <div
+        className="absolute -bottom-2 -left-2 w-3.5 h-3.5 bg-amber-400 border-2 border-black rounded-xs z-50 cursor-nesw-resize shadow-md hover:scale-125 transition-transform"
+        onPointerDown={(e) => handleCornerPointerDown("sw", targetPhoto, e)}
+        onPointerMove={handleCornerPointerMove}
+        onPointerUp={handleCornerPointerUp}
+        title="Arraste para redimensionar"
+      />
+      <div
+        className="absolute -bottom-2 -right-2 w-3.5 h-3.5 bg-amber-400 border-2 border-black rounded-xs z-50 cursor-nwse-resize shadow-md hover:scale-125 transition-transform"
+        onPointerDown={(e) => handleCornerPointerDown("se", targetPhoto, e)}
+        onPointerMove={handleCornerPointerMove}
+        onPointerUp={handleCornerPointerUp}
+        title="Arraste para redimensionar"
+      />
+    </>
+  );
+
   return (
     <div
       ref={cellRef}
@@ -372,41 +411,10 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
         }
       }}
     >
-      {/* Figma Handles Interativos de Redimensionamento pelos 4 cantos */}
+      {/* Handles para foto única (quando não há 2 fotos) e Badge Flutuante em Tempo Real */}
       {isSelected && (
         <>
-          {/* Alça Noroeste (Top-Left) */}
-          <div
-            className="absolute -top-2 -left-2 w-4 h-4 bg-amber-400 border-2 border-black rounded-xs z-50 cursor-nwse-resize shadow-md hover:scale-125 transition-transform"
-            onPointerDown={(e) => handleCornerPointerDown("nw", e)}
-            onPointerMove={handleCornerPointerMove}
-            onPointerUp={handleCornerPointerUp}
-            title="Arraste para redimensionar (Zoom)"
-          />
-          {/* Alça Nordeste (Top-Right) */}
-          <div
-            className="absolute -top-2 -right-2 w-4 h-4 bg-amber-400 border-2 border-black rounded-xs z-50 cursor-nesw-resize shadow-md hover:scale-125 transition-transform"
-            onPointerDown={(e) => handleCornerPointerDown("ne", e)}
-            onPointerMove={handleCornerPointerMove}
-            onPointerUp={handleCornerPointerUp}
-            title="Arraste para redimensionar (Zoom)"
-          />
-          {/* Alça Sudoeste (Bottom-Left) */}
-          <div
-            className="absolute -bottom-2 -left-2 w-4 h-4 bg-amber-400 border-2 border-black rounded-xs z-50 cursor-nesw-resize shadow-md hover:scale-125 transition-transform"
-            onPointerDown={(e) => handleCornerPointerDown("sw", e)}
-            onPointerMove={handleCornerPointerMove}
-            onPointerUp={handleCornerPointerUp}
-            title="Arraste para redimensionar (Zoom)"
-          />
-          {/* Alça Sudeste (Bottom-Right) */}
-          <div
-            className="absolute -bottom-2 -right-2 w-4 h-4 bg-amber-400 border-2 border-black rounded-xs z-50 cursor-nwse-resize shadow-md hover:scale-125 transition-transform"
-            onPointerDown={(e) => handleCornerPointerDown("se", e)}
-            onPointerMove={handleCornerPointerMove}
-            onPointerUp={handleCornerPointerUp}
-            title="Arraste para redimensionar (Zoom)"
-          />
+          {!hasTwoPhotos && renderCornerHandles("photo1")}
 
           {/* Badge Flutuante em Tempo Real: Tamanho ou Posição */}
           {(isResizingCorner || isDraggingPhoto) && (
@@ -429,40 +437,6 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
                   </span>
                 </>
               )}
-            </div>
-          )}
-
-          {/* Seletor Rápido de Foco quando houver 2 fotos no box */}
-          {hasTwoPhotos && (
-            <div className="absolute top-1 left-1.5 z-40 flex items-center gap-1 bg-black/85 backdrop-blur-xs p-1 rounded-md border border-amber-500/50 shadow-lg">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveTarget("photo1");
-                }}
-                className={`text-[9px] font-bold px-1.5 py-0.5 rounded transition-all cursor-pointer ${
-                  activeTarget === "photo1"
-                    ? "bg-amber-400 text-neutral-950"
-                    : "text-neutral-400 hover:text-white"
-                }`}
-              >
-                Foto 1
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveTarget("photo2");
-                }}
-                className={`text-[9px] font-bold px-1.5 py-0.5 rounded transition-all cursor-pointer ${
-                  activeTarget === "photo2"
-                    ? "bg-amber-400 text-neutral-950"
-                    : "text-neutral-400 hover:text-white"
-                }`}
-              >
-                Foto 2
-              </button>
             </div>
           )}
         </>
@@ -534,25 +508,26 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
             });
             return (
               <div className="relative w-full h-full">
-                {/* Foto 1 (Esquerda / Trás) com arrastar 1:1 */}
+                {/* Foto 1 (Esquerda / Trás) — clique direto seleciona, arrasta e exibe os 4 cantos */}
                 <div
                   className={`absolute select-none ${
-                    isSelected
-                      ? "cursor-grab active:cursor-grabbing hover:ring-1 hover:ring-amber-400/80 rounded"
+                    interactive
+                      ? "cursor-grab active:cursor-grabbing hover:ring-1 hover:ring-amber-300/70 rounded"
                       : "pointer-events-none"
-                  } ${activeTarget === "photo1" && isSelected ? "ring-1 ring-amber-400/70" : ""}`}
+                  } ${activeTarget === "photo1" && isSelected ? "ring-2 ring-amber-400 rounded" : ""}`}
                   style={{
                     left: `${twoLayout.photo1.x}px`,
                     top: `${twoLayout.photo1.y}px`,
                     width: `${twoLayout.photo1.width}px`,
                     height: `${twoLayout.photo1.height}px`,
-                    zIndex: 11,
+                    zIndex: isSelected && activeTarget === "photo1" ? 13 : 11,
                   }}
                   onPointerDown={(e) => handlePhotoPointerDown("photo1", e)}
                   onPointerMove={handlePhotoPointerMove}
                   onPointerUp={handlePhotoPointerUp}
-                  title={isSelected ? "Arraste para mover a Foto 1" : undefined}
+                  title={interactive ? "Clique para selecionar/mover esta foto" : undefined}
                 >
+                  {isSelected && activeTarget === "photo1" && renderCornerHandles("photo1")}
                   {isSelected && isDraggingPhoto === "photo1" && (
                     <span className="absolute -top-4 left-0 bg-amber-400 text-neutral-950 text-[8px] font-black px-1 rounded shadow-xs pointer-events-none">
                       Foto 1
@@ -573,25 +548,26 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
                   />
                 </div>
 
-                {/* Foto 2 (Direita / Frente, sobreposta) com arrastar 1:1 */}
+                {/* Foto 2 (Direita / Frente, sobreposta) — clique direto seleciona, arrasta e exibe os 4 cantos */}
                 <div
                   className={`absolute select-none ${
-                    isSelected
-                      ? "cursor-grab active:cursor-grabbing hover:ring-1 hover:ring-amber-400/80 rounded"
+                    interactive
+                      ? "cursor-grab active:cursor-grabbing hover:ring-1 hover:ring-amber-300/70 rounded"
                       : "pointer-events-none"
-                  } ${activeTarget === "photo2" && isSelected ? "ring-1 ring-amber-400/70" : ""}`}
+                  } ${activeTarget === "photo2" && isSelected ? "ring-2 ring-amber-400 rounded" : ""}`}
                   style={{
                     left: `${twoLayout.photo2.x}px`,
                     top: `${twoLayout.photo2.y}px`,
                     width: `${twoLayout.photo2.width}px`,
                     height: `${twoLayout.photo2.height}px`,
-                    zIndex: 12,
+                    zIndex: isSelected && activeTarget === "photo2" ? 13 : 12,
                   }}
                   onPointerDown={(e) => handlePhotoPointerDown("photo2", e)}
                   onPointerMove={handlePhotoPointerMove}
                   onPointerUp={handlePhotoPointerUp}
-                  title={isSelected ? "Arraste para mover a Foto 2" : undefined}
+                  title={interactive ? "Clique para selecionar/mover esta foto" : undefined}
                 >
+                  {isSelected && activeTarget === "photo2" && renderCornerHandles("photo2")}
                   {isSelected && isDraggingPhoto === "photo2" && (
                     <span className="absolute -top-4 right-0 bg-amber-400 text-neutral-950 text-[8px] font-black px-1 rounded shadow-xs pointer-events-none">
                       Foto 2
