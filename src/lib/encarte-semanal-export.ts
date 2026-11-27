@@ -348,14 +348,14 @@ export async function renderEncarteSemanalPageToCanvas(
 
       let chosenFontSize = 13.5;
       let wrapped = { lines: [desc], overflowed: false };
-      for (const candidateSize of [13.5, 12.5, 11.5, 10.5]) {
-        ctx.font = `900 ${candidateSize}px 'Segoe UI', Roboto, Arial, sans-serif`;
+      for (const candidateSize of [13.5, 12.5, 11.5, 10.5, 9.5]) {
+        ctx.font = `800 ${candidateSize}px 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif`;
         wrapped = wrapText(ctx, desc, availableDescWidth, 2);
         chosenFontSize = candidateSize;
         if (!wrapped.overflowed) break;
       }
 
-      ctx.font = `900 ${chosenFontSize}px 'Segoe UI', Roboto, Arial, sans-serif`;
+      ctx.font = `800 ${chosenFontSize}px 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif`;
       const descCenterX = textStartX + availableDescWidth / 2;
       const lineOffset = chosenFontSize >= 13 ? 8.5 : 7.5;
 
