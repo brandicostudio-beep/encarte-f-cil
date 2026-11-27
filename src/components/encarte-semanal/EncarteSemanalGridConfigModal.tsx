@@ -17,6 +17,7 @@ import { saveEncarteSemanalGridConfig } from "@/lib/encarte-semanal-storage";
 
 interface EncarteSemanalGridConfigModalProps {
   gridConfig: EncarteSemanalGridConfig;
+  currentPage?: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (updated: EncarteSemanalGridConfig) => void;
@@ -24,6 +25,7 @@ interface EncarteSemanalGridConfigModalProps {
 
 export const EncarteSemanalGridConfigModal: React.FC<EncarteSemanalGridConfigModalProps> = ({
   gridConfig,
+  currentPage = 1,
   open,
   onOpenChange,
   onSave,
@@ -71,34 +73,36 @@ export const EncarteSemanalGridConfigModal: React.FC<EncarteSemanalGridConfigMod
         </DialogHeader>
 
         <div className="space-y-4 my-2 text-xs">
-          {/* Quantidade Total de Produtos na Tela (ajuste automático da grade) */}
+          {/* Quantidade Total de Produtos nesta Página (ajuste individual da página atual) */}
           <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg space-y-1.5">
             <Label className="text-amber-300 font-bold flex items-center justify-between">
-              <span>Quantidade de Produtos na Tela (Padrão: 20)</span>
-              <span className="text-[10px] font-normal text-amber-200/80">Centraliza última linha</span>
+              <span>Quantidade de Produtos na Tela {currentPage} (Padrão: 20)</span>
+              <span className="text-[10px] font-normal text-amber-200/80">Só afeta esta página</span>
             </Label>
             <Input
               type="number"
               min={1}
               max={36}
-              value={form.itemsPerPage || form.columnsCount * form.rowsCount}
+              value={form.perPageItems?.[currentPage] ?? (form.itemsPerPage || form.columnsCount * form.rowsCount)}
               onChange={(e) => {
                 const count = Math.max(1, Math.min(36, parseInt(e.target.value) || 1));
                 const autoCols =
                   count <= 2 ? count : count <= 4 ? 2 : count <= 8 ? 3 : count <= 20 ? 4 : count <= 25 ? 5 : 6;
                 const autoRows = Math.max(1, Math.ceil(count / autoCols));
+                const nextPerPage = { ...(form.perPageItems || {}), [currentPage]: count };
                 setForm({
                   ...form,
-                  itemsPerPage: count,
-                  columnsCount: autoCols,
-                  rowsCount: autoRows,
+                  perPageItems: nextPerPage,
+                  ...(currentPage === 1
+                    ? { itemsPerPage: count, columnsCount: autoCols, rowsCount: autoRows }
+                    : {}),
                 });
               }}
               className="bg-neutral-900 border-amber-500/40 text-amber-300 font-bold"
               data-testid="grid-config-items-per-page"
             />
             <span className="text-[10px] text-neutral-400 block">
-              Ex.: se digitar 13, o quadro organiza 13 boxes dentro da arte e centraliza o último produto na linha final.
+              Ex.: Página 1 pode ter 18 produtos e Página 2 ter 10 produtos, cada uma centralizada no seu limite.
             </span>
           </div>
 

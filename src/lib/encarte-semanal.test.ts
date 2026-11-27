@@ -950,4 +950,22 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("Teste 27: getSemanalPageGridConfig e getSemanalPageStartOffset mantêm quantidade individual por página", async () => {
+    const { getSemanalPageGridConfig, getSemanalPageStartOffset } = await import("./encarte-semanal-layout");
+    const grid = {
+      ...DEFAULT_ENCARTE_SEMANAL_GRID,
+      perPageItems: { 1: 18, 2: 10 },
+    };
+
+    const page1 = getSemanalPageGridConfig(grid, 1);
+    const page2 = getSemanalPageGridConfig(grid, 2);
+
+    expect(page1.itemsPerPage).toBe(18);
+    expect(page2.itemsPerPage).toBe(10);
+    expect(getSemanalPageStartOffset(grid, 1)).toBe(0);
+    expect(getSemanalPageStartOffset(grid, 2)).toBe(18);
+    expect(calculateEncarteSemanalGridCells(page1)).toHaveLength(18);
+    expect(calculateEncarteSemanalGridCells(page2)).toHaveLength(10);
+  });
 });

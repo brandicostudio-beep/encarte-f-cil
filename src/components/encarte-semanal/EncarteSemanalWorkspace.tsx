@@ -28,6 +28,8 @@ import {
 } from "@/lib/encarte-semanal-storage";
 import {
   calculateEncarteSemanalGridCells,
+  getSemanalPageGridConfig,
+  getSemanalPageStartOffset,
   paginateEncarteSemanalProducts,
 } from "@/lib/encarte-semanal-layout";
 import {
@@ -624,31 +626,40 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   const effectiveTotalPages = Math.max(1, totalPages, manualPagesCount);
   const currentProducts = pages[currentPage - 1] || [];
 
-  // Coordenadas calculadas das células da grade
-  const gridCells = useMemo(() => {
-    return calculateEncarteSemanalGridCells(gridConfig);
-  }, [gridConfig]);
+  const currentPageGridConfig = useMemo(() => {
+    return getSemanalPageGridConfig(gridConfig, currentPage);
+  }, [gridConfig, currentPage]);
 
-  // Obtém o produto atribuído ao box (slot 0 a 19) na tela atual
+  // Coordenadas calculadas das células da grade para a página atual
+  const gridCells = useMemo(() => {
+    return calculateEncarteSemanalGridCells(currentPageGridConfig);
+  }, [currentPageGridConfig]);
+
+  // Obtém o produto atribuído ao box na tela atual (considerando quantidades individuais por página)
   const getProductAtSlot = (slotIdx: number): EncarteSemanalProduct | null => {
-    const targetGlobalIndex = (currentPage - 1) * (gridConfig.itemsPerPage || 20) + slotIdx;
+    const pageOffset = getSemanalPageStartOffset(gridConfig, currentPage);
+    const targetGlobalIndex = pageOffset + slotIdx;
 
     // 1. Primeiro verifica por slotIndex explícito
     const byExplicitSlot = products.find((p) => p.slotIndex === targetGlobalIndex);
     if (byExplicitSlot) return byExplicitSlot;
 
     // 2. Depois por sequência nos produtos paginados da página
-    if (currentProducts[slotIdx]) {
+    if (currentProducts[slotIdx] && currentProducts[slotIdx].slotIndex === undefined) {
       return currentProducts[slotIdx];
     }
 
-    // 3. Fallback: índice global no array de produtos
-    return products[targetGlobalIndex] || null;
+    // 3. Fallback: índice global no array de produtos quando não há slotIndex conflitante
+    const atGlobal = products[targetGlobalIndex];
+    if (atGlobal && atGlobal.slotIndex === undefined) {
+      return atGlobal;
+    }
+    return null;
   };
 
   // Salva ou atualiza um produto digitado diretamente dentro da arte (Figma/Canva)
   const handleSaveSlotProduct = (slotIdx: number, updated: EncarteSemanalProduct) => {
-    const targetGlobalIndex = (currentPage - 1) * (gridConfig.itemsPerPage || 20) + slotIdx;
+    const targetGlobalIndex = getSemanalPageStartOffset(gridConfig, currentPage) + slotIdx;
     const productWithSlot: EncarteSemanalProduct = {
       ...updated,
       slotIndex: targetGlobalIndex,
@@ -675,7 +686,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
 
   // Limpa o produto do box selecionado (volta a ser slot vazio)
   const handleClearSlotProduct = (slotIdx: number) => {
-    const targetGlobalIndex = (currentPage - 1) * (gridConfig.itemsPerPage || 20) + slotIdx;
+    const targetGlobalIndex = getSemanalPageStartOffset(gridConfig, currentPage) + slotIdx;
     const currentProd = getProductAtSlot(slotIdx);
 
     const filtered = products.filter((p) => {
@@ -693,9 +704,9 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   // Troca rápida de posição entre dois boxes (Swap)
   const handleSwapSlots = (fromSlotIdx: number, toSlotIdx: number) => {
     if (fromSlotIdx === toSlotIdx) return;
-    const itemsPerPage = gridConfig.itemsPerPage || 20;
-    const globalFrom = (currentPage - 1) * itemsPerPage + fromSlotIdx;
-    const globalTo = (currentPage - 1) * itemsPerPage + toSlotIdx;
+    const pageOffset = getSemanalPageStartOffset(gridConfig, currentPage);
+    const globalFrom = pageOffset + fromSlotIdx;
+    const globalTo = pageOffset + toSlotIdx;
 
     const prodFrom = getProductAtSlot(fromSlotIdx);
     const prodTo = getProductAtSlot(toSlotIdx);
@@ -875,8 +886,8 @@ export const EncarteSemanalWorkspace: React.FC = () => {
         name: "Encarte Semanal - Ofertas da Semana",
         templateImage,
         footerText,
-        gridConfig,
-        exportScale: 1,
+        gridConfig: currentPageGridConfig,
+        exportScale: 2,
       };
 
       await exportEncarteSemanalPageAsPng(slotProducts, config, currentPage);
@@ -913,8 +924,8 @@ export const EncarteSemanalWorkspace: React.FC = () => {
         name: "Encarte Semanal - Ofertas da Semana",
         templateImage,
         footerText,
-        gridConfig,
-        exportScale: 1,
+        gridConfig: currentPageGridConfig,
+        exportScale: 2,
       };
 
       await exportAllEncarteSemanalPagesAsZip(
@@ -1653,6 +1664,32 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                   <Plus className="h-3.5 w-3.5 mr-1" />
                   Página {effectiveTotalPages + 1}
                 </Button>
+                <div className="flex items-center gap-1.5 bg-neutral-950/70 border border-neutral-800 rounded-md px-2 h-8">
+                  <span className="text-[11px] text-neutral-400 font-semibold whitespace-nowrap">
+                    Boxes Pág. {currentPage}:
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={36}
+                    value={currentPageGridConfig.itemsPerPage}
+                    onChange={(e) => {
+                      const count = Math.max(1, Math.min(36, parseInt(e.target.value) || 1));
+                      const updated: EncarteSemanalGridConfig = {
+                        ...gridConfig,
+                        perPageItems: {
+                          ...(gridConfig.perPageItems || {}),
+                          [currentPage]: count,
+                        },
+                      };
+                      setGridConfig(updated);
+                      saveEncarteSemanalGridConfig(updated);
+                    }}
+                    className="w-11 bg-neutral-900 border border-neutral-700 rounded px-1.5 py-0.5 text-center text-amber-300 font-bold text-xs focus:outline-none focus:border-amber-400"
+                    title="Quantidade de boxes apenas nesta página"
+                    data-testid="input-page-box-count"
+                  />
+                </div>
               </div>
 
               {/* Informação do Modelo Atual */}
@@ -2187,6 +2224,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
         open={gridModalOpen}
         onOpenChange={setGridModalOpen}
         gridConfig={gridConfig}
+        currentPage={currentPage}
         onSave={(updated) => setGridConfig(updated)}
       />
 

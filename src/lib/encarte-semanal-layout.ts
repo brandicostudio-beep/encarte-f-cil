@@ -78,6 +78,50 @@ export function calculateEncarteSemanalGridCells(
   return cells;
 }
 
+/**
+ * Retorna a configuração de grade efetiva para uma página específica (ex.: Página 1 com 18 itens, Página 2 com 10).
+ */
+export function getSemanalPageGridConfig(
+  gridConfig: EncarteSemanalGridConfig = DEFAULT_ENCARTE_SEMANAL_GRID,
+  pageNumber = 1
+): EncarteSemanalGridConfig {
+  const customCount = gridConfig.perPageItems?.[pageNumber];
+  const baseCount = gridConfig.itemsPerPage || gridConfig.columnsCount * gridConfig.rowsCount || 20;
+  const count = typeof customCount === "number" && customCount > 0 ? customCount : baseCount;
+
+  if (count === baseCount) {
+    return {
+      ...gridConfig,
+      itemsPerPage: count,
+    };
+  }
+
+  const autoCols =
+    count <= 2 ? count : count <= 4 ? 2 : count <= 8 ? 3 : count <= 20 ? 4 : count <= 25 ? 5 : 6;
+  const autoRows = Math.max(1, Math.ceil(count / autoCols));
+
+  return {
+    ...gridConfig,
+    itemsPerPage: count,
+    columnsCount: autoCols,
+    rowsCount: autoRows,
+  };
+}
+
+/**
+ * Calcula o índice global inicial (slotIndex) de uma página considerando quantidades individuais por página.
+ */
+export function getSemanalPageStartOffset(
+  gridConfig: EncarteSemanalGridConfig = DEFAULT_ENCARTE_SEMANAL_GRID,
+  pageNumber = 1
+): number {
+  let offset = 0;
+  for (let p = 1; p < pageNumber; p++) {
+    offset += getSemanalPageGridConfig(gridConfig, p).itemsPerPage;
+  }
+  return offset;
+}
+
 export interface SemanalPhotosResolution {
   photo1: string;
   photo2: string;

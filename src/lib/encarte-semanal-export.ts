@@ -12,6 +12,7 @@ import type {
 } from "@/types/encarte-semanal";
 import {
   calculateEncarteSemanalGridCells,
+  getSemanalPageGridConfig,
   resolveSemanalCellPhotos,
 } from "./encarte-semanal-layout";
 import { computeSemanalTwoPhotoLayout } from "./encarte-semanal-editing";
@@ -476,7 +477,11 @@ export async function exportAllEncarteSemanalPagesAsZip(
   for (let i = 0; i < pages.length; i++) {
     const pageNum = i + 1;
     const pageProducts = pages[i];
-    const canvas = await renderEncarteSemanalPageToCanvas(pageProducts, config);
+    const pageConfig: EncarteSemanalConfig = {
+      ...config,
+      gridConfig: getSemanalPageGridConfig(config.gridConfig, pageNum),
+    };
+    const canvas = await renderEncarteSemanalPageToCanvas(pageProducts, pageConfig);
     const blob = await canvasToBlob(canvas);
     const filename = `encarte_semanal_${dateStr}_pag_${pageNum}.png`;
     zip.file(filename, blob);

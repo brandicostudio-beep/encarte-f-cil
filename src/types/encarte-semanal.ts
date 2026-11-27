@@ -57,6 +57,7 @@ export interface EncarteSemanalGridConfig {
   columnsCount: number;          // 4
   rowsCount: number;             // 5
   itemsPerPage: number;          // 20
+  perPageItems?: Record<number, number>; // Quantidade personalizada por página (ex: { 1: 18, 2: 10 })
   barHeight: number;             // 54
   barColor: string;              // "#F6E0A6"
   barTextColor: string;          // "#7A0D12"
