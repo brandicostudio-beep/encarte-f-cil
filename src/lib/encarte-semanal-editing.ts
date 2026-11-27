@@ -74,12 +74,12 @@ export function computeSemanalTwoPhotoLayout(params: {
   const s2 = rawScale2 > 10 ? rawScale2 / 100 : rawScale2 || 1;
 
   const availableW = Math.max(20, boxWidth - 16);
-  const availableH = Math.max(20, photoAreaHeight - 14);
+  const availableH = Math.max(20, photoAreaHeight - 16);
   const isWidePair = aspect1 > 1.35 && aspect2 > 1.35;
 
   const fitBaseSize = (aspect: number) => {
     const maxItemW = availableW * (isWidePair ? 0.78 : 0.62);
-    const maxItemH = availableH * (isWidePair ? 0.56 : 0.94);
+    const maxItemH = availableH * (isWidePair ? 0.56 : 0.92);
     let w = maxItemW;
     let h = w / aspect;
     if (h > maxItemH) {
@@ -113,21 +113,18 @@ export function computeSemanalTwoPhotoLayout(params: {
   const size1 = { w: base1.w * s1, h: base1.h * s1 };
   const size2 = { w: base2.w * s2, h: base2.h * s2 };
 
-  // Centraliza verticalmente quando as fotos forem baixas/horizontais para não ficarem coladas no rodapé
+  // Centraliza verticalmente dentro da área da foto para manter respiro igual no topo e na base
   let baseY1: number;
   let baseY2: number;
   if (isWidePair) {
     const stepY = Math.min(Math.max(base1.h, base2.h) * 0.72, availableH * 0.38);
     const pairH = Math.max(base1.h, stepY + base2.h);
-    const pairTopY = Math.max(6, (photoAreaHeight - pairH) / 2);
+    const pairTopY = Math.max(8, (photoAreaHeight - pairH) / 2);
     baseY1 = pairTopY + (base1.h - size1.h) / 2;
     baseY2 = pairTopY + stepY + (base2.h - size2.h) / 2;
   } else {
-    const tallestBase = Math.max(base1.h, base2.h);
-    const centeredOffset1 = tallestBase < availableH * 0.78 ? (photoAreaHeight - size1.h) / 2 : barY - size1.h + overlapY;
-    const centeredOffset2 = tallestBase < availableH * 0.78 ? (photoAreaHeight - size2.h) / 2 : barY - size2.h + overlapY;
-    baseY1 = centeredOffset1;
-    baseY2 = centeredOffset2;
+    baseY1 = (photoAreaHeight - size1.h) / 2;
+    baseY2 = (photoAreaHeight - size2.h) / 2;
   }
 
   return {

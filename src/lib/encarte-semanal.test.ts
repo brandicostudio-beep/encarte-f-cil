@@ -771,11 +771,16 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     expect(layout.photo2.x).toBeLessThan(layout.photo1.x + layout.photo1.width);
     expect(layout.photo2.x).toBeGreaterThan(layout.photo1.x);
 
-    // Conjunto centralizado com respiro nas laterais
+    // Conjunto centralizado com respiro igual nas laterais e topo/base
     const leftMargin = layout.photo1.x;
     const rightMargin = 250 - (layout.photo2.x + layout.photo2.width);
     expect(leftMargin).toBeGreaterThanOrEqual(8);
     expect(leftMargin).toBeCloseTo(rightMargin, 1);
+
+    const topMargin = layout.photo1.y;
+    const bottomMargin = 220 - (layout.photo1.y + layout.photo1.height);
+    expect(topMargin).toBeGreaterThanOrEqual(8);
+    expect(topMargin).toBeCloseTo(bottomMargin, 1);
 
     // Redimensionar Foto 1 não pode mover Foto 2, e redimensionar Foto 2 não pode mover Foto 1
     const scaled1 = computeSemanalTwoPhotoLayout({

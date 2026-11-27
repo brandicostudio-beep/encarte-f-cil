@@ -609,7 +609,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
               style={{
                 maxWidth: `${(width - 24) * 0.88 * scale1}px`,
                 maxHeight: `${(photoAreaHeight - 16) * scale1}px`,
-                transform: `translate(${curOffsetX1}px, ${overlapY + curOffsetY1}px) ${
+                transform: `translate(${curOffsetX1}px, ${curOffsetY1}px) ${
                   product.flipHorizontal ? "scaleX(-1)" : ""
                 }`,
                 zIndex: 11,
