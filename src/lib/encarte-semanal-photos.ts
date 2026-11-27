@@ -300,7 +300,7 @@ export function findKnownPhotoForCode(code: string): string | undefined {
 }
 
 /**
- * Busca foto apenas nas prioridades 1 a 3 (Pasta Local > Validade/Encartes > Drive Cache),
+ * Busca foto apenas nas prioridades locais/Drive (Pasta Local > Drive Cache > Validade/Encartes sem CDN branco),
  * sem recorrer ao fallback externo da Cescom.
  */
 export function findLocalOrCachedPhotoForCode(code: string): string | undefined {
@@ -315,11 +315,24 @@ export function findLocalOrCachedPhotoForCode(code: string): string | undefined 
     return localPhoto.trim();
   }
 
-  // 2. Fotos do Acompanhamento de Validade / mapa de encartes salvos
+  // 2. Cache do Google Drive (PNGs baixados da pasta oficial FOTOS PALM CESCOM)
+  try {
+    const cached = getCachedPhoto(cleanCode) || getCachedPhoto(normalizedNum);
+    if (cached && cached.dataUrl) return cached.dataUrl;
+  } catch {
+    /* ignore */
+  }
+
+  // 3. Fotos do Acompanhamento de Validade / mapa de encartes salvos (ignora URLs de fundo branco da Cescom)
   try {
     const encarteMap = getActiveEncartePhotoMap();
     const encartePhoto = encarteMap.get(cleanCode) || encarteMap.get(normalizedNum);
-    if (encartePhoto && encartePhoto.trim()) {
+    if (
+      encartePhoto &&
+      encartePhoto.trim() &&
+      !encartePhoto.includes("agilecdn.com.br") &&
+      !encartePhoto.includes("cescom.com.br")
+    ) {
       return encartePhoto.trim();
     }
   } catch (err) {
@@ -332,18 +345,15 @@ export function findLocalOrCachedPhotoForCode(code: string): string | undefined 
       const found = snapshot.lotes.find(
         (l) => l.codprod && l.codprod.trim().toLowerCase() === cleanLower
       );
-      if (found && found.foto && !found.foto.includes("agilecdn.com.br")) {
+      if (
+        found &&
+        found.foto &&
+        !found.foto.includes("agilecdn.com.br") &&
+        !found.foto.includes("cescom.com.br")
+      ) {
         return found.foto;
       }
     }
-  } catch {
-    /* ignore */
-  }
-
-  // 3. Cache do Google Drive
-  try {
-    const cached = getCachedPhoto(cleanCode) || getCachedPhoto(normalizedNum);
-    if (cached && cached.dataUrl) return cached.dataUrl;
   } catch {
     /* ignore */
   }

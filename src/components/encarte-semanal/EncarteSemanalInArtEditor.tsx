@@ -135,26 +135,41 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       setSuggestions(results);
       setShowSuggestions(results.length > 0);
 
-      // Se for código de 3+ dígitos não encontrado na planilha/catálogo local, consulta pasta local / Drive / site Cescom
-      if (cleanTerm.length >= 3 && results.length === 0) {
-        setIsSearchingCescom(true);
-        Promise.all([
-          fetchCescomProductOnline(cleanTerm),
-          fetchLocalFolderHandlePhotoForCode(cleanTerm).then(
-            (p) => p || findLocalOrCachedPhotoForCode(cleanTerm) || fetchSingleDrivePhotoForCode(cleanTerm)
-          ),
-        ]).then(([online, priorityPhoto]) => {
-          if (active && online) {
-            setSuggestions([
-              {
-                ...online,
-                image: priorityPhoto || resolveBestPhotoForCode(cleanTerm, online.image),
-              },
-            ]);
-            setShowSuggestions(true);
-          }
-          if (active) setIsSearchingCescom(false);
-        });
+      // Se for código de 3+ dígitos, verifica também Pasta Local e Google Drive para garantir PNG sem fundo
+      if (cleanTerm.length >= 3) {
+        const hasMissingOrCescomImg =
+          results.length === 0 ||
+          results.some((r) => !r.image || r.image.includes("agilecdn.com.br") || r.image.includes("cescom.com.br"));
+
+        if (results.length === 0 || hasMissingOrCescomImg) {
+          setIsSearchingCescom(true);
+          Promise.all([
+            results.length === 0 ? fetchCescomProductOnline(cleanTerm) : Promise.resolve(null),
+            fetchLocalFolderHandlePhotoForCode(cleanTerm).then(
+              (p) => p || findLocalOrCachedPhotoForCode(cleanTerm) || fetchSingleDrivePhotoForCode(cleanTerm)
+            ),
+          ]).then(([online, priorityPhoto]) => {
+            if (!active) return;
+            if (online) {
+              setSuggestions([
+                {
+                  ...online,
+                  image: priorityPhoto || resolveBestPhotoForCode(cleanTerm, online.image),
+                },
+              ]);
+              setShowSuggestions(true);
+            } else if (priorityPhoto && results.length > 0) {
+              setSuggestions(
+                results.map((r) =>
+                  r.code.trim().toLowerCase() === cleanTerm.toLowerCase()
+                    ? { ...r, image: priorityPhoto }
+                    : r
+                )
+              );
+            }
+            setIsSearchingCescom(false);
+          });
+        }
       }
     } else {
       const popular = searchProductSuggestions("", 6);
@@ -228,9 +243,10 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
 
     let primaryCode = trimmed;
     let secCode: string | undefined = undefined;
-    let photo1 = image;
-    let photo2 = secondaryImage;
-    let newDesc = description.trim();
+    const isCodeChanged = trimmed !== (product?.code || "").trim();
+    let photo1 = isCodeChanged ? "" : image;
+    let photo2 = isCodeChanged ? "" : secondaryImage;
+    let newDesc = isCodeChanged ? "" : description.trim();
 
     if (parts.length >= 2) {
       primaryCode = parts[0];
