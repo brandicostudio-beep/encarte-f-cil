@@ -113,18 +113,19 @@ export function computeSemanalTwoPhotoLayout(params: {
   const size1 = { w: base1.w * s1, h: base1.h * s1 };
   const size2 = { w: base2.w * s2, h: base2.h * s2 };
 
-  // Centraliza verticalmente dentro da área da foto para manter respiro igual no topo e na base
+  // Centraliza verticalmente dentro da área da foto (ancorada em areaTopY = barY - photoAreaHeight) para manter respiro igual no topo e na base
+  const areaTopY = barY - photoAreaHeight;
   let baseY1: number;
   let baseY2: number;
   if (isWidePair) {
     const stepY = Math.min(Math.max(base1.h, base2.h) * 0.72, availableH * 0.38);
     const pairH = Math.max(base1.h, stepY + base2.h);
-    const pairTopY = Math.max(8, (photoAreaHeight - pairH) / 2);
+    const pairTopY = areaTopY + Math.max(8, (photoAreaHeight - pairH) / 2);
     baseY1 = pairTopY + (base1.h - size1.h) / 2;
     baseY2 = pairTopY + stepY + (base2.h - size2.h) / 2;
   } else {
-    baseY1 = (photoAreaHeight - size1.h) / 2;
-    baseY2 = (photoAreaHeight - size2.h) / 2;
+    baseY1 = areaTopY + (photoAreaHeight - size1.h) / 2;
+    baseY2 = areaTopY + (photoAreaHeight - size2.h) / 2;
   }
 
   return {

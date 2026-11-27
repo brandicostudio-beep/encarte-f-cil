@@ -168,12 +168,12 @@ export async function renderEncarteSemanalPageToCanvas(
         const scale2 = product.scale2
           ? (product.scale2 > 10 ? product.scale2 / 100 : product.scale2)
           : scale;
-        const offsetX2 = product.offsetX2 ?? offsetX;
-        const offsetY2 = product.offsetY2 ?? offsetY;
+        const offsetX2 = product.offsetX2 ?? 0;
+        const offsetY2 = product.offsetY2 ?? 0;
 
         const twoLayout = computeSemanalTwoPhotoLayout({
-          boxX: barX,
-          boxWidth: barW,
+          boxX: cell.x,
+          boxWidth: cell.width,
           photoAreaHeight: cell.photoAreaHeight,
           barY,
           aspect1,
@@ -235,8 +235,8 @@ export async function renderEncarteSemanalPageToCanvas(
           drawW = drawH * aspect;
         }
 
-        const drawX = barX + (barW - drawW) / 2 + offsetX;
-        const drawY = barY - drawH + overlapY + offsetY;
+        const drawX = cell.x + (cell.width - drawW) / 2 + offsetX;
+        const drawY = cell.y + (cell.photoAreaHeight - drawH) / 2 + offsetY;
 
         ctx.save();
         ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
