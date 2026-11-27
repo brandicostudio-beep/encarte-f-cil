@@ -217,8 +217,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
         }
       }
     } else {
-      const popular = searchProductSuggestions("", 6);
-      setSuggestions(popular);
+      setSuggestions([]);
       setShowSuggestions(false);
     }
 
@@ -733,10 +732,18 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
             ref={codeInputRef}
             value={codeQuery}
             onChange={(e) => {
-              setCodeQuery(e.target.value);
-              setShowSuggestions(true);
+              const val = e.target.value;
+              setCodeQuery(val);
+              setShowSuggestions(val.trim().length > 0);
             }}
-            onFocus={() => setShowSuggestions(true)}
+            onFocus={() => {
+              if (codeQuery.trim().length > 0) {
+                setShowSuggestions(true);
+              }
+            }}
+            onBlur={() => {
+              setTimeout(() => setShowSuggestions(false), 150);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -758,13 +765,23 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
             className="absolute left-0 right-0 top-full mt-1 bg-[#1a1a1a] border border-amber-500/40 rounded-lg shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-neutral-800"
             data-testid="in-art-suggestions-list"
           >
-            <div className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-amber-400/70 bg-black/40">
-              Sugestões / Catálogo Cescom ({suggestions.length})
+            <div className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-amber-400/70 bg-black/40 flex items-center justify-between">
+              <span>Sugestões / Catálogo Cescom ({suggestions.length})</span>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setShowSuggestions(false)}
+                className="text-neutral-400 hover:text-white px-1 cursor-pointer"
+                title="Fechar sugestões"
+              >
+                ×
+              </button>
             </div>
             {suggestions.map((item) => (
               <button
                 key={`${item.code}-${item.description}`}
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleSelectSuggestion(item)}
                 className="w-full flex items-center gap-2 p-2 hover:bg-amber-500/15 text-left transition-colors cursor-pointer group"
               >
