@@ -92,26 +92,46 @@ export async function fetchLocalFolderHandlePhotoForCode(code: string): Promise<
   const existing = getLocalFolderPhotoForCode(code);
   if (existing) return existing;
 
-  if (!code || localFolderHandleMap.size === 0) return undefined;
   const clean = code.trim().toLowerCase();
   const stripped = /^\d+$/.test(clean) ? String(parseInt(clean, 10)) : clean;
   const fileEntry = localFolderHandleMap.get(clean) || localFolderHandleMap.get(stripped);
-  if (!fileEntry?.handle?.getFile) return undefined;
-
-  try {
-    const fileObj: File = await fileEntry.handle.getFile();
-    const rawDataUrl = await fileToDataUrl(fileObj);
-    if (rawDataUrl) {
-      const dataUrl = await trimEmptyMarginsSafe(rawDataUrl);
-      localFolderPhotoMap.set(clean, {
-        dataUrl,
-        suffixOrder: fileEntry.suffixOrder ?? 0,
-        isPng: /\.png$/i.test(fileEntry.name || ""),
-      });
-      return dataUrl;
+  if (fileEntry?.handle?.getFile) {
+    try {
+      const fileObj: File = await fileEntry.handle.getFile();
+      const rawDataUrl = await fileToDataUrl(fileObj);
+      if (rawDataUrl) {
+        const dataUrl = await trimEmptyMarginsSafe(rawDataUrl);
+        localFolderPhotoMap.set(clean, {
+          dataUrl,
+          suffixOrder: fileEntry.suffixOrder ?? 0,
+          isPng: /\.png$/i.test(fileEntry.name || ""),
+        });
+        return dataUrl;
+      }
+    } catch {
+      /* ignore */
     }
-  } catch {
-    /* ignore */
+  }
+
+  // Fallback nativo quando rodando localmente: lê diretamente de C:\Users\JOAO_VITOR\Desktop\fotos
+  if (typeof window !== "undefined" && typeof fetch === "function") {
+    try {
+      const res = await fetch(`/api/local-photos?code=${encodeURIComponent(code.trim())}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.ok && data.dataUrl) {
+          const trimmed = await trimEmptyMarginsSafe(data.dataUrl);
+          localFolderPhotoMap.set(clean, {
+            dataUrl: trimmed,
+            suffixOrder: 0,
+            isPng: /\.png$/i.test(data.filename || ""),
+          });
+          return trimmed;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
   }
   return undefined;
 }

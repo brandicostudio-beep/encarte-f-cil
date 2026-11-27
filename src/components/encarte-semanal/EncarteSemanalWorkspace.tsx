@@ -39,6 +39,8 @@ import {
 import {
   isFileSystemAccessSupported,
   saveFolderHandle,
+  getSavedFolderHandle,
+  verifyFolderPermission,
   indexLocalFolder,
   crossLocalFolderWithCampaign,
   loadCampaignPhotosFromFolder,
@@ -186,7 +188,70 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   const [driveBarOpen, setDriveBarOpen] = useState<boolean>(false);
   const [driveUrlInput, setDriveUrlInput] = useState<string>(OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL);
   const [isSyncingDrive, setIsSyncingDrive] = useState<boolean>(false);
+  const [savedFolderName, setSavedFolderName] = useState<string | null>(null);
+  const savedFolderHandleRef = useRef<any>(null);
   const quickFolderInputRef = useRef<HTMLInputElement>(null);
+
+  const connectFromDirectoryHandle = async (dirHandle: any, silent = false) => {
+    const knownCodes = products.map((p) => p.code);
+    const indexResult = await indexLocalFolder(dirHandle, { knownCodes });
+    if (indexResult.files.length === 0) {
+      if (!silent) {
+        setExportMessage("Nenhuma imagem (.png, .jpg) encontrada na pasta selecionada.");
+        setTimeout(() => setExportMessage(null), 4000);
+      }
+      return;
+    }
+    registerLocalFolderHandles(indexResult.files, indexResult.folderName || "Pasta Local");
+
+    const tempEncarteProducts: EncarteProduct[] = products.map((p) => ({
+      id: p.id,
+      code: p.code,
+      description: p.description,
+      image: p.image || "",
+      name: p.description,
+      packaging: "",
+      validity: "",
+      price: "",
+      badge: "nenhum",
+      unit: "UN",
+      included: true,
+    }));
+    const crossing = crossLocalFolderWithCampaign(indexResult.files, tempEncarteProducts);
+    const { loadedPhotos } = await loadCampaignPhotosFromFolder(crossing, tempEncarteProducts);
+    if (loadedPhotos.length > 0) {
+      registerLocalFolderPhotos(loadedPhotos, indexResult.folderName || "Pasta Local");
+    }
+    setLocalFolderStatus(getLocalFolderStatus());
+
+    const { updatedProducts, resolvedCount } = autoResolvePhotosForSemanalProducts(products);
+    if (resolvedCount > 0) {
+      pushHistoryState(updatedProducts);
+      setProducts(updatedProducts);
+      saveEncarteSemanalProducts(updatedProducts);
+    }
+    if (!silent) {
+      setExportMessage(
+        `📁 Pasta Conectada: ${indexResult.files.length} fotos encontradas${resolvedCount > 0 ? ` (${resolvedCount} aplicada(s))` : ""}.`
+      );
+      setTimeout(() => setExportMessage(null), 4500);
+    }
+  };
+
+  // Restaura automaticamente a última pasta local conectada (ex: C:\Users\JOAO_VITOR\Desktop\fotos) ao abrir o app
+  useEffect(() => {
+    if (!isFileSystemAccessSupported()) return;
+    getSavedFolderHandle().then(async (saved) => {
+      if (saved && saved.handle) {
+        savedFolderHandleRef.current = saved.handle;
+        setSavedFolderName(saved.folderName);
+        const perm = await verifyFolderPermission(saved.handle, false);
+        if (perm === "granted") {
+          void connectFromDirectoryHandle(saved.handle, true);
+        }
+      }
+    });
+  }, []);
 
   const handleSyncDriveFromToolbar = async (overrideUrl?: string) => {
     const targetUrl = (overrideUrl || driveUrlInput || OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL).trim();
@@ -235,49 +300,20 @@ export const EncarteSemanalWorkspace: React.FC = () => {
       return;
     }
     try {
+      // Se já houver pasta salva aguardando apenas confirmação de leitura, reconecta em 1 clique sem abrir o seletor
+      if (savedFolderHandleRef.current && !localFolderStatus.connected) {
+        const perm = await verifyFolderPermission(savedFolderHandleRef.current, true);
+        if (perm === "granted") {
+          await connectFromDirectoryHandle(savedFolderHandleRef.current, false);
+          return;
+        }
+      }
       const dirHandle = await (window as any).showDirectoryPicker();
       if (!dirHandle) return;
       await saveFolderHandle(dirHandle);
-      const knownCodes = products.map((p) => p.code);
-      const indexResult = await indexLocalFolder(dirHandle, { knownCodes });
-      if (indexResult.files.length === 0) {
-        setExportMessage("Nenhuma imagem (.png, .jpg) encontrada na pasta selecionada.");
-        setTimeout(() => setExportMessage(null), 4000);
-        return;
-      }
-      // Registra todos os handles indexados para uso imediato ao digitar códigos (mesmo no Modo Manual)
-      registerLocalFolderHandles(indexResult.files, indexResult.folderName || "Pasta Local");
-
-      const tempEncarteProducts: EncarteProduct[] = products.map((p) => ({
-        id: p.id,
-        code: p.code,
-        description: p.description,
-        image: p.image || "",
-        name: p.description,
-        packaging: "",
-        validity: "",
-        price: "",
-        badge: "nenhum",
-        unit: "UN",
-        included: true,
-      }));
-      const crossing = crossLocalFolderWithCampaign(indexResult.files, tempEncarteProducts);
-      const { loadedPhotos } = await loadCampaignPhotosFromFolder(crossing, tempEncarteProducts);
-      if (loadedPhotos.length > 0) {
-        registerLocalFolderPhotos(loadedPhotos, indexResult.folderName || "Pasta Local");
-      }
-      setLocalFolderStatus(getLocalFolderStatus());
-
-      const { updatedProducts, resolvedCount } = autoResolvePhotosForSemanalProducts(products);
-      if (resolvedCount > 0) {
-        pushHistoryState(updatedProducts);
-        setProducts(updatedProducts);
-        saveEncarteSemanalProducts(updatedProducts);
-      }
-      setExportMessage(
-        `📁 Pasta Conectada: ${indexResult.files.length} fotos encontradas${resolvedCount > 0 ? ` (${resolvedCount} aplicada(s))` : ""}.`
-      );
-      setTimeout(() => setExportMessage(null), 4500);
+      savedFolderHandleRef.current = dirHandle;
+      setSavedFolderName(dirHandle.name || "Pasta Local");
+      await connectFromDirectoryHandle(dirHandle, false);
     } catch (err: any) {
       if (err?.name !== "AbortError") {
         quickFolderInputRef.current?.click();
@@ -1070,6 +1106,8 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                 <FolderOpen className="h-3.5 w-3.5 mr-1 text-amber-400" />
                 {localFolderStatus.connected
                   ? `📁 Pasta Conectada: ${localFolderStatus.photoCount} fotos encontradas`
+                  : savedFolderName
+                  ? `Reconectar Pasta: ${savedFolderName}`
                   : "Conectar Pasta de Fotos"}
               </Button>
 

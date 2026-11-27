@@ -86,6 +86,57 @@ export default {
         });
       }
 
+      // Leitura nativa da pasta local padrão (quando executado localmente no Windows)
+      if (reqUrl.pathname === "/api/local-photos") {
+        const code = reqUrl.searchParams.get("code")?.trim();
+        if (!code) {
+          return new Response(JSON.stringify({ ok: false, error: "Missing code" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        try {
+          const fs = await import("node:fs");
+          const path = await import("node:path");
+          const baseDir = process.env.LOCAL_PHOTOS_DIR || "C:\\Users\\JOAO_VITOR\\Desktop\\fotos";
+          if (!fs.existsSync(baseDir)) {
+            return new Response(JSON.stringify({ ok: false }), {
+              status: 404,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          const clean = code.toLowerCase();
+          const stripped = /^\d+$/.test(clean) ? String(parseInt(clean, 10)) : clean;
+          const entries = fs.readdirSync(baseDir);
+          const match = entries.find((name) => {
+            const m = name.match(/^([^.\-_]+)(?:[-_]\d+)?\.(png|jpe?g|webp)$/i);
+            if (!m) return false;
+            const stem = m[1].trim().toLowerCase();
+            return stem === clean || stem === stripped;
+          });
+          if (!match) {
+            return new Response(JSON.stringify({ ok: false }), {
+              status: 404,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          const fullPath = path.join(baseDir, match);
+          const buf = fs.readFileSync(fullPath);
+          const ext = path.extname(match).toLowerCase().replace(".", "");
+          const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png";
+          const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
+          return new Response(JSON.stringify({ ok: true, filename: match, dataUrl }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch {
+          return new Response(JSON.stringify({ ok: false }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      }
+
       // Busca oficial de produto no site https://www.cescom.com.br por código ou descrição
       if (reqUrl.pathname === "/api/cescom-product") {
         const code = reqUrl.searchParams.get("code")?.trim();
