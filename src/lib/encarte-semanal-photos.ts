@@ -11,9 +11,21 @@ import {
   processPhotoBankUpload,
   type LoadedPhoto,
 } from "./photo-bank";
-import { getCachedPhoto } from "./drive-cache";
+import {
+  getCachedPhoto,
+  setCachedPhoto,
+  isPhotoCacheValid,
+} from "./drive-cache";
 import { getActiveSnapshot, getActiveEncartePhotoMap } from "./painel-validade-storage";
 import { getThumbnailFallbackUrl } from "./parse-product";
+import {
+  indexDriveFolder,
+  downloadCampaignDrivePhotos,
+} from "./product.functions";
+
+export const OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_ID = "1E-MmRqMVnbm6LsOyV7Tc9E1crOhZTF5T";
+export const OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL =
+  "https://drive.google.com/drive/folders/1E-MmRqMVnbm6LsOyV7Tc9E1crOhZTF5T";
 
 export interface LocalFolderPhotoStatus {
   connected: boolean;
@@ -287,6 +299,175 @@ export function resolveBestPhotoForCode(
   if (localOrCached) return localOrCached;
   if (onlineImage && onlineImage.trim()) return onlineImage.trim();
   return findKnownPhotoForCode(code);
+}
+
+export interface SyncDrivePhotosResult {
+  ok: boolean;
+  photoByCode: Map<string, string>;
+  downloadedCount: number;
+  cachedHitsCount: number;
+  error?: string;
+  errorCode?: string;
+}
+
+/**
+ * Sincroniza fotos de uma pasta do Google Drive (padrão: FOTOS PALM CESCOM) para os códigos informados,
+ * salvando cada foto baixada no cache local (setCachedPhoto) para carregamento instantâneo futuro.
+ */
+export async function syncSemanalPhotosFromDriveFolder(params: {
+  url?: string;
+  codes: string[];
+}): Promise<SyncDrivePhotosResult> {
+  const folderUrl = (params.url || OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL).trim();
+  const cleanCodes = Array.from(
+    new Set(params.codes.map((c) => c.trim()).filter(Boolean))
+  );
+  const photoByCode = new Map<string, string>();
+  let cachedHitsCount = 0;
+  let downloadedCount = 0;
+
+  if (cleanCodes.length === 0) {
+    return { ok: true, photoByCode, downloadedCount: 0, cachedHitsCount: 0 };
+  }
+
+  try {
+    const indexRes = await indexDriveFolder({
+      data: {
+        url: folderUrl,
+        knownCodes: cleanCodes,
+      },
+    });
+
+    if (!indexRes || !indexRes.ok) {
+      return {
+        ok: false,
+        photoByCode,
+        downloadedCount: 0,
+        cachedHitsCount: 0,
+        error:
+          (indexRes as { errorMessage?: string; error?: string })?.errorMessage ||
+          (indexRes as { error?: string })?.error ||
+          "Não foi possível acessar a pasta do Google Drive.",
+        errorCode: (indexRes as { errorCode?: string })?.errorCode,
+      };
+    }
+
+    const wantedSet = new Set(cleanCodes.map((c) => c.toLowerCase()));
+    const bestByCode = new Map<
+      string,
+      { id: string; code: string; filename: string; modifiedTime?: string; suffixOrder: number }
+    >();
+
+    for (const item of indexRes.indexedPhotos || []) {
+      const codeLower = (item.code || "").trim().toLowerCase();
+      if (!codeLower || !wantedSet.has(codeLower)) continue;
+      const existing = bestByCode.get(codeLower);
+      const itemOrder = item.suffixOrder ?? 0;
+      const isPng = /\.png$/i.test(item.filename || "");
+      const existingIsPng = existing ? /\.png$/i.test(existing.filename || "") : false;
+
+      if (
+        !existing ||
+        itemOrder < existing.suffixOrder ||
+        (itemOrder === existing.suffixOrder && isPng && !existingIsPng)
+      ) {
+        bestByCode.set(codeLower, {
+          id: item.id,
+          code: item.code.trim(),
+          filename: item.filename,
+          modifiedTime: item.modifiedTime,
+          suffixOrder: itemOrder,
+        });
+      }
+    }
+
+    const itemsToDownload: Array<{
+      id: string;
+      code: string;
+      filename: string;
+      modifiedTime?: string;
+      isPrimary?: boolean;
+    }> = [];
+
+    for (const [, item] of bestByCode.entries()) {
+      if (isPhotoCacheValid(item.code, item.id, item.modifiedTime)) {
+        const cached = getCachedPhoto(item.code);
+        if (cached?.dataUrl) {
+          photoByCode.set(item.code.toLowerCase(), cached.dataUrl);
+          cachedHitsCount++;
+          continue;
+        }
+      }
+      itemsToDownload.push({
+        id: item.id,
+        code: item.code,
+        filename: item.filename,
+        modifiedTime: item.modifiedTime,
+        isPrimary: true,
+      });
+    }
+
+    if (itemsToDownload.length > 0) {
+      const dlRes = await downloadCampaignDrivePhotos({
+        data: { items: itemsToDownload },
+      });
+
+      if (dlRes && dlRes.ok && Array.isArray(dlRes.photos)) {
+        for (const p of dlRes.photos) {
+          if (!p.code || !p.dataUrl) continue;
+          setCachedPhoto({
+            code: p.code,
+            fileId: p.fileId,
+            filename: p.filename,
+            modifiedTime: p.modifiedTime,
+            dataUrl: p.dataUrl,
+            cachedAt: Date.now(),
+          });
+          photoByCode.set(p.code.trim().toLowerCase(), p.dataUrl);
+          downloadedCount++;
+        }
+      }
+    }
+
+    return {
+      ok: true,
+      photoByCode,
+      downloadedCount,
+      cachedHitsCount,
+    };
+  } catch (err: any) {
+    return {
+      ok: false,
+      photoByCode,
+      downloadedCount: 0,
+      cachedHitsCount: 0,
+      error: err?.message || "Erro ao sincronizar pasta do Google Drive.",
+    };
+  }
+}
+
+/**
+ * Busca dinamicamente a foto de um único código na pasta oficial do Google Drive (FOTOS PALM CESCOM)
+ * quando não encontrada no cache local, salvando no cache (setCachedPhoto) após baixar.
+ */
+export async function fetchSingleDrivePhotoForCode(
+  code: string,
+  folderUrl = OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL
+): Promise<string | undefined> {
+  const clean = (code || "").trim();
+  if (!clean) return undefined;
+
+  const localOrCached = findLocalOrCachedPhotoForCode(clean);
+  if (localOrCached) return localOrCached;
+
+  const res = await syncSemanalPhotosFromDriveFolder({
+    url: folderUrl,
+    codes: [clean],
+  });
+  if (res.ok) {
+    return res.photoByCode.get(clean.toLowerCase());
+  }
+  return undefined;
 }
 
 /**

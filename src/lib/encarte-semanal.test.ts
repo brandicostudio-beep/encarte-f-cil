@@ -680,4 +680,69 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
       clearLocalFolderPhotos();
     }
   });
+
+  // =========================================================================
+  // Teste 19: Integração Pasta Oficial Google Drive "FOTOS PALM CESCOM"
+  // =========================================================================
+  it("Teste 19: Sincroniza pasta oficial FOTOS PALM CESCOM do Drive e salva no cache local", async () => {
+    const {
+      OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_ID,
+      OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL,
+      syncSemanalPhotosFromDriveFolder,
+    } = await import("./encarte-semanal-photos");
+    const productFns = await import("./product.functions");
+    const { getCachedPhoto, clearDrivePhotoCache } = await import("./drive-cache");
+
+    expect(OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_ID).toBe("1E-MmRqMVnbm6LsOyV7Tc9E1crOhZTF5T");
+    expect(OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL).toBe(
+      "https://drive.google.com/drive/folders/1E-MmRqMVnbm6LsOyV7Tc9E1crOhZTF5T"
+    );
+
+    clearDrivePhotoCache();
+    const indexSpy = vi.spyOn(productFns, "indexDriveFolder" as any).mockResolvedValue({
+      ok: true,
+      totalImages: 1,
+      indexedPhotos: [
+        {
+          id: "drive-file-25710",
+          code: "25710",
+          filename: "25710.png",
+          modifiedTime: "2026-11-27T10:00:00Z",
+          suffixOrder: 0,
+        },
+      ],
+    });
+    const dlSpy = vi.spyOn(productFns, "downloadCampaignDrivePhotos" as any).mockResolvedValue({
+      ok: true,
+      photos: [
+        {
+          fileId: "drive-file-25710",
+          code: "25710",
+          filename: "25710.png",
+          modifiedTime: "2026-11-27T10:00:00Z",
+          dataUrl: "data:image/png;base64,DRIVE_PALM_CESCOM_PNG",
+        },
+      ],
+      corruptFiles: [],
+    });
+
+    try {
+      const res1 = await syncSemanalPhotosFromDriveFolder({ codes: ["25710"] });
+      expect(res1.ok).toBe(true);
+      expect(res1.downloadedCount).toBe(1);
+      expect(res1.photoByCode.get("25710")).toBe("data:image/png;base64,DRIVE_PALM_CESCOM_PNG");
+      expect(getCachedPhoto("25710")?.dataUrl).toBe("data:image/png;base64,DRIVE_PALM_CESCOM_PNG");
+
+      // Segunda chamada deve usar o cache local sem baixar novamente
+      const res2 = await syncSemanalPhotosFromDriveFolder({ codes: ["25710"] });
+      expect(res2.ok).toBe(true);
+      expect(res2.cachedHitsCount).toBe(1);
+      expect(res2.downloadedCount).toBe(0);
+      expect(dlSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      indexSpy.mockRestore();
+      dlSpy.mockRestore();
+      clearDrivePhotoCache();
+    }
+  });
 });

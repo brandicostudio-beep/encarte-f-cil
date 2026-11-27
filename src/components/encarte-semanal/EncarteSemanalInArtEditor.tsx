@@ -10,6 +10,8 @@ import {
 } from "@/lib/encarte-semanal-catalog";
 import {
   findKnownPhotoForCode,
+  findLocalOrCachedPhotoForCode,
+  fetchSingleDrivePhotoForCode,
   resolveBestPhotoForCode,
   copyProductCodeToClipboard,
 } from "@/lib/encarte-semanal-photos";
@@ -233,10 +235,16 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       }
 
       if (!photo1) {
-        photo1 = resolveBestPhotoForCode(primaryCode, lookedUp1.image);
+        photo1 =
+          findLocalOrCachedPhotoForCode(primaryCode) ||
+          (await fetchSingleDrivePhotoForCode(primaryCode)) ||
+          resolveBestPhotoForCode(primaryCode, lookedUp1.image);
       }
       if (!photo2) {
-        photo2 = resolveBestPhotoForCode(secCode, lookedUp2.image);
+        photo2 =
+          findLocalOrCachedPhotoForCode(secCode) ||
+          (await fetchSingleDrivePhotoForCode(secCode)) ||
+          resolveBestPhotoForCode(secCode, lookedUp2.image);
       }
       if (!newDesc) {
         const d1 = lookedUp1.description;
@@ -249,6 +257,12 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       }
     } else {
       let lookedUp = lookupProductByCode(trimmed);
+      // Busca primeiro no cache local e na pasta oficial do Google Drive antes do site Cescom
+      if (!photo1) {
+        photo1 =
+          findLocalOrCachedPhotoForCode(trimmed) ||
+          (await fetchSingleDrivePhotoForCode(trimmed));
+      }
       // Se não estiver na planilha/catálogo local, consulta o site https://www.cescom.com.br/
       if (!newDesc || newDesc.startsWith("PRODUTO ") || !lookedUp.description || lookedUp.description.startsWith("PRODUTO ")) {
         setIsSearchingCescom(true);

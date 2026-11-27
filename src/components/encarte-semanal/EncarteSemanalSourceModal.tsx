@@ -39,6 +39,8 @@ import {
   autoResolvePhotosForSemanalProducts,
   registerLocalFolderPhotos,
   getLocalFolderStatus,
+  OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL,
+  syncSemanalPhotosFromDriveFolder,
 } from "@/lib/encarte-semanal-photos";
 import { processPhotoBankUpload } from "@/lib/photo-bank";
 import {
@@ -74,6 +76,7 @@ export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModa
   const [isParsing, setIsParsing] = useState(false);
   const [isMatchingPhotos, setIsMatchingPhotos] = useState(false);
   const [photoMatchMessage, setPhotoMatchMessage] = useState<string | null>(null);
+  const [driveUrl, setDriveUrl] = useState<string>(OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{
@@ -172,17 +175,43 @@ export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModa
       const { updatedProducts, resolvedCount } = autoResolvePhotosForSemanalProducts(result.products);
       setStagedProducts(updatedProducts);
 
-      if (resolvedCount > 0) {
-        setPhotoMatchMessage(
-          `✓ ${resolvedCount} foto(s) puxadas automaticamente do Acompanhamento de Validade / Cescom CDN.`
-        );
-      } else {
-        setPhotoMatchMessage(null);
-      }
-
       // Avança para a aba de fotos se houver produtos
       if (updatedProducts.length > 0) {
         setActiveTab("fotos");
+      }
+
+      // Tenta buscar fotos pendentes (ou em fallback CDN) na pasta oficial do Google Drive FOTOS PALM CESCOM
+      const codesToSync = updatedProducts
+        .filter((p) => p.code && (!p.image || p.image.includes("agilecdn.com.br")))
+        .map((p) => p.code);
+
+      let driveDownloaded = 0;
+      if (codesToSync.length > 0) {
+        const driveRes = await syncSemanalPhotosFromDriveFolder({
+          url: driveUrl,
+          codes: codesToSync,
+        });
+        if (driveRes.ok && driveRes.photoByCode.size > 0) {
+          setStagedProducts((prev) =>
+            prev.map((p) => {
+              const drivePhoto = p.code ? driveRes.photoByCode.get(p.code.trim().toLowerCase()) : undefined;
+              if (drivePhoto) {
+                driveDownloaded++;
+                return { ...p, image: drivePhoto };
+              }
+              return p;
+            })
+          );
+        }
+      }
+
+      const totalFound = resolvedCount + driveDownloaded;
+      if (totalFound > 0) {
+        setPhotoMatchMessage(
+          `✓ ${totalFound} foto(s) puxadas automaticamente (Pasta Local / Drive / Validade).`
+        );
+      } else {
+        setPhotoMatchMessage(null);
       }
     } catch (err: any) {
       setWarnings([`Erro ao ler arquivo: ${err?.message || "Formato inválido"}`]);
@@ -318,12 +347,19 @@ export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModa
     }
   };
 
-  // Sincronizar com cache de fotos conhecidas
-  const handleSyncDriveCache = () => {
+  // Sincronizar com Google Drive (pasta oficial FOTOS PALM CESCOM ou link colado) e cache local
+  const handleSyncDriveCache = async (overrideUrl?: string) => {
+    const targetUrl = (overrideUrl || driveUrl || OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL).trim();
     setIsMatchingPhotos(true);
     try {
       let matchedCount = 0;
-      const updated = stagedProducts.map((p) => {
+      const codesToFetchFromDrive: string[] = [];
+
+      const afterLocalCache = stagedProducts.map((p) => {
+        if (!p.code) return p;
+        if (!p.image || p.image.includes("agilecdn.com.br")) {
+          codesToFetchFromDrive.push(p.code);
+        }
         const photo = findKnownPhotoForCode(p.code);
         if (photo && !p.image) {
           matchedCount++;
@@ -332,14 +368,54 @@ export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModa
         return p;
       });
 
-      setStagedProducts(updated);
-      setPhotoMatchMessage(
-        matchedCount > 0
-          ? `✓ ${matchedCount} nova(s) foto(s) associada(s) a partir do cache/Drive.`
-          : "Nenhuma foto nova encontrada no cache."
-      );
+      setStagedProducts(afterLocalCache);
+
+      if (codesToFetchFromDrive.length > 0) {
+        const driveRes = await syncSemanalPhotosFromDriveFolder({
+          url: targetUrl,
+          codes: codesToFetchFromDrive,
+        });
+
+        if (!driveRes.ok) {
+          setPhotoMatchMessage(
+            matchedCount > 0
+              ? `✓ ${matchedCount} foto(s) do cache local. Drive: ${driveRes.error || "não conectado."}`
+              : `Aviso Drive: ${driveRes.error || "não foi possível conectar ao Google Drive."}`
+          );
+          return;
+        }
+
+        let driveApplied = 0;
+        if (driveRes.photoByCode.size > 0) {
+          setStagedProducts((prev) =>
+            prev.map((p) => {
+              const drivePhoto = p.code
+                ? driveRes.photoByCode.get(p.code.trim().toLowerCase())
+                : undefined;
+              if (drivePhoto && drivePhoto !== p.image) {
+                driveApplied++;
+                return { ...p, image: drivePhoto };
+              }
+              return p;
+            })
+          );
+        }
+
+        const total = matchedCount + driveApplied;
+        setPhotoMatchMessage(
+          total > 0
+            ? `✓ ${total} foto(s) associada(s) do Google Drive / cache (${driveRes.downloadedCount} baixada(s), ${driveRes.cachedHitsCount} em cache).`
+            : "Nenhuma foto nova encontrada na pasta do Google Drive para os códigos atuais."
+        );
+      } else {
+        setPhotoMatchMessage(
+          matchedCount > 0
+            ? `✓ ${matchedCount} nova(s) foto(s) associada(s) a partir do cache/Drive.`
+            : "Todos os produtos já possuem foto vinculada."
+        );
+      }
     } catch (err: any) {
-      setPhotoMatchMessage(`Erro ao sincronizar: ${err?.message || err}`);
+      setPhotoMatchMessage(`Erro ao sincronizar Drive: ${err?.message || err}`);
     } finally {
       setIsMatchingPhotos(false);
     }
@@ -797,26 +873,51 @@ export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModa
                 </Button>
               </div>
 
-              {/* Opção 3: Google Drive */}
+              {/* Opção 3: Google Drive (Pasta Oficial FOTOS PALM CESCOM ou link personalizado) */}
               <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 flex flex-col justify-between">
                 <div className="space-y-2">
                   <Cloud className="h-6 w-6 text-blue-400" />
-                  <p className="font-bold text-white text-xs">Google Drive</p>
+                  <p className="font-bold text-white text-xs">Google Drive (Palm Cescom)</p>
                   <p className="text-[11px] text-neutral-400 leading-relaxed">
-                    Utiliza o cache sincronizado das fotos salvas no navegador e Drive.
+                    Cole um link de pasta do Drive ou use a pasta oficial de PNGs com 1 clique.
                   </p>
+                  <Input
+                    type="url"
+                    value={driveUrl}
+                    onChange={(e) => setDriveUrl(e.target.value)}
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    className="h-7 text-[10px] bg-neutral-900 border-neutral-700 text-neutral-200 font-mono"
+                    aria-label="Link da pasta do Google Drive"
+                  />
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleSyncDriveCache}
-                  disabled={isMatchingPhotos}
-                  className="mt-3 bg-neutral-800 border-neutral-700 text-white hover:bg-neutral-700 text-xs w-full"
-                >
-                  <Cloud className="h-3.5 w-3.5 mr-1 text-blue-300" />
-                  Sincronizar Cache
-                </Button>
+                <div className="mt-2 space-y-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setDriveUrl(OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL);
+                      void handleSyncDriveCache(OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL);
+                    }}
+                    disabled={isMatchingPhotos}
+                    className="bg-blue-950/60 border-blue-700/70 text-blue-200 hover:bg-blue-900/70 hover:text-white text-[10px] w-full h-7"
+                    data-testid="btn-use-palm-cescom-drive"
+                  >
+                    <Cloud className="h-3 w-3 mr-1 text-blue-300" />
+                    Usar Pasta Palm Cescom do Drive
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void handleSyncDriveCache()}
+                    disabled={isMatchingPhotos}
+                    className="bg-neutral-800 border-neutral-700 text-white hover:bg-neutral-700 text-xs w-full h-7"
+                  >
+                    <Cloud className="h-3.5 w-3.5 mr-1 text-blue-300" />
+                    Sincronizar Pasta do Drive
+                  </Button>
+                </div>
               </div>
             </div>
 
