@@ -38,6 +38,7 @@ import {
   findKnownPhotoForCode,
   autoResolvePhotosForSemanalProducts,
   registerLocalFolderPhotos,
+  registerLocalFolderHandles,
   getLocalFolderStatus,
   OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL,
   syncSemanalPhotosFromDriveFolder,
@@ -254,6 +255,7 @@ export const EncarteSemanalSourceModalContent: React.FC<EncarteSemanalSourceModa
       await saveFolderHandle(dirHandle);
       const knownCodes = stagedProducts.map((p) => p.code);
       const indexResult = await indexLocalFolder(dirHandle, { knownCodes });
+      registerLocalFolderHandles(indexResult.files, indexResult.folderName || "Pasta Local");
 
       if (indexResult.files.length === 0) {
         setPhotoMatchMessage("Nenhuma imagem (.png, .jpg) encontrada na pasta selecionada.");

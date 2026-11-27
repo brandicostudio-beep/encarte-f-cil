@@ -11,6 +11,7 @@ import {
 import {
   findKnownPhotoForCode,
   findLocalOrCachedPhotoForCode,
+  fetchLocalFolderHandlePhotoForCode,
   fetchSingleDrivePhotoForCode,
   resolveBestPhotoForCode,
   copyProductCodeToClipboard,
@@ -236,12 +237,14 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
 
       if (!photo1) {
         photo1 =
+          (await fetchLocalFolderHandlePhotoForCode(primaryCode)) ||
           findLocalOrCachedPhotoForCode(primaryCode) ||
           (await fetchSingleDrivePhotoForCode(primaryCode)) ||
           resolveBestPhotoForCode(primaryCode, lookedUp1.image);
       }
       if (!photo2) {
         photo2 =
+          (await fetchLocalFolderHandlePhotoForCode(secCode)) ||
           findLocalOrCachedPhotoForCode(secCode) ||
           (await fetchSingleDrivePhotoForCode(secCode)) ||
           resolveBestPhotoForCode(secCode, lookedUp2.image);
@@ -257,9 +260,10 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       }
     } else {
       let lookedUp = lookupProductByCode(trimmed);
-      // Busca primeiro no cache local e na pasta oficial do Google Drive antes do site Cescom
+      // Busca primeiro na Pasta Local conectada, cache local e pasta oficial do Google Drive antes do site Cescom
       if (!photo1) {
         photo1 =
+          (await fetchLocalFolderHandlePhotoForCode(trimmed)) ||
           findLocalOrCachedPhotoForCode(trimmed) ||
           (await fetchSingleDrivePhotoForCode(trimmed));
       }

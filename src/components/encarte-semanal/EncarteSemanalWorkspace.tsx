@@ -28,9 +28,12 @@ import {
 } from "@/lib/encarte-semanal-layout";
 import {
   registerLocalFolderPhotos,
+  registerLocalFolderHandles,
   getLocalFolderStatus,
   autoResolvePhotosForSemanalProducts,
   processPhotoBankUpload,
+  OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL,
+  syncSemanalPhotosFromDriveFolder,
   type LocalFolderPhotoStatus,
 } from "@/lib/encarte-semanal-photos";
 import {
@@ -98,6 +101,7 @@ import {
   CheckCheck,
   ArrowLeftRight,
   Tag,
+  Cloud,
 } from "lucide-react";
 
 export const EncarteSemanalWorkspace: React.FC = () => {
@@ -162,7 +166,51 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   const [localFolderStatus, setLocalFolderStatus] = useState<LocalFolderPhotoStatus>(() =>
     getLocalFolderStatus()
   );
+  const [driveBarOpen, setDriveBarOpen] = useState<boolean>(false);
+  const [driveUrlInput, setDriveUrlInput] = useState<string>(OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL);
+  const [isSyncingDrive, setIsSyncingDrive] = useState<boolean>(false);
   const quickFolderInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSyncDriveFromToolbar = async (overrideUrl?: string) => {
+    const targetUrl = (overrideUrl || driveUrlInput || OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL).trim();
+    const codes = products.map((p) => p.code).filter(Boolean);
+    setIsSyncingDrive(true);
+    try {
+      if (codes.length === 0) {
+        setExportMessage(
+          "Pasta Palm Cescom configurada! Ao digitar qualquer código nos boxes, as fotos PNG serão buscadas automaticamente no Drive."
+        );
+        setTimeout(() => setExportMessage(null), 4500);
+        return;
+      }
+      const res = await syncSemanalPhotosFromDriveFolder({ url: targetUrl, codes });
+      if (!res.ok) {
+        setExportMessage(`Aviso Google Drive: ${res.error || "verifique o conector no Lovable."}`);
+        setTimeout(() => setExportMessage(null), 5000);
+        return;
+      }
+      let applied = 0;
+      const updated = products.map((p) => {
+        const drivePhoto = p.code ? res.photoByCode.get(p.code.trim().toLowerCase()) : undefined;
+        if (drivePhoto && drivePhoto !== p.image) {
+          applied++;
+          return { ...p, image: drivePhoto };
+        }
+        return p;
+      });
+      if (applied > 0) {
+        pushHistoryState(updated);
+        setProducts(updated);
+        saveEncarteSemanalProducts(updated);
+      }
+      setExportMessage(
+        `☁️ Drive sincronizado: ${res.downloadedCount} baixada(s), ${res.cachedHitsCount} em cache${applied > 0 ? `, ${applied} aplicada(s)` : ""}.`
+      );
+      setTimeout(() => setExportMessage(null), 4500);
+    } finally {
+      setIsSyncingDrive(false);
+    }
+  };
 
   const handleQuickFolderConnect = async () => {
     if (!isFileSystemAccessSupported()) {
@@ -180,6 +228,9 @@ export const EncarteSemanalWorkspace: React.FC = () => {
         setTimeout(() => setExportMessage(null), 4000);
         return;
       }
+      // Registra todos os handles indexados para uso imediato ao digitar códigos (mesmo no Modo Manual)
+      registerLocalFolderHandles(indexResult.files, indexResult.folderName || "Pasta Local");
+
       const tempEncarteProducts: EncarteProduct[] = products.map((p) => ({
         id: p.id,
         code: p.code,
@@ -195,7 +246,9 @@ export const EncarteSemanalWorkspace: React.FC = () => {
       }));
       const crossing = crossLocalFolderWithCampaign(indexResult.files, tempEncarteProducts);
       const { loadedPhotos } = await loadCampaignPhotosFromFolder(crossing, tempEncarteProducts);
-      registerLocalFolderPhotos(loadedPhotos, indexResult.folderName || "Pasta Local");
+      if (loadedPhotos.length > 0) {
+        registerLocalFolderPhotos(loadedPhotos, indexResult.folderName || "Pasta Local");
+      }
       setLocalFolderStatus(getLocalFolderStatus());
 
       const { updatedProducts, resolvedCount } = autoResolvePhotosForSemanalProducts(products);
@@ -205,7 +258,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
         saveEncarteSemanalProducts(updatedProducts);
       }
       setExportMessage(
-        `📁 Pasta Conectada: ${loadedPhotos.length} fotos encontradas${resolvedCount > 0 ? ` (${resolvedCount} aplicada(s))` : ""}.`
+        `📁 Pasta Conectada: ${indexResult.files.length} fotos encontradas${resolvedCount > 0 ? ` (${resolvedCount} aplicada(s))` : ""}.`
       );
       setTimeout(() => setExportMessage(null), 4500);
     } catch (err: any) {
@@ -1013,6 +1066,23 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                 type="button"
                 size="sm"
                 variant="ghost"
+                onClick={() => setDriveBarOpen((prev) => !prev)}
+                className={`text-xs h-7 px-2.5 font-semibold ${
+                  driveBarOpen
+                    ? "bg-blue-950/70 text-blue-200 border border-blue-700/60"
+                    : "text-blue-300 hover:text-white"
+                }`}
+                title="Conectar / sincronizar pasta FOTOS PALM CESCOM do Google Drive"
+                data-testid="btn-drive-palm-toolbar"
+              >
+                <Cloud className="h-3.5 w-3.5 mr-1 text-blue-400" />
+                Drive Palm Cescom
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
                 onClick={handleOpenFromComputer}
                 className="text-neutral-300 hover:text-white text-xs h-7 px-2.5"
                 title="Abrir encarte salvo previamente na pasta do computador"
@@ -1170,6 +1240,54 @@ export const EncarteSemanalWorkspace: React.FC = () => {
           <div className="max-w-7xl mx-auto mt-2 p-2 bg-neutral-900/90 border border-emerald-500/40 rounded-lg text-xs text-emerald-300 flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-emerald-400" />
             <span>{exportMessage}</span>
+          </div>
+        )}
+
+        {driveBarOpen && (
+          <div className="max-w-7xl mx-auto mt-2 p-2.5 bg-blue-950/70 border border-blue-800/80 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold text-blue-200 flex items-center gap-1.5">
+                <Cloud className="h-3.5 w-3.5 text-blue-400" />
+                Pasta Google Drive (FOTOS PALM CESCOM):
+              </span>
+              <Input
+                type="url"
+                value={driveUrlInput}
+                onChange={(e) => setDriveUrlInput(e.target.value)}
+                placeholder="https://drive.google.com/drive/folders/..."
+                className="h-7 w-72 sm:w-96 text-[11px] bg-neutral-950 border-blue-800 text-neutral-100 font-mono"
+                aria-label="Link da pasta do Google Drive"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  setDriveUrlInput(OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL);
+                  void handleSyncDriveFromToolbar(OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL);
+                }}
+                disabled={isSyncingDrive}
+                className="h-7 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3"
+              >
+                {isSyncingDrive ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                ) : (
+                  <Cloud className="h-3.5 w-3.5 mr-1" />
+                )}
+                Usar Pasta Palm Cescom do Drive
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void handleSyncDriveFromToolbar()}
+                disabled={isSyncingDrive}
+                className="h-7 bg-neutral-900 border-blue-700 text-blue-200 hover:text-white text-xs px-3"
+              >
+                Sincronizar Link
+              </Button>
+            </div>
           </div>
         )}
       </div>

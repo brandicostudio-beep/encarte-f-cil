@@ -22,6 +22,7 @@ import {
   indexDriveFolder,
   downloadCampaignDrivePhotos,
 } from "./product.functions";
+import { fileToDataUrl, type LocalIndexedFile } from "./local-folder-service";
 
 export const OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_ID = "1E-MmRqMVnbm6LsOyV7Tc9E1crOhZTF5T";
 export const OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL =
@@ -35,8 +36,70 @@ export interface LocalFolderPhotoStatus {
 
 // Índice em memória da Pasta Local de Fotos conectada (Fotos_Palm) — Prioridade 1 absoluta
 const localFolderPhotoMap = new Map<string, { dataUrl: string; suffixOrder: number; isPng: boolean }>();
+const localFolderHandleMap = new Map<string, LocalIndexedFile>();
 let localFolderNameState = "";
 let localFolderTotalCount = 0;
+
+/**
+ * Registra os handles indexados da Pasta Local conectada para leitura sob demanda
+ * mesmo quando a grade ainda está vazia (Modo Manual).
+ */
+export function registerLocalFolderHandles(
+  files: LocalIndexedFile[],
+  folderName = "Pasta Local"
+): number {
+  localFolderHandleMap.clear();
+  localFolderNameState = folderName;
+  localFolderTotalCount = files.length;
+
+  for (const file of files) {
+    if (!file.code || !file.handle) continue;
+    const key = file.code.trim().toLowerCase();
+    const isPng = /\.png$/i.test(file.name || "");
+    const existing = localFolderHandleMap.get(key);
+    const existingIsPng = existing ? /\.png$/i.test(existing.name || "") : false;
+
+    if (
+      !existing ||
+      file.suffixOrder < existing.suffixOrder ||
+      (file.suffixOrder === existing.suffixOrder && isPng && !existingIsPng)
+    ) {
+      localFolderHandleMap.set(key, file);
+    }
+  }
+
+  return localFolderHandleMap.size;
+}
+
+/**
+ * Lê sob demanda a foto original da Pasta Local conectada (preservando transparência PNG sem recomprimir em JPEG).
+ */
+export async function fetchLocalFolderHandlePhotoForCode(code: string): Promise<string | undefined> {
+  const existing = getLocalFolderPhotoForCode(code);
+  if (existing) return existing;
+
+  if (!code || localFolderHandleMap.size === 0) return undefined;
+  const clean = code.trim().toLowerCase();
+  const stripped = /^\d+$/.test(clean) ? String(parseInt(clean, 10)) : clean;
+  const fileEntry = localFolderHandleMap.get(clean) || localFolderHandleMap.get(stripped);
+  if (!fileEntry?.handle?.getFile) return undefined;
+
+  try {
+    const fileObj: File = await fileEntry.handle.getFile();
+    const dataUrl = await fileToDataUrl(fileObj);
+    if (dataUrl) {
+      localFolderPhotoMap.set(clean, {
+        dataUrl,
+        suffixOrder: fileEntry.suffixOrder ?? 0,
+        isPng: /\.png$/i.test(fileEntry.name || ""),
+      });
+      return dataUrl;
+    }
+  } catch {
+    /* ignore */
+  }
+  return undefined;
+}
 
 /**
  * Registra fotos indexadas da Pasta Local conectada (Fotos_Palm) para resolução instantânea com Prioridade 1.
@@ -109,6 +172,7 @@ export function getLocalFolderStatus(): LocalFolderPhotoStatus {
  */
 export function clearLocalFolderPhotos(): void {
   localFolderPhotoMap.clear();
+  localFolderHandleMap.clear();
   localFolderNameState = "";
   localFolderTotalCount = 0;
 }
