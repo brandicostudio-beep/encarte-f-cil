@@ -87,10 +87,10 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   const [image, setImage] = useState(product?.image || "");
   const [secondaryImage, setSecondaryImage] = useState(product?.secondaryImage || "");
   const [duplicatePhoto, setDuplicatePhoto] = useState<boolean>(
-    Boolean(product?.duplicatePhoto)
+    product ? Boolean(product.duplicatePhoto) : true
   );
-  const [scale, setScale] = useState(product?.scale ?? 1.15);
-  const [scale2, setScale2] = useState(product?.scale2 ?? (product?.scale ?? 1.15));
+  const [scale, setScale] = useState(product?.scale ?? 1.0);
+  const [scale2, setScale2] = useState(product?.scale2 ?? (product?.scale ?? 1.0));
   const [limitFontSize, setLimitFontSize] = useState<number>(product?.limitFontSize || 9);
   const [limitWidthPercent, setLimitWidthPercent] = useState<number>(product?.limitWidthPercent || 75);
   const [flipHorizontal, setFlipHorizontal] = useState<boolean>(Boolean(product?.flipHorizontal));
@@ -141,9 +141,9 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     setLimit(product?.limit || "");
     setImage(product?.image || "");
     setSecondaryImage(product?.secondaryImage || "");
-    setDuplicatePhoto(Boolean(product?.duplicatePhoto));
-    setScale(product?.scale ?? 1.15);
-    setScale2(product?.scale2 ?? (product?.scale ?? 1.15));
+    setDuplicatePhoto(product ? Boolean(product.duplicatePhoto) : true);
+    setScale(product?.scale ?? 1.0);
+    setScale2(product?.scale2 ?? (product?.scale ?? 1.0));
     setLimitFontSize(product?.limitFontSize || 9);
     setLimitWidthPercent(product?.limitWidthPercent || 75);
     setFlipHorizontal(Boolean(product?.flipHorizontal));
@@ -253,14 +253,28 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       setImage(photo);
     }
 
+    const isCodeChanged = !product || suggestion.code.trim() !== (product.code || "").trim();
+    const nextDuplicate = isCodeChanged ? true : duplicatePhoto;
+    if (nextDuplicate !== duplicatePhoto) setDuplicatePhoto(nextDuplicate);
+    if (isCodeChanged) {
+      setScale(1.0);
+      setScale2(1.0);
+      setSecondaryImage("");
+    }
+
     const updated = createSemanalProductFromSuggestion(suggestion, product);
     onSaveProduct({
       ...updated,
       image: photo || updated.image,
       limit: limit.trim() || undefined,
-      scale,
-      duplicatePhoto,
-      secondaryImage: secondaryImage || undefined,
+      scale: isCodeChanged ? 1.0 : scale,
+      scale2: isCodeChanged ? 1.0 : scale2,
+      duplicatePhoto: nextDuplicate,
+      secondaryImage: isCodeChanged ? undefined : (secondaryImage || undefined),
+      offsetX: isCodeChanged ? 0 : (product?.offsetX ?? 0),
+      offsetY: isCodeChanged ? 0 : (product?.offsetY ?? 0),
+      offsetX2: isCodeChanged ? 0 : (product?.offsetX2 ?? 0),
+      offsetY2: isCodeChanged ? 0 : (product?.offsetY2 ?? 0),
     });
   };
 
@@ -347,6 +361,13 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     setDescription(newDesc);
     if (photo1) setImage(photo1);
     if (photo2) setSecondaryImage(photo2);
+    const nextDuplicate = parts.length >= 2 ? false : (isCodeChanged || !product ? true : duplicatePhoto);
+    if (nextDuplicate !== duplicatePhoto) setDuplicatePhoto(nextDuplicate);
+    if (isCodeChanged) {
+      setScale(1.0);
+      setScale2(1.0);
+      if (!photo2) setSecondaryImage("");
+    }
     setShowSuggestions(false);
 
     const updated: EncarteSemanalProduct = {
@@ -356,7 +377,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       description: newDesc,
       image: photo1,
       secondaryImage: photo2 || undefined,
-      duplicatePhoto,
+      duplicatePhoto: nextDuplicate,
       limit: limit.trim() || undefined,
       limitFontSize,
       limitWidthPercent,
@@ -364,12 +385,12 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       flipHorizontal2,
       badge: badge.trim() || undefined,
       badgeColor,
-      scale,
-      scale2,
-      offsetX: product?.offsetX ?? 0,
-      offsetY: product?.offsetY ?? 0,
-      offsetX2: product?.offsetX2 ?? 0,
-      offsetY2: product?.offsetY2 ?? 0,
+      scale: isCodeChanged ? 1.0 : scale,
+      scale2: isCodeChanged ? 1.0 : scale2,
+      offsetX: isCodeChanged ? 0 : (product?.offsetX ?? 0),
+      offsetY: isCodeChanged ? 0 : (product?.offsetY ?? 0),
+      offsetX2: isCodeChanged ? 0 : (product?.offsetX2 ?? 0),
+      offsetY2: isCodeChanged ? 0 : (product?.offsetY2 ?? 0),
       overlapY: product?.overlapY ?? 2,
       included: true,
       originalCode: product?.originalCode || primaryCode,

@@ -71,7 +71,7 @@ export function computeSemanalTwoPhotoLayout(params: {
   const aspect1 = rawAspect1 > 0 && isFinite(rawAspect1) ? rawAspect1 : 1;
   const aspect2 = rawAspect2 > 0 && isFinite(rawAspect2) ? rawAspect2 : aspect1;
   const s1 = rawScale1 > 10 ? rawScale1 / 100 : rawScale1 || 1;
-  const s2 = rawScale2 > 10 ? rawScale2 / 100 : rawScale2 || s1;
+  const s2 = rawScale2 > 10 ? rawScale2 / 100 : rawScale2 || 1;
 
   const availableW = Math.max(20, boxWidth - 16);
   const availableH = Math.max(20, photoAreaHeight - 14);
@@ -100,25 +100,26 @@ export function computeSemanalTwoPhotoLayout(params: {
     const ratio = maxPairW / basePairW;
     base1 = { w: base1.w * ratio, h: base1.h * ratio };
     base2 = { w: base2.w * ratio, h: base2.h * ratio };
+    basePairW = basePairW * ratio;
   }
 
-  // Aplica o zoom individual livremente após o ajuste base, sem travar crescimento manual
+  // Ancora cada foto pelo seu centro-base independente para que redimensionar uma não desloque a outra
+  const basePairStartX = boxX + (boxWidth - basePairW) / 2;
+  const baseCenter1X = basePairStartX + base1.w / 2;
+  const baseCenter2X = basePairStartX + basePairW - base2.w / 2;
+
   const size1 = { w: base1.w * s1, h: base1.h * s1 };
   const size2 = { w: base2.w * s2, h: base2.h * s2 };
-  const overlapPx = Math.min(size1.w, size2.w) * overlapRatio;
-  const pairW = size1.w + size2.w - overlapPx;
-
-  const pairStartX = boxX + (boxWidth - pairW) / 2;
 
   return {
     photo1: {
-      x: pairStartX + offsetX1,
+      x: baseCenter1X - size1.w / 2 + offsetX1,
       y: barY - size1.h + overlapY + offsetY1,
       width: size1.w,
       height: size1.h,
     },
     photo2: {
-      x: pairStartX + pairW - size2.w + offsetX2,
+      x: baseCenter2X - size2.w / 2 + offsetX2,
       y: barY - size2.h + overlapY + offsetY2,
       width: size2.w,
       height: size2.h,

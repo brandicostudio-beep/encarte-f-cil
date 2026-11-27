@@ -776,5 +776,45 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     const rightMargin = 250 - (layout.photo2.x + layout.photo2.width);
     expect(leftMargin).toBeGreaterThanOrEqual(8);
     expect(leftMargin).toBeCloseTo(rightMargin, 1);
+
+    // Redimensionar Foto 1 não pode mover Foto 2, e redimensionar Foto 2 não pode mover Foto 1
+    const scaled1 = computeSemanalTwoPhotoLayout({
+      boxX: 0,
+      boxWidth: 250,
+      photoAreaHeight: 220,
+      barY: 220,
+      aspect1: 0.75,
+      aspect2: 0.75,
+      scale1: 1.35,
+      scale2: 1.0,
+    });
+    expect(scaled1.photo2.x).toBeCloseTo(layout.photo2.x, 3);
+    expect(scaled1.photo2.width).toBeCloseTo(layout.photo2.width, 3);
+
+    const scaled2 = computeSemanalTwoPhotoLayout({
+      boxX: 0,
+      boxWidth: 250,
+      photoAreaHeight: 220,
+      barY: 220,
+      aspect1: 0.75,
+      aspect2: 0.75,
+      scale1: 1.0,
+      scale2: 1.35,
+    });
+    expect(scaled2.photo1.x).toBeCloseTo(layout.photo1.x, 3);
+    expect(scaled2.photo1.width).toBeCloseTo(layout.photo1.width, 3);
+  });
+
+  it("Teste 21: createSemanalProductFromSuggestion duplica automaticamente 2 fotos no tamanho ideal para novos boxes", async () => {
+    const { createSemanalProductFromSuggestion } = await import("./encarte-semanal-catalog");
+    const created = createSemanalProductFromSuggestion({
+      code: "25710",
+      description: "MAIONESE LIZA",
+      image: "data:image/png;base64,maionese",
+    });
+
+    expect(created.duplicatePhoto).toBe(true);
+    expect(created.scale).toBe(1.0);
+    expect(created.scale2).toBe(1.0);
   });
 });
