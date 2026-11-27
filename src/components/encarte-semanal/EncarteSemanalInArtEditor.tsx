@@ -40,6 +40,8 @@ import {
   FlipHorizontal,
   ArrowLeftRight,
   Tag,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { findSemanalVariations, getAllKnownProducts } from "@/lib/encarte-semanal-catalog";
 
@@ -47,24 +49,32 @@ export interface EncarteSemanalInArtEditorProps {
   cell: EncarteSemanalCellPosition;
   product: EncarteSemanalProduct | null;
   cellIndex: number; // 0 a 19
+  totalSlots?: number;
+  variant?: "sidebar" | "popover";
   allProducts?: EncarteSemanalProduct[];
   onSaveProduct: (updated: EncarteSemanalProduct) => void;
   onClearProduct: () => void;
   onClose: () => void;
   onOpenAdvancedModal?: (product: EncarteSemanalProduct) => void;
   onSwapSlots?: (targetSlotIndex: number) => void;
+  onSelectPrevSlot?: () => void;
+  onSelectNextSlot?: () => void;
 }
 
 export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps> = ({
   cell,
   product,
   cellIndex,
+  totalSlots = 20,
+  variant = "popover",
   allProducts,
   onSaveProduct,
   onClearProduct,
   onClose,
   onOpenAdvancedModal,
   onSwapSlots,
+  onSelectPrevSlot,
+  onSelectNextSlot,
 }) => {
   // Se houver secondaryCode, compõe o texto inicial (ex: "14352 / 17585")
   const initialCode = product?.secondaryCode
@@ -121,11 +131,30 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   const secFileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Foco automático no input de código ao abrir
+  // Foco automático no input de código ao abrir ou trocar de box
   useEffect(() => {
+    const nextCode = product?.secondaryCode
+      ? `${product.code} / ${product.secondaryCode}`
+      : product?.code || "";
+    setCodeQuery(nextCode);
+    setDescription(product?.description || "");
+    setLimit(product?.limit || "");
+    setImage(product?.image || "");
+    setSecondaryImage(product?.secondaryImage || "");
+    setDuplicatePhoto(Boolean(product?.duplicatePhoto));
+    setScale(product?.scale ?? 1.15);
+    setScale2(product?.scale2 ?? (product?.scale ?? 1.15));
+    setLimitFontSize(product?.limitFontSize || 9);
+    setLimitWidthPercent(product?.limitWidthPercent || 75);
+    setFlipHorizontal(Boolean(product?.flipHorizontal));
+    setFlipHorizontal2(Boolean(product?.flipHorizontal2));
+    setBadge(product?.badge || "");
+    setBadgeColor(product?.badgeColor || "red");
+    setSwapTargetBox(cellIndex === 0 ? 1 : 0);
+    setShowSuggestions(false);
     codeInputRef.current?.focus();
     codeInputRef.current?.select();
-  }, []);
+  }, [cellIndex, product?.id]);
 
   // Atualiza sugestões conforme digitação (busca local e consulta online no cescom.com.br)
   useEffect(() => {
@@ -508,7 +537,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     }
   };
 
-  // Posicionamento inteligente para não sair da tela (abaixo da célula ou acima se for última linha)
+  const isSidebar = variant === "sidebar";
   const isBottomRow = cell.rowIndex >= 3;
   const popoverTop = isBottomRow
     ? `${Math.max(10, cell.y - 340)}px`
@@ -517,33 +546,65 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   return (
     <div
       ref={containerRef}
-      className="absolute z-50 bg-[#161616] text-white rounded-xl border border-amber-500/60 shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-3.5 space-y-3 w-[340px] backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-auto"
-      style={{
-        left: `${Math.max(10, Math.min(1080 - 350, cell.x - 30))}px`,
-        top: popoverTop,
-      }}
+      className={
+        isSidebar
+          ? "w-full bg-[#141414] text-white rounded-xl border border-amber-500/40 shadow-xl p-3.5 space-y-3 select-auto"
+          : "absolute z-50 bg-[#161616] text-white rounded-xl border border-amber-500/60 shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-3.5 space-y-3 w-[340px] max-h-[82vh] overflow-y-auto backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-auto"
+      }
+      style={
+        isSidebar
+          ? undefined
+          : {
+              left: `${Math.max(10, Math.min(1080 - 350, cell.x - 30))}px`,
+              top: popoverTop,
+            }
+      }
       onClick={(e) => e.stopPropagation()}
       data-testid="in-art-editor-popover"
     >
-      {/* Cabeçalho do Editor Figma/Canva */}
-      <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-          <span className="text-xs font-black tracking-wider text-amber-300 uppercase">
+      {/* Cabeçalho do Inspetor Canva/Illustrator */}
+      <div className="flex items-center justify-between border-b border-neutral-800 pb-2 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+          <span className="text-xs font-black tracking-wider text-amber-300 uppercase truncate">
             Editar Box {cellIndex + 1}
           </span>
-          <span className="text-[10px] text-neutral-400">
+          <span className="text-[10px] text-neutral-400 shrink-0">
             (L{cell.rowIndex + 1}, C{cell.colIndex + 1})
           </span>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-neutral-400 hover:text-white p-1 rounded-md hover:bg-neutral-800 transition-colors cursor-pointer"
-          title="Fechar editor"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {onSelectPrevSlot && (
+            <button
+              type="button"
+              onClick={onSelectPrevSlot}
+              className="text-neutral-300 hover:text-white p-1 rounded bg-neutral-800/80 hover:bg-neutral-700 transition-colors cursor-pointer"
+              title="Box anterior"
+              aria-label="Box anterior"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {onSelectNextSlot && (
+            <button
+              type="button"
+              onClick={onSelectNextSlot}
+              className="text-neutral-300 hover:text-white p-1 rounded bg-neutral-800/80 hover:bg-neutral-700 transition-colors cursor-pointer"
+              title={`Próximo box (1 a ${totalSlots})`}
+              aria-label="Próximo box"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-neutral-400 hover:text-white p-1 rounded-md hover:bg-neutral-800 transition-colors cursor-pointer"
+            title="Fechar editor"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Botão de Classificação como Principal */}

@@ -1426,106 +1426,109 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                 1080×1920 • {currentProducts.length} produto(s) nesta tela
               </div>
 
-              {/* Controles de Zoom */}
-              <div className="flex items-center gap-2">
+              {/* Controles de Zoom estilo Illustrator / Canva */}
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => setPreviewZoom((z) => Math.max(0.2, z - 0.05))}
-                  className="h-8 text-neutral-300 hover:text-white"
-                  title="Reduzir zoom"
+                  onClick={() => setPreviewZoom((z) => Math.max(0.25, Number((z - 0.08).toFixed(2))))}
+                  className="h-7 px-2 text-neutral-300 hover:text-white"
+                  title="Reduzir zoom (Ctrl + Scroll)"
                 >
-                  <ZoomOut className="h-4 w-4" />
+                  <ZoomOut className="h-3.5 w-3.5" />
                 </Button>
-                <span className="font-mono text-neutral-400 w-12 text-center text-xs">
+                <span className="font-mono text-neutral-300 w-11 text-center text-xs font-bold">
                   {Math.round(previewZoom * 100)}%
                 </span>
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => setPreviewZoom((z) => Math.min(1.0, z + 0.05))}
-                  className="h-8 text-neutral-300 hover:text-white"
-                  title="Aumentar zoom"
+                  onClick={() => setPreviewZoom((z) => Math.min(1.2, Number((z + 0.08).toFixed(2))))}
+                  className="h-7 px-2 text-neutral-300 hover:text-white"
+                  title="Aumentar zoom (Ctrl + Scroll)"
                 >
-                  <ZoomIn className="h-4 w-4" />
+                  <ZoomIn className="h-3.5 w-3.5" />
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setPreviewZoom(0.38)}
-                  className="h-8 bg-neutral-800 border-neutral-700 text-xs text-neutral-300 hover:text-white"
-                >
-                  <Maximize2 className="h-3.5 w-3.5 mr-1" />
-                  Encaixar na Tela
-                </Button>
+                {[
+                  { label: "Ajustar", val: 0.38 },
+                  { label: "55%", val: 0.55 },
+                  { label: "75%", val: 0.75 },
+                  { label: "100%", val: 1.0 },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => setPreviewZoom(preset.val)}
+                    className={`px-2 py-1 rounded text-[11px] font-bold transition-colors cursor-pointer ${
+                      Math.abs(previewZoom - preset.val) < 0.03
+                        ? "bg-amber-500 text-neutral-950"
+                        : "bg-neutral-800 text-neutral-300 hover:bg-neutral-700"
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Área do Canvas 1080x1920 com Zoom */}
-            <div className="flex justify-center overflow-auto p-4 bg-neutral-950/70 rounded-xl border border-neutral-800 min-h-[640px]">
+            {/* Layout Estúdio Profissional (Canvas Limpo à Esquerda + Painel Inspetor Fixo à Direita) */}
+            <div className="flex flex-col lg:flex-row gap-4 items-start">
+              {/* Área do Canvas 1080x1920 com Zoom suave e Ctrl+Scroll */}
               <div
-                style={{
-                  transform: `scale(${previewZoom})`,
-                  transformOrigin: "top center",
-                  marginBottom: `${1920 * (previewZoom - 1)}px`,
-                  width: "1080px",
-                  height: "1920px",
+                className="flex-1 min-w-0 w-full flex justify-center overflow-auto p-4 bg-neutral-950/70 rounded-xl border border-neutral-800 max-h-[calc(100vh-220px)] min-h-[620px]"
+                onWheel={(e) => {
+                  if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    const delta = e.deltaY < 0 ? 0.06 : -0.06;
+                    setPreviewZoom((z) => Math.max(0.25, Math.min(1.2, Number((z + delta).toFixed(2)))));
+                  }
                 }}
-                className="relative shadow-2xl rounded-lg overflow-hidden border border-neutral-800 shrink-0 bg-[#0a0204]"
               >
-                {/* Imagem de Fundo (Modelo da Arte) */}
-                <img
-                  src={templateImage}
-                  alt="Modelo Encarte Semanal"
-                  className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
-                />
+                <div
+                  style={{
+                    transform: `scale(${previewZoom})`,
+                    transformOrigin: "top center",
+                    marginBottom: `${1920 * (previewZoom - 1)}px`,
+                    width: "1080px",
+                    height: "1920px",
+                  }}
+                  className="relative shadow-2xl rounded-lg overflow-hidden border border-neutral-800 shrink-0 bg-[#0a0204]"
+                >
+                  {/* Imagem de Fundo (Modelo da Arte) */}
+                  <img
+                    src={templateImage}
+                    alt="Modelo Encarte Semanal"
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+                  />
 
-                {/* Células dos Produtos da Grade (20 boxes interativos estilo Canva/Figma) */}
-                {gridCells.map((cell, idx) => {
-                  const product = getProductAtSlot(idx);
-                  const isSelected = selectedSlotIndex === idx;
+                  {/* Células dos Produtos da Grade (20 boxes interativos sem popover tapando a arte) */}
+                  {gridCells.map((cell, idx) => {
+                    const product = getProductAtSlot(idx);
+                    const isSelected = selectedSlotIndex === idx;
 
-                  return (
-                    <div
-                      key={product?.id || `slot-${currentPage}-${idx}`}
-                      style={{ zIndex: isSelected ? 40 : 10 }}
-                    >
-                      <EncarteSemanalCell
-                        product={product}
-                        cell={cell}
-                        interactive={true}
-                        onTransform={updated => handleSaveSlotProduct(idx, updated)}
-                        isSelected={isSelected}
-                        previewZoom={previewZoom}
-                        onUpdateProduct={(updated) => handleSaveSlotProduct(idx, updated)}
-                        onClickSlot={() => {
-                          setSelectedSlotIndex(selectedSlotIndex === idx ? null : idx);
-                        }}
-                        onEdit={() => {
-                          setSelectedSlotIndex(idx);
-                        }}
-                      />
-
-                      {/* Editor Flutuante Dentro da Arte (Estilo Canva/Figma com Predição de Texto) */}
-                      {isSelected && (
-                        <EncarteSemanalInArtEditor
-                          cell={cell}
+                    return (
+                      <div
+                        key={product?.id || `slot-${currentPage}-${idx}`}
+                        style={{ zIndex: isSelected ? 40 : 10 }}
+                      >
+                        <EncarteSemanalCell
                           product={product}
-                          cellIndex={idx}
-                          allProducts={products}
-                          onSwapSlots={(targetSlotIdx) => handleSwapSlots(idx, targetSlotIdx)}
-                          onSaveProduct={(updated) => handleSaveSlotProduct(idx, updated)}
-                          onClearProduct={() => handleClearSlotProduct(idx)}
-                          onClose={() => setSelectedSlotIndex(null)}
-                          onOpenAdvancedModal={(p) => {
-                            setEditingProduct(p);
-                            setProductModalOpen(true);
+                          cell={cell}
+                          interactive={true}
+                          onTransform={updated => handleSaveSlotProduct(idx, updated)}
+                          isSelected={isSelected}
+                          previewZoom={previewZoom}
+                          onUpdateProduct={(updated) => handleSaveSlotProduct(idx, updated)}
+                          onClickSlot={() => {
+                            setSelectedSlotIndex(selectedSlotIndex === idx ? null : idx);
+                          }}
+                          onEdit={() => {
+                            setSelectedSlotIndex(idx);
                           }}
                         />
-                      )}
-                    </div>
-                  );
-                })}
+                      </div>
+                    );
+                  })}
 
                 {/* RODAPÉ EDITÁVEL NA ARTE: Cobre as guias ("TEXTO EDITÁVEL") e permite edição direta estilo Canva/Figma */}
                 <div
@@ -1586,6 +1589,65 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                   )}
                 </div>
               </div>
+              </div>
+
+              {/* Painel Inspetor Lateral Fixo (1:1 sem corte e com scroll próprio, estilo Canva / Illustrator) */}
+              <aside className="w-full lg:w-[370px] shrink-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-140px)] overflow-y-auto">
+                {selectedSlotIndex !== null && gridCells[selectedSlotIndex] ? (
+                  <EncarteSemanalInArtEditor
+                    cell={gridCells[selectedSlotIndex]}
+                    product={getProductAtSlot(selectedSlotIndex)}
+                    cellIndex={selectedSlotIndex}
+                    totalSlots={gridCells.length}
+                    variant="sidebar"
+                    allProducts={products}
+                    onSwapSlots={(targetSlotIdx) => handleSwapSlots(selectedSlotIndex, targetSlotIdx)}
+                    onSaveProduct={(updated) => handleSaveSlotProduct(selectedSlotIndex, updated)}
+                    onClearProduct={() => handleClearSlotProduct(selectedSlotIndex)}
+                    onClose={() => setSelectedSlotIndex(null)}
+                    onSelectPrevSlot={() =>
+                      setSelectedSlotIndex((prev) =>
+                        prev === null ? 0 : (prev - 1 + gridCells.length) % gridCells.length
+                      )
+                    }
+                    onSelectNextSlot={() =>
+                      setSelectedSlotIndex((prev) =>
+                        prev === null ? 0 : (prev + 1) % gridCells.length
+                      )
+                    }
+                    onOpenAdvancedModal={(p) => {
+                      setEditingProduct(p);
+                      setProductModalOpen(true);
+                    }}
+                  />
+                ) : (
+                  <div className="bg-[#141414] border border-neutral-800 rounded-xl p-4 text-xs text-neutral-300 space-y-3">
+                    <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
+                      <span className="font-black text-amber-300 uppercase tracking-wider">
+                        Inspetor de Box
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => setSelectedSlotIndex(0)}
+                        className="h-7 bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-[11px]"
+                      >
+                        Editar Box 1
+                      </Button>
+                    </div>
+                    <p className="text-neutral-400 leading-relaxed">
+                      Clique em qualquer box na arte ao lado para editar código, fotos, duplicação, selos e posição em tamanho real sem cobrir a grade.
+                    </p>
+                    <div className="bg-neutral-900/80 border border-neutral-800 rounded-lg p-3 space-y-1.5 text-[11px] text-neutral-400">
+                      <div className="font-bold text-neutral-200 mb-1">Atalhos estilo Illustrator / Canva:</div>
+                      <div>• <strong className="text-white">Ctrl + Roda do Mouse:</strong> Zoom suave na arte</div>
+                      <div>• <strong className="text-white">Arrastar foto / cantos:</strong> Mover e redimensionar 1:1</div>
+                      <div>• <strong className="text-white">Setas (↑ ↓ ← →):</strong> Ajuste fino de 1px (Shift = 5px)</div>
+                      <div>• <strong className="text-white">Ctrl + Z / Ctrl + Y:</strong> Desfazer e Refazer</div>
+                    </div>
+                  </div>
+                )}
+              </aside>
             </div>
           </div>
         )}
