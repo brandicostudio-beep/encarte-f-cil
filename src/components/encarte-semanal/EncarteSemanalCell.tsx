@@ -295,7 +295,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
     const ratio = currentDist / resizeStartData.initialDist;
     const nextScale = Math.max(
       0.4,
-      Math.min(2.5, Number((resizeStartData.initialScale * ratio).toFixed(2)))
+      Math.min(4.0, Number((resizeStartData.initialScale * ratio).toFixed(2)))
     );
 
     if (resizeStartData.target === "photo2") {
@@ -318,7 +318,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
     const ratio = currentDist / resizeStartData.initialDist;
     const nextScale = Math.max(
       0.4,
-      Math.min(2.5, Number((resizeStartData.initialScale * ratio).toFixed(2)))
+      Math.min(4.0, Number((resizeStartData.initialScale * ratio).toFixed(2)))
     );
 
     if (resizeStartData.target === "photo2") {

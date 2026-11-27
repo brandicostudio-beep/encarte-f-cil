@@ -76,9 +76,9 @@ export function computeSemanalTwoPhotoLayout(params: {
   const availableW = Math.max(20, boxWidth - 16);
   const availableH = Math.max(20, photoAreaHeight - 14);
 
-  const fitSize = (aspect: number, scale: number) => {
-    const maxItemW = availableW * 0.62 * scale;
-    const maxItemH = availableH * 0.92 * scale;
+  const fitBaseSize = (aspect: number) => {
+    const maxItemW = availableW * 0.62;
+    const maxItemH = availableH * 0.94;
     let w = maxItemW;
     let h = w / aspect;
     if (h > maxItemH) {
@@ -88,19 +88,25 @@ export function computeSemanalTwoPhotoLayout(params: {
     return { w, h };
   };
 
-  let size1 = fitSize(aspect1, s1);
-  let size2 = fitSize(aspect2, s2);
+  let base1 = fitBaseSize(aspect1);
+  let base2 = fitBaseSize(aspect2);
 
-  const overlapPx = Math.min(size1.w, size2.w) * overlapRatio;
-  let pairW = size1.w + size2.w - overlapPx;
+  const baseOverlapPx = Math.min(base1.w, base2.w) * overlapRatio;
+  let basePairW = base1.w + base2.w - baseOverlapPx;
 
+  // Garante que na escala padrão (1.0) o par caiba perfeitamente no box com respiro
   const maxPairW = availableW * 0.96;
-  if (pairW > maxPairW && pairW > 0) {
-    const ratio = maxPairW / pairW;
-    size1 = { w: size1.w * ratio, h: size1.h * ratio };
-    size2 = { w: size2.w * ratio, h: size2.h * ratio };
-    pairW = size1.w + size2.w - Math.min(size1.w, size2.w) * overlapRatio;
+  if (basePairW > maxPairW && basePairW > 0) {
+    const ratio = maxPairW / basePairW;
+    base1 = { w: base1.w * ratio, h: base1.h * ratio };
+    base2 = { w: base2.w * ratio, h: base2.h * ratio };
   }
+
+  // Aplica o zoom individual livremente após o ajuste base, sem travar crescimento manual
+  const size1 = { w: base1.w * s1, h: base1.h * s1 };
+  const size2 = { w: base2.w * s2, h: base2.h * s2 };
+  const overlapPx = Math.min(size1.w, size2.w) * overlapRatio;
+  const pairW = size1.w + size2.w - overlapPx;
 
   const pairStartX = boxX + (boxWidth - pairW) / 2;
 

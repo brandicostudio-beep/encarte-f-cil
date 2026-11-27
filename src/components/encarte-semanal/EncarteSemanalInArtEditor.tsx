@@ -398,7 +398,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
 
   // Ajuste rápido de zoom da foto 1 (+ / -)
   const handleAdjustScale = (delta: number) => {
-    const newScale = Math.max(0.4, Math.min(2.5, Number((scale + delta).toFixed(2))));
+    const newScale = Math.max(0.4, Math.min(4.0, Number((scale + delta).toFixed(2))));
     setScale(newScale);
     if (product) {
       onSaveProduct({
@@ -410,7 +410,7 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
 
   // Ajuste rápido de zoom da foto 2 (+ / -)
   const handleAdjustScale2 = (delta: number) => {
-    const newScale = Math.max(0.4, Math.min(2.5, Number((scale2 + delta).toFixed(2))));
+    const newScale = Math.max(0.4, Math.min(4.0, Number((scale2 + delta).toFixed(2))));
     setScale2(newScale);
     if (product) {
       onSaveProduct({

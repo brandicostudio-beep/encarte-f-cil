@@ -23,6 +23,20 @@ import {
   downloadCampaignDrivePhotos,
 } from "./product.functions";
 import { fileToDataUrl, type LocalIndexedFile } from "./local-folder-service";
+import { autoTrimImageWhitespace } from "./image-normalizer";
+
+async function trimEmptyMarginsSafe(dataUrl: string): Promise<string> {
+  if (!dataUrl || typeof window === "undefined" || typeof document === "undefined") return dataUrl;
+  try {
+    const res = await Promise.race([
+      autoTrimImageWhitespace(dataUrl, 12),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 400)),
+    ]);
+    return res?.trimmedSrc || dataUrl;
+  } catch {
+    return dataUrl;
+  }
+}
 
 export const OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_ID = "1E-MmRqMVnbm6LsOyV7Tc9E1crOhZTF5T";
 export const OFFICIAL_PALM_CESCOM_DRIVE_FOLDER_URL =
@@ -86,8 +100,9 @@ export async function fetchLocalFolderHandlePhotoForCode(code: string): Promise<
 
   try {
     const fileObj: File = await fileEntry.handle.getFile();
-    const dataUrl = await fileToDataUrl(fileObj);
-    if (dataUrl) {
+    const rawDataUrl = await fileToDataUrl(fileObj);
+    if (rawDataUrl) {
+      const dataUrl = await trimEmptyMarginsSafe(rawDataUrl);
       localFolderPhotoMap.set(clean, {
         dataUrl,
         suffixOrder: fileEntry.suffixOrder ?? 0,
@@ -489,15 +504,16 @@ export async function syncSemanalPhotosFromDriveFolder(params: {
       if (dlRes && dlRes.ok && Array.isArray(dlRes.photos)) {
         for (const p of dlRes.photos) {
           if (!p.code || !p.dataUrl) continue;
+          const trimmedDataUrl = await trimEmptyMarginsSafe(p.dataUrl);
           setCachedPhoto({
             code: p.code,
             fileId: p.fileId,
             filename: p.filename,
             modifiedTime: p.modifiedTime,
-            dataUrl: p.dataUrl,
+            dataUrl: trimmedDataUrl,
             cachedAt: Date.now(),
           });
-          photoByCode.set(p.code.trim().toLowerCase(), p.dataUrl);
+          photoByCode.set(p.code.trim().toLowerCase(), trimmedDataUrl);
           downloadedCount++;
         }
       }
