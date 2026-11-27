@@ -311,6 +311,47 @@ export async function fetchCescomProductOnline(code: string): Promise<ProductSug
   return null;
 }
 
+const onlineSearchCache = new Map<string, ProductSuggestion[]>();
+
+/**
+ * Busca múltiplos produtos no site oficial da Cescom por descrição ou código.
+ */
+export async function searchCescomProductsOnline(
+  query: string,
+  limit = 8
+): Promise<ProductSuggestion[]> {
+  const cleanQuery = query.trim();
+  if (cleanQuery.length < 2) return [];
+
+  const cacheKey = `${cleanQuery.toLowerCase()}::${limit}`;
+  if (onlineSearchCache.has(cacheKey)) {
+    return onlineSearchCache.get(cacheKey)!;
+  }
+
+  try {
+    const res = await fetch(`/api/cescom-product?q=${encodeURIComponent(cleanQuery)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.products)) {
+        const mapped: ProductSuggestion[] = data.products
+          .slice(0, limit)
+          .map((item: { code: string; description: string; image?: string }) => ({
+            code: String(item.code).trim(),
+            description: String(item.description || "").toUpperCase(),
+            image: findKnownPhotoForCode(String(item.code).trim()) || item.image || "",
+            source: "cescom" as const,
+          }));
+        onlineSearchCache.set(cacheKey, mapped);
+        return mapped;
+      }
+    }
+  } catch (err) {
+    console.warn(`Aviso ao pesquisar "${cleanQuery}" no site cescom.com.br:`, err);
+  }
+
+  return [];
+}
+
 /**
  * Busca dados completos de um produto a partir de um código exato.
  * Se não existir no catálogo, verifica o cache online do site da Cescom.

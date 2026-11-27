@@ -6,6 +6,7 @@ import {
   createSemanalProductFromSuggestion,
   cleanPrincipalDescription,
   fetchCescomProductOnline,
+  searchCescomProductsOnline,
   type ProductSuggestion,
 } from "@/lib/encarte-semanal-catalog";
 import {
@@ -107,6 +108,10 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   const [variations, setVariations] = useState<Array<{ code: string; description: string; image?: string }>>([]);
   const [suggestions, setSuggestions] = useState<ProductSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [secQuery, setSecQuery] = useState(product?.secondaryCode || "");
+  const [secSuggestions, setSecSuggestions] = useState<ProductSuggestion[]>([]);
+  const [showSecSuggestions, setShowSecSuggestions] = useState(false);
+  const [isSearchingSecCescom, setIsSearchingSecCescom] = useState(false);
   const [isLoadingPhoto, setIsLoadingPhoto] = useState(false);
   const [isSearchingCescom, setIsSearchingCescom] = useState(false);
   const [copyToast, setCopyToast] = useState<string | null>(null);
@@ -154,6 +159,8 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     setBadgeColor(product?.badgeColor || "red");
     setSwapTargetBox(cellIndex === 0 ? 1 : 0);
     setShowSuggestions(false);
+    setSecQuery(product?.secondaryCode || "");
+    setShowSecSuggestions(false);
   }, [cellIndex, product?.id]);
 
   // Garante foco imediato no campo de código sempre que abrir ou der duplo clique no box
@@ -226,6 +233,43 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     };
   }, [codeQuery]);
 
+  // Busca sugestões para a 2ª Foto / Variação por código ou descrição (local + site Cescom)
+  useEffect(() => {
+    let active = true;
+    const cleanTerm = secQuery.trim();
+    if (cleanTerm.length < 2) {
+      setSecSuggestions([]);
+      setShowSecSuggestions(false);
+      setIsSearchingSecCescom(false);
+      return;
+    }
+
+    const localResults = searchProductSuggestions(cleanTerm, 8);
+    setSecSuggestions(localResults);
+
+    const timer = setTimeout(async () => {
+      if (!active) return;
+      setIsSearchingSecCescom(true);
+      const onlineResults = await searchCescomProductsOnline(cleanTerm, 8);
+      if (!active) return;
+      const merged = [...localResults];
+      const seen = new Set(localResults.map((r) => r.code.trim()));
+      for (const item of onlineResults) {
+        if (!seen.has(item.code.trim())) {
+          seen.add(item.code.trim());
+          merged.push(item);
+        }
+      }
+      setSecSuggestions(merged.slice(0, 10));
+      setIsSearchingSecCescom(false);
+    }, 220);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [secQuery]);
+
   // Busca variações inteligentes para sugerir como Foto 2
   useEffect(() => {
     const descToUse = description || product?.description || "";
@@ -290,6 +334,42 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
       offsetX2: isCodeChanged ? 0 : (product?.offsetX2 ?? 0),
       offsetY2: isCodeChanged ? 0 : (product?.offsetY2 ?? 0),
     });
+  };
+
+  // Aplica um produto escolhido no 2º campo (código ou descrição) como Foto 2 / Variação
+  const handleSelectSecondarySuggestion = async (suggestion: ProductSuggestion) => {
+    setSecQuery(suggestion.code);
+    setShowSecSuggestions(false);
+    setIsLoadingPhoto(true);
+
+    let photo =
+      (await fetchLocalFolderHandlePhotoForCode(suggestion.code)) ||
+      findLocalOrCachedPhotoForCode(suggestion.code) ||
+      (await fetchSingleDrivePhotoForCode(suggestion.code));
+
+    if (!photo) {
+      photo = resolveBestPhotoForCode(suggestion.code, suggestion.image);
+    }
+
+    const trimmedPhoto = photo ? await trimEmptyMarginsSafe(photo) : "";
+    setIsLoadingPhoto(false);
+    if (!trimmedPhoto) return;
+
+    setSecondaryImage(trimmedPhoto);
+    setDuplicatePhoto(false);
+    setScale2(scale);
+
+    if (product) {
+      onSaveProduct({
+        ...product,
+        secondaryCode: suggestion.code,
+        secondaryImage: trimmedPhoto,
+        duplicatePhoto: false,
+        scale2: scale,
+        offsetX2: 0,
+        offsetY2: 0,
+      });
+    }
   };
 
   // Quando o usuário termina de digitar o código manualmente (Enter ou blur)
@@ -803,6 +883,99 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
                     </span>
                   </div>
                   <div className="text-[11px] text-neutral-200 truncate uppercase font-semibold group-hover:text-amber-200">
+                    {item.description}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 1B. CAMPO 2ª FOTO / VARIAÇÃO (BUSCA POR CÓDIGO OU DESCRIÇÃO) */}
+      <div className="space-y-1 relative">
+        <Label htmlFor="inArtSecondaryCode" className="text-[11px] font-bold text-neutral-300 flex items-center justify-between">
+          <span>2ª Foto / Variação (Código ou Descrição):</span>
+          {isSearchingSecCescom ? (
+            <span className="text-[10px] text-amber-300 font-bold flex items-center gap-1 animate-pulse">
+              <Loader2 className="h-3 w-3 animate-spin" /> Buscando variação...
+            </span>
+          ) : (
+            <span className="text-[10px] text-emerald-400/90 font-mono">Drive + Cescom</span>
+          )}
+        </Label>
+        <div className="relative">
+          <Input
+            id="inArtSecondaryCode"
+            value={secQuery}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSecQuery(val);
+              setShowSecSuggestions(val.trim().length >= 2);
+            }}
+            onFocus={() => {
+              if (secQuery.trim().length >= 2) {
+                setShowSecSuggestions(true);
+              }
+            }}
+            onBlur={() => {
+              setTimeout(() => setShowSecSuggestions(false), 150);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && secSuggestions.length > 0) {
+                e.preventDefault();
+                void handleSelectSecondarySuggestion(secSuggestions[0]);
+              } else if (e.key === "Escape") {
+                setShowSecSuggestions(false);
+              }
+            }}
+            placeholder="Digite descrição ou código da variação (ex: oreo morango)..."
+            className="h-8 bg-neutral-900 border-neutral-700 text-emerald-300 font-semibold text-xs pr-8 focus:border-emerald-400"
+            data-testid="in-art-input-secondary-code"
+          />
+          <Search className="h-3.5 w-3.5 text-neutral-500 absolute right-2.5 top-2.5 pointer-events-none" />
+        </div>
+
+        {showSecSuggestions && secSuggestions.length > 0 && (
+          <div
+            className="absolute left-0 right-0 top-full mt-1 bg-[#1a1a1a] border border-emerald-500/40 rounded-lg shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-neutral-800"
+            data-testid="in-art-secondary-suggestions-list"
+          >
+            <div className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400/80 bg-black/40 flex items-center justify-between">
+              <span>Variações para Foto 2 ({secSuggestions.length})</span>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setShowSecSuggestions(false)}
+                className="text-neutral-400 hover:text-white px-1 cursor-pointer"
+                title="Fechar sugestões"
+              >
+                ×
+              </button>
+            </div>
+            {secSuggestions.map((item) => (
+              <button
+                key={`sec-${item.code}-${item.description}`}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => void handleSelectSecondarySuggestion(item)}
+                className="w-full flex items-center gap-2 p-2 hover:bg-emerald-500/15 text-left transition-colors cursor-pointer group"
+              >
+                <div className="h-8 w-8 rounded bg-[#330409] border border-neutral-800 flex items-center justify-center shrink-0 overflow-hidden">
+                  {item.image ? (
+                    <img src={item.image} alt={item.description} className="max-h-full max-w-full object-contain" />
+                  ) : (
+                    <ImageIcon className="h-4 w-4 text-neutral-600" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono font-black text-emerald-300 text-xs">{item.code}</span>
+                    <span className="text-[9px] font-semibold px-1 rounded bg-neutral-800 text-neutral-400 uppercase">
+                      {item.source === "winthor" ? "Winthor" : "Cescom"}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-neutral-200 truncate uppercase font-semibold group-hover:text-emerald-200">
                     {item.description}
                   </div>
                 </div>

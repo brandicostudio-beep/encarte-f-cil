@@ -838,4 +838,37 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     expect(layout.photo2.y).toBeGreaterThan(layout.photo1.y);
     expect(layout.photo2.y + layout.photo2.height).toBeLessThan(185);
   });
+
+  it("Teste 23: searchCescomProductsOnline busca variações por descrição no site Cescom", async () => {
+    const { searchCescomProductsOnline } = await import("./encarte-semanal-catalog");
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const urlStr = typeof input === "string" ? input : input.toString();
+      if (urlStr.includes("/api/cescom-product?q=")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            products: [
+              {
+                code: "24725",
+                description: "BISCOITO RECHEADO OREO MORANGO 90G",
+                image: "https://cescom.agilecdn.com.br/24725_thumb_1.jpg",
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      return new Response(JSON.stringify({ ok: false }), { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const results = await searchCescomProductsOnline("oreo morango", 5);
+      expect(results).toHaveLength(1);
+      expect(results[0].code).toBe("24725");
+      expect(results[0].description).toContain("OREO MORANGO");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

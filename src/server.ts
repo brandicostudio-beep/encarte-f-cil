@@ -86,17 +86,19 @@ export default {
         });
       }
 
-      // Busca oficial de produto no site https://www.cescom.com.br por código
+      // Busca oficial de produto no site https://www.cescom.com.br por código ou descrição
       if (reqUrl.pathname === "/api/cescom-product") {
         const code = reqUrl.searchParams.get("code")?.trim();
-        if (!code) {
-          return new Response(JSON.stringify({ ok: false, error: "Missing code" }), {
+        const query = reqUrl.searchParams.get("q")?.trim();
+        const searchTerm = code || query;
+        if (!searchTerm) {
+          return new Response(JSON.stringify({ ok: false, error: "Missing code or q" }), {
             status: 400,
             headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
           });
         }
         try {
-          const upstream = await fetch(`https://www.cescom.com.br/busca?s=${encodeURIComponent(code)}`, {
+          const upstream = await fetch(`https://www.cescom.com.br/busca?s=${encodeURIComponent(searchTerm)}`, {
             headers: {
               "User-Agent":
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
@@ -111,6 +113,51 @@ export default {
           const html = await upstream.text();
           const { parse } = await import("node-html-parser");
           const root = parse(html);
+
+          if (query && !code) {
+            const items: Array<{ code: string; description: string; image: string; source: string }> = [];
+            const seenCodes = new Set<string>();
+            const cards = root.querySelectorAll(".product-card, [data-codigo-produto]");
+            for (const card of cards) {
+              const cardCode =
+                card.getAttribute("data-codigo-produto")?.trim() ||
+                card.querySelector("[data-codigo-produto]")?.getAttribute("data-codigo-produto")?.trim() ||
+                card.getAttribute("data-id-produto")?.trim() ||
+                card.querySelector("[data-id-produto]")?.getAttribute("data-id-produto")?.trim() ||
+                "";
+              const name =
+                card.getAttribute("data-nome")?.trim() ||
+                card.querySelector("[data-nome]")?.getAttribute("data-nome")?.trim() ||
+                card.querySelector(".product-card__name a")?.text?.trim() ||
+                card.querySelector(".product-card__name")?.text?.trim() ||
+                "";
+              if (cardCode && name && !seenCodes.has(cardCode)) {
+                seenCodes.add(cardCode);
+                items.push({
+                  code: cardCode,
+                  description: name.toUpperCase(),
+                  image: `https://cescom.agilecdn.com.br/${cardCode}_thumb_1.jpg`,
+                  source: "cescom.com.br",
+                });
+                if (items.length >= 10) break;
+              }
+            }
+
+            return new Response(
+              JSON.stringify({
+                ok: items.length > 0,
+                products: items,
+              }),
+              {
+                status: 200,
+                headers: {
+                  "Content-Type": "application/json",
+                  "Access-Control-Allow-Origin": "*",
+                  "Cache-Control": "public, max-age=3600",
+                },
+              }
+            );
+          }
 
           let foundName = "";
           const matches = root.querySelectorAll(`[data-codigo-produto='${code}'], [data-id-produto='${code}']`);
