@@ -160,6 +160,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
+  const [inspectorOpen, setInspectorOpen] = useState<boolean>(false);
   const [isEditingFooter, setIsEditingFooter] = useState<boolean>(false);
   const [localFolderStatus, setLocalFolderStatus] = useState<LocalFolderPhotoStatus>(() =>
     getLocalFolderStatus()
@@ -1520,10 +1521,18 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                           previewZoom={previewZoom}
                           onUpdateProduct={(updated) => handleSaveSlotProduct(idx, updated)}
                           onClickSlot={() => {
-                            setSelectedSlotIndex(selectedSlotIndex === idx ? null : idx);
+                            setSelectedSlotIndex(idx);
+                            if (!product) {
+                              setInspectorOpen(true);
+                            }
+                          }}
+                          onDoubleClickSlot={() => {
+                            setSelectedSlotIndex(idx);
+                            setInspectorOpen(true);
                           }}
                           onEdit={() => {
                             setSelectedSlotIndex(idx);
+                            setInspectorOpen(true);
                           }}
                         />
                       </div>
@@ -1591,9 +1600,9 @@ export const EncarteSemanalWorkspace: React.FC = () => {
               </div>
               </div>
 
-              {/* Painel Inspetor Lateral Fixo (1:1 sem corte e com scroll próprio, estilo Canva / Illustrator) */}
-              <aside className="w-full lg:w-[370px] shrink-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-140px)] overflow-y-auto">
-                {selectedSlotIndex !== null && gridCells[selectedSlotIndex] ? (
+              {/* Painel Inspetor Lateral Fixo: abre somente com 2 cliques contínuos (ou clique no lápis / box vazio) */}
+              {inspectorOpen && selectedSlotIndex !== null && gridCells[selectedSlotIndex] && (
+                <aside className="w-full lg:w-[370px] shrink-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-140px)] overflow-y-auto">
                   <EncarteSemanalInArtEditor
                     cell={gridCells[selectedSlotIndex]}
                     product={getProductAtSlot(selectedSlotIndex)}
@@ -1603,8 +1612,11 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                     allProducts={products}
                     onSwapSlots={(targetSlotIdx) => handleSwapSlots(selectedSlotIndex, targetSlotIdx)}
                     onSaveProduct={(updated) => handleSaveSlotProduct(selectedSlotIndex, updated)}
-                    onClearProduct={() => handleClearSlotProduct(selectedSlotIndex)}
-                    onClose={() => setSelectedSlotIndex(null)}
+                    onClearProduct={() => {
+                      handleClearSlotProduct(selectedSlotIndex);
+                      setInspectorOpen(false);
+                    }}
+                    onClose={() => setInspectorOpen(false)}
                     onSelectPrevSlot={() =>
                       setSelectedSlotIndex((prev) =>
                         prev === null ? 0 : (prev - 1 + gridCells.length) % gridCells.length
@@ -1620,34 +1632,8 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                       setProductModalOpen(true);
                     }}
                   />
-                ) : (
-                  <div className="bg-[#141414] border border-neutral-800 rounded-xl p-4 text-xs text-neutral-300 space-y-3">
-                    <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
-                      <span className="font-black text-amber-300 uppercase tracking-wider">
-                        Inspetor de Box
-                      </span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => setSelectedSlotIndex(0)}
-                        className="h-7 bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold text-[11px]"
-                      >
-                        Editar Box 1
-                      </Button>
-                    </div>
-                    <p className="text-neutral-400 leading-relaxed">
-                      Clique em qualquer box na arte ao lado para editar código, fotos, duplicação, selos e posição em tamanho real sem cobrir a grade.
-                    </p>
-                    <div className="bg-neutral-900/80 border border-neutral-800 rounded-lg p-3 space-y-1.5 text-[11px] text-neutral-400">
-                      <div className="font-bold text-neutral-200 mb-1">Atalhos estilo Illustrator / Canva:</div>
-                      <div>• <strong className="text-white">Ctrl + Roda do Mouse:</strong> Zoom suave na arte</div>
-                      <div>• <strong className="text-white">Arrastar foto / cantos:</strong> Mover e redimensionar 1:1</div>
-                      <div>• <strong className="text-white">Setas (↑ ↓ ← →):</strong> Ajuste fino de 1px (Shift = 5px)</div>
-                      <div>• <strong className="text-white">Ctrl + Z / Ctrl + Y:</strong> Desfazer e Refazer</div>
-                    </div>
-                  </div>
-                )}
-              </aside>
+                </aside>
+              )}
             </div>
           </div>
         )}

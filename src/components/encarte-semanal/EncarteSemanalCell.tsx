@@ -13,6 +13,7 @@ export interface EncarteSemanalCellProps {
   onUpdateProduct?: (updated: EncarteSemanalProduct) => void;
   onEdit?: (product: EncarteSemanalProduct) => void;
   onClickSlot?: () => void;
+  onDoubleClickSlot?: () => void;
 }
 
 export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
@@ -24,6 +25,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
   onUpdateProduct,
   onEdit,
   onClickSlot,
+  onDoubleClickSlot,
 }) => {
   const { width, height, photoAreaHeight, barHeight } = cell;
   const cellRef = useRef<HTMLDivElement>(null);
@@ -129,6 +131,10 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
         data-testid="semanal-cell-empty"
         data-cell-index={cell.index}
         onClick={handleClick}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onDoubleClickSlot?.();
+        }}
       >
         {/* Figma Handles quando selecionado */}
         {isSelected && (
@@ -357,6 +363,14 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
       data-testid="semanal-cell"
       data-product-code={product.code}
       onClick={handleClick}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        if (onDoubleClickSlot) {
+          onDoubleClickSlot();
+        } else if (onEdit && product) {
+          onEdit(product);
+        }
+      }}
     >
       {/* Figma Handles Interativos de Redimensionamento pelos 4 cantos */}
       {isSelected && (
@@ -480,10 +494,12 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            if (onClickSlot) {
-              onClickSlot();
-            } else if (onEdit) {
+            if (onEdit) {
               onEdit(product);
+            } else if (onDoubleClickSlot) {
+              onDoubleClickSlot();
+            } else if (onClickSlot) {
+              onClickSlot();
             }
           }}
           className="absolute top-1 right-1 z-30 opacity-0 group-hover:opacity-100 transition-opacity bg-neutral-900/90 hover:bg-neutral-800 text-amber-300 p-1.5 rounded-md shadow-lg border border-amber-500/40 cursor-pointer"
