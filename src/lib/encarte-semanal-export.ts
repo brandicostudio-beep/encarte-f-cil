@@ -31,26 +31,30 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-function wrapText(
+export function wrapText(
   ctx: CanvasRenderingContext2D,
   text: string,
   maxWidth: number,
   maxLines = 2
-): string[] {
-  const words = text.split(" ");
+): { lines: string[]; overflowed: boolean } {
+  const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let currentLine = "";
+  let overflowed = false;
 
-  for (const word of words) {
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
     const testLine = currentLine ? `${currentLine} ${word}` : word;
     const width = ctx.measureText(testLine).width;
 
-    if (width <= maxWidth) {
+    if (width <= maxWidth || !currentLine) {
       currentLine = testLine;
-    } else {
-      if (currentLine) lines.push(currentLine);
+    } else if (lines.length < maxLines - 1) {
+      lines.push(currentLine);
       currentLine = word;
-      if (lines.length === maxLines - 1) break;
+    } else {
+      overflowed = true;
+      break;
     }
   }
 
@@ -58,15 +62,16 @@ function wrapText(
     lines.push(currentLine);
   }
 
-  // Se exceder maxLines, adiciona ellipsis
-  if (lines.length === maxLines && words.length > 0) {
-    const last = lines[lines.length - 1];
-    if (ctx.measureText(last).width > maxWidth - 10) {
-      lines[lines.length - 1] = last.slice(0, -3) + "...";
+  if (overflowed && lines.length > 0) {
+    const lastIdx = lines.length - 1;
+    let last = lines[lastIdx];
+    while (last.length > 3 && ctx.measureText(`${last}...`).width > maxWidth) {
+      last = last.slice(0, -1).trimEnd();
     }
+    lines[lastIdx] = `${last}...`;
   }
 
-  return lines;
+  return { lines, overflowed };
 }
 
 function roundRect(
@@ -325,21 +330,30 @@ export async function renderEncarteSemanalPageToCanvas(
       availableDescWidth = barW - codeBoxW - 12;
     }
 
-    // Descrição do Produto
+    // Descrição do Produto (ajusta fonte automaticamente de 13.5px até 10.5px para nunca cortar palavras)
     if (desc) {
-      ctx.font = "900 13.5px 'Segoe UI', Roboto, Arial, sans-serif";
       ctx.fillStyle = gridConfig.barTextColor || "#7A0D12";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      const lines = wrapText(ctx, desc, availableDescWidth, 2);
-      const descCenterX = textStartX + availableDescWidth / 2;
+      let chosenFontSize = 13.5;
+      let wrapped = { lines: [desc], overflowed: false };
+      for (const candidateSize of [13.5, 12.5, 11.5, 10.5]) {
+        ctx.font = `900 ${candidateSize}px 'Segoe UI', Roboto, Arial, sans-serif`;
+        wrapped = wrapText(ctx, desc, availableDescWidth, 2);
+        chosenFontSize = candidateSize;
+        if (!wrapped.overflowed) break;
+      }
 
-      if (lines.length === 1) {
-        ctx.fillText(lines[0], descCenterX, barY + barH / 2);
-      } else if (lines.length >= 2) {
-        ctx.fillText(lines[0], descCenterX, barY + barH / 2 - 8.5);
-        ctx.fillText(lines[1], descCenterX, barY + barH / 2 + 8.5);
+      ctx.font = `900 ${chosenFontSize}px 'Segoe UI', Roboto, Arial, sans-serif`;
+      const descCenterX = textStartX + availableDescWidth / 2;
+      const lineOffset = chosenFontSize >= 13 ? 8.5 : 7.5;
+
+      if (wrapped.lines.length === 1) {
+        ctx.fillText(wrapped.lines[0], descCenterX, barY + barH / 2, availableDescWidth);
+      } else if (wrapped.lines.length >= 2) {
+        ctx.fillText(wrapped.lines[0], descCenterX, barY + barH / 2 - lineOffset, availableDescWidth);
+        ctx.fillText(wrapped.lines[1], descCenterX, barY + barH / 2 + lineOffset, availableDescWidth);
       }
     }
     ctx.restore();

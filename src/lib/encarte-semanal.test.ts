@@ -974,4 +974,16 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     expect(cleanPrincipalDescription("PEDRA SANITÁRIA AROMAS DO CAMPO TRIEX")).toBe("PEDRA SANITÁRIA TRIEX");
     expect(cleanPrincipalDescription("PEDRA SANITÁRIA FLOR DE ROSAS TRIEX")).toBe("PEDRA SANITÁRIA TRIEX");
   });
+
+  it("Teste 29: wrapText na exportação PNG não corta palavras da segunda linha", async () => {
+    const { wrapText } = await import("./encarte-semanal-export");
+    const mockCtx = {
+      measureText: (txt: string) => ({ width: txt.length * 7 }),
+    } as unknown as CanvasRenderingContext2D;
+
+    const res = wrapText(mockCtx, "SABONETE INTENSO AZUL LEVE 12 PAGUE 11 FRANCIS", 180, 2);
+    expect(res.lines).toHaveLength(2);
+    expect(res.lines.join(" ")).toContain("FRANCIS");
+    expect(res.overflowed).toBe(false);
+  });
 });
