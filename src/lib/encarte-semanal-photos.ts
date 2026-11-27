@@ -25,7 +25,7 @@ import {
 import { fileToDataUrl, type LocalIndexedFile } from "./local-folder-service";
 import { autoTrimImageWhitespace } from "./image-normalizer";
 
-async function trimEmptyMarginsSafe(dataUrl: string): Promise<string> {
+export async function trimEmptyMarginsSafe(dataUrl: string): Promise<string> {
   if (!dataUrl || typeof window === "undefined" || typeof document === "undefined") return dataUrl;
   try {
     const res = await Promise.race([

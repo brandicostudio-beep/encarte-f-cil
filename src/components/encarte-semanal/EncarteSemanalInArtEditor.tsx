@@ -15,6 +15,7 @@ import {
   fetchSingleDrivePhotoForCode,
   resolveBestPhotoForCode,
   copyProductCodeToClipboard,
+  trimEmptyMarginsSafe,
 } from "@/lib/encarte-semanal-photos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -350,15 +351,16 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     onSaveProduct(updated);
   };
 
-  // Upload manual de imagem 1 (preserva 100% o PNG transparente original sem conversão ou recorte destrutivo)
+  // Upload manual de imagem 1 (preserva 100% o PNG transparente original e remove apenas sobra vazia externa)
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsLoadingPhoto(true);
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string;
+    reader.onload = async (ev) => {
+      const rawDataUrl = ev.target?.result as string;
+      const dataUrl = await trimEmptyMarginsSafe(rawDataUrl);
       setImage(dataUrl);
       setIsLoadingPhoto(false);
 
@@ -374,22 +376,29 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
     reader.readAsDataURL(file);
   };
 
-  // Upload manual de imagem 2 / variação (preserva 100% o PNG transparente original)
+  // Upload manual de imagem 2 / variação (preserva 100% o PNG transparente original e iguala proporção)
   const handleSecondaryImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsLoadingPhoto(true);
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string;
+    reader.onload = async (ev) => {
+      const rawDataUrl = ev.target?.result as string;
+      const dataUrl = await trimEmptyMarginsSafe(rawDataUrl);
       setSecondaryImage(dataUrl);
+      setScale2(scale);
       setIsLoadingPhoto(false);
 
       if (product) {
         onSaveProduct({
           ...product,
           secondaryImage: dataUrl,
+          scale2: scale,
+          offsetX: 0,
+          offsetY: 0,
+          offsetX2: 0,
+          offsetY2: 0,
         });
       }
     };
@@ -478,16 +487,23 @@ export const EncarteSemanalInArtEditor: React.FC<EncarteSemanalInArtEditorProps>
   };
 
   // Aplicar uma variação inteligente na Foto 2
-  const handleSelectVariation = (variation: { code: string; description: string; image?: string }) => {
+  const handleSelectVariation = async (variation: { code: string; description: string; image?: string }) => {
     if (!variation.image) return;
-    setSecondaryImage(variation.image);
+    const trimmedImg = await trimEmptyMarginsSafe(variation.image);
+    setSecondaryImage(trimmedImg);
     setDuplicatePhoto(false);
+    setScale2(scale);
     if (product) {
       onSaveProduct({
         ...product,
-        secondaryImage: variation.image,
+        secondaryImage: trimmedImg,
         secondaryCode: variation.code,
         duplicatePhoto: false,
+        scale2: scale,
+        offsetX: 0,
+        offsetY: 0,
+        offsetX2: 0,
+        offsetY2: 0,
       });
     }
   };
