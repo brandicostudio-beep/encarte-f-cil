@@ -623,7 +623,8 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   }, [products, gridConfig.itemsPerPage]);
 
   const { pages, pendingProducts, totalPages } = pagination;
-  const effectiveTotalPages = Math.max(1, totalPages, manualPagesCount);
+  const maxProductPage = products.reduce((max, p) => Math.max(max, p.pageIndex || 1), 1);
+  const effectiveTotalPages = Math.max(1, totalPages, manualPagesCount, maxProductPage);
   const currentProducts = pages[currentPage - 1] || [];
 
   const currentPageGridConfig = useMemo(() => {
@@ -661,9 +662,12 @@ export const EncarteSemanalWorkspace: React.FC = () => {
       return null;
     }
 
-    // 3. Produtos legados sem pageIndex, mas com slotIndex global explícito
+    // 3. Produtos legados sem pageIndex, mas com slotIndex global explícito (restritos à sua página de origem)
     const byExplicitSlot = products.find(
-      (p) => p.pageIndex === undefined && p.slotIndex === targetGlobalIndex
+      (p) =>
+        p.pageIndex === undefined &&
+        p.slotIndex === targetGlobalIndex &&
+        Math.floor(p.slotIndex / (gridConfig.itemsPerPage || 20)) + 1 === pageNum
     );
     if (byExplicitSlot) return byExplicitSlot;
 
@@ -1675,7 +1679,7 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                 </Button>
                 <span className="font-bold text-white px-2">
                   Tela {currentPage} de {effectiveTotalPages} (
-                  {currentProducts.length} produtos)
+                  {gridCells.filter((_, idx) => Boolean(getProductAtSlot(idx))).length} produtos)
                 </span>
                 <Button
                   size="sm"
