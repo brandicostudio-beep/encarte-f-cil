@@ -876,4 +876,25 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("Teste 24: calculateEncarteSemanalGridCells ajusta para quantidade personalizada (ex: 13) e centraliza último item", () => {
+    const customGrid = {
+      ...DEFAULT_ENCARTE_SEMANAL_GRID,
+      columnsCount: 4,
+      rowsCount: 4,
+      itemsPerPage: 13,
+    };
+    const cells = calculateEncarteSemanalGridCells(customGrid);
+    expect(cells).toHaveLength(13);
+
+    // O 13º produto (última linha sozinho) deve estar centralizado entre xStart e xEnd
+    const lastCell = cells[12];
+    const leftSpace = lastCell.x - customGrid.xStart;
+    const rightSpace = customGrid.xEnd - (lastCell.x + lastCell.width);
+    expect(leftSpace).toBeCloseTo(rightSpace, 1);
+
+    // Todos os boxes permanecem dentro dos limites verticais configurados
+    expect(cells[0].y).toBeGreaterThanOrEqual(customGrid.yStart);
+    expect(lastCell.y + lastCell.height).toBeLessThanOrEqual(customGrid.yEnd + 0.5);
+  });
 });

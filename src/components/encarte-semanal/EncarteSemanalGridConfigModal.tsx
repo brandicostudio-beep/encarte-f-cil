@@ -71,6 +71,37 @@ export const EncarteSemanalGridConfigModal: React.FC<EncarteSemanalGridConfigMod
         </DialogHeader>
 
         <div className="space-y-4 my-2 text-xs">
+          {/* Quantidade Total de Produtos na Tela (ajuste automático da grade) */}
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg space-y-1.5">
+            <Label className="text-amber-300 font-bold flex items-center justify-between">
+              <span>Quantidade de Produtos na Tela (Padrão: 20)</span>
+              <span className="text-[10px] font-normal text-amber-200/80">Centraliza última linha</span>
+            </Label>
+            <Input
+              type="number"
+              min={1}
+              max={36}
+              value={form.itemsPerPage || form.columnsCount * form.rowsCount}
+              onChange={(e) => {
+                const count = Math.max(1, Math.min(36, parseInt(e.target.value) || 1));
+                const autoCols =
+                  count <= 2 ? count : count <= 4 ? 2 : count <= 8 ? 3 : count <= 20 ? 4 : count <= 25 ? 5 : 6;
+                const autoRows = Math.max(1, Math.ceil(count / autoCols));
+                setForm({
+                  ...form,
+                  itemsPerPage: count,
+                  columnsCount: autoCols,
+                  rowsCount: autoRows,
+                });
+              }}
+              className="bg-neutral-900 border-amber-500/40 text-amber-300 font-bold"
+              data-testid="grid-config-items-per-page"
+            />
+            <span className="text-[10px] text-neutral-400 block">
+              Ex.: se digitar 13, o quadro organiza 13 boxes dentro da arte e centraliza o último produto na linha final.
+            </span>
+          </div>
+
           {/* Número de Linhas e Colunas */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -80,12 +111,15 @@ export const EncarteSemanalGridConfigModal: React.FC<EncarteSemanalGridConfigMod
                 min={1}
                 max={6}
                 value={form.columnsCount}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const cols = Math.max(1, Math.min(6, parseInt(e.target.value) || 1));
+                  const nextItems = cols * form.rowsCount;
                   setForm({
                     ...form,
-                    columnsCount: Math.max(1, parseInt(e.target.value) || 1),
-                  })
-                }
+                    columnsCount: cols,
+                    itemsPerPage: nextItems,
+                  });
+                }}
                 className="bg-neutral-800 border-neutral-700 text-white"
               />
             </div>
@@ -96,12 +130,15 @@ export const EncarteSemanalGridConfigModal: React.FC<EncarteSemanalGridConfigMod
                 min={1}
                 max={8}
                 value={form.rowsCount}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const rows = Math.max(1, Math.min(8, parseInt(e.target.value) || 1));
+                  const nextItems = form.columnsCount * rows;
                   setForm({
                     ...form,
-                    rowsCount: Math.max(1, parseInt(e.target.value) || 1),
-                  })
-                }
+                    rowsCount: rows,
+                    itemsPerPage: nextItems,
+                  });
+                }}
                 className="bg-neutral-800 border-neutral-700 text-white"
               />
             </div>
@@ -184,10 +221,10 @@ export const EncarteSemanalGridConfigModal: React.FC<EncarteSemanalGridConfigMod
           <div className="p-3 bg-neutral-950/60 rounded-lg border border-neutral-800 text-[11px] text-neutral-400">
             <strong>Resumo:</strong> {form.columnsCount} colunas × {form.rowsCount} linhas ={" "}
             <span className="text-amber-300 font-bold">
-              {form.columnsCount * form.rowsCount} produtos por tela
+              {form.itemsPerPage || form.columnsCount * form.rowsCount} produtos por tela
             </span>
             . Altura total útil da grade: {form.yEnd - form.yStart}px (
-            {Math.round((form.yEnd - form.yStart) / form.rowsCount)}px por linha).
+            {Math.round((form.yEnd - form.yStart) / Math.max(1, form.rowsCount))}px por linha).
           </div>
         </div>
 

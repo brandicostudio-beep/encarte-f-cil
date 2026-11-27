@@ -24,37 +24,40 @@ export function calculateEncarteSemanalGridCells(
     xEnd,
     yStart,
     yEnd,
-    columns,
     columnsCount = 4,
     rowsCount = 5,
+    itemsPerPage,
     barHeight = 54,
   } = gridConfig;
 
-  // Determine dynamic columns/rows if productCount provided
-  let dynColumns = columnsCount;
-  let dynRows = rowsCount;
-  if (typeof productCount === 'number' && productCount > 0) {
-    // Limit columns to a reasonable max (e.g., 6) to keep cells readable
-    const maxColumns = 6;
-    dynColumns = Math.min(productCount, maxColumns);
-    dynRows = Math.ceil(productCount / dynColumns);
-  }
+  const targetCount =
+    typeof productCount === "number" && productCount > 0
+      ? productCount
+      : typeof itemsPerPage === "number" && itemsPerPage > 0
+      ? itemsPerPage
+      : columnsCount * rowsCount;
+
+  const dynColumns = Math.max(1, Math.min(columnsCount, targetCount));
+  const dynRows = Math.max(1, Math.ceil(targetCount / dynColumns));
 
   const totalWidth = xEnd - xStart;
   const totalHeight = yEnd - yStart;
   const cellWidth = totalWidth / dynColumns;
   const cellHeight = totalHeight / dynRows;
 
-  // Center the grid within canvas
-  const offsetX = xStart + (totalWidth - cellWidth * dynColumns) / 2;
-  const offsetY = yStart + (totalHeight - cellHeight * dynRows) / 2;
-
   const cells: EncarteSemanalCellPosition[] = [];
   let index = 0;
   for (let r = 0; r < dynRows; r++) {
-    const y = offsetY + r * cellHeight;
-    for (let c = 0; c < dynColumns; c++) {
-      const x = offsetX + c * cellWidth;
+    const remaining = targetCount - index;
+    const itemsInRow = Math.min(dynColumns, remaining);
+    if (itemsInRow <= 0) break;
+
+    const rowWidth = itemsInRow * cellWidth;
+    const rowOffsetX = xStart + (totalWidth - rowWidth) / 2;
+    const y = yStart + r * cellHeight;
+
+    for (let c = 0; c < itemsInRow; c++) {
+      const x = rowOffsetX + c * cellWidth;
       const photoAreaHeight = cellHeight - barHeight;
       const barY = y + photoAreaHeight;
       cells.push({
