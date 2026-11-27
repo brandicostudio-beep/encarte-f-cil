@@ -817,4 +817,25 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     expect(created.scale).toBe(1.0);
     expect(created.scale2).toBe(1.0);
   });
+
+  it("Teste 22: computeSemanalTwoPhotoLayout centraliza e amplia produtos horizontais (ex: biscoito Oreo)", async () => {
+    const { computeSemanalTwoPhotoLayout } = await import("./encarte-semanal-editing");
+    const layout = computeSemanalTwoPhotoLayout({
+      boxX: 0,
+      boxWidth: 250,
+      photoAreaHeight: 200,
+      barY: 200,
+      aspect1: 3.2,
+      aspect2: 3.2,
+      scale1: 1.0,
+      scale2: 1.0,
+    });
+
+    // Deve preencher mais largura por item do que o modo lado a lado tradicional
+    expect(layout.photo1.width).toBeGreaterThan(150);
+    // Deve ficar centralizado verticalmente na área da foto, não colado no fundo
+    expect(layout.photo1.y).toBeGreaterThan(20);
+    expect(layout.photo2.y).toBeGreaterThan(layout.photo1.y);
+    expect(layout.photo2.y + layout.photo2.height).toBeLessThan(185);
+  });
 });

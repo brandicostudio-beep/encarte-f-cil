@@ -75,10 +75,11 @@ export function computeSemanalTwoPhotoLayout(params: {
 
   const availableW = Math.max(20, boxWidth - 16);
   const availableH = Math.max(20, photoAreaHeight - 14);
+  const isWidePair = aspect1 > 1.35 && aspect2 > 1.35;
 
   const fitBaseSize = (aspect: number) => {
-    const maxItemW = availableW * 0.62;
-    const maxItemH = availableH * 0.94;
+    const maxItemW = availableW * (isWidePair ? 0.78 : 0.62);
+    const maxItemH = availableH * (isWidePair ? 0.56 : 0.94);
     let w = maxItemW;
     let h = w / aspect;
     if (h > maxItemH) {
@@ -91,7 +92,8 @@ export function computeSemanalTwoPhotoLayout(params: {
   let base1 = fitBaseSize(aspect1);
   let base2 = fitBaseSize(aspect2);
 
-  const baseOverlapPx = Math.min(base1.w, base2.w) * overlapRatio;
+  const effectiveOverlapRatio = isWidePair ? 0.62 : overlapRatio;
+  const baseOverlapPx = Math.min(base1.w, base2.w) * effectiveOverlapRatio;
   let basePairW = base1.w + base2.w - baseOverlapPx;
 
   // Garante que na escala padrão (1.0) o par caiba perfeitamente no box com respiro
@@ -111,16 +113,33 @@ export function computeSemanalTwoPhotoLayout(params: {
   const size1 = { w: base1.w * s1, h: base1.h * s1 };
   const size2 = { w: base2.w * s2, h: base2.h * s2 };
 
+  // Centraliza verticalmente quando as fotos forem baixas/horizontais para não ficarem coladas no rodapé
+  let baseY1: number;
+  let baseY2: number;
+  if (isWidePair) {
+    const stepY = Math.min(Math.max(base1.h, base2.h) * 0.72, availableH * 0.38);
+    const pairH = Math.max(base1.h, stepY + base2.h);
+    const pairTopY = Math.max(6, (photoAreaHeight - pairH) / 2);
+    baseY1 = pairTopY + (base1.h - size1.h) / 2;
+    baseY2 = pairTopY + stepY + (base2.h - size2.h) / 2;
+  } else {
+    const tallestBase = Math.max(base1.h, base2.h);
+    const centeredOffset1 = tallestBase < availableH * 0.78 ? (photoAreaHeight - size1.h) / 2 : barY - size1.h + overlapY;
+    const centeredOffset2 = tallestBase < availableH * 0.78 ? (photoAreaHeight - size2.h) / 2 : barY - size2.h + overlapY;
+    baseY1 = centeredOffset1;
+    baseY2 = centeredOffset2;
+  }
+
   return {
     photo1: {
       x: baseCenter1X - size1.w / 2 + offsetX1,
-      y: barY - size1.h + overlapY + offsetY1,
+      y: baseY1 + offsetY1,
       width: size1.w,
       height: size1.h,
     },
     photo2: {
       x: baseCenter2X - size2.w / 2 + offsetX2,
-      y: barY - size2.h + overlapY + offsetY2,
+      y: baseY2 + offsetY2,
       width: size2.w,
       height: size2.h,
     },

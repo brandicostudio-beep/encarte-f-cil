@@ -593,7 +593,7 @@ export const EncarteSemanalCell: React.FC<EncarteSemanalCellProps> = ({
         ) : cleanPhoto1 ? (
           /* Foto Única e Centralizada: ampla, espaçosa e arrastável estilo Canva/Figma */
           <div
-            className={`relative w-full h-full flex items-end justify-center pb-1 ${
+            className={`relative w-full h-full flex items-center justify-center ${
               isSelected ? "cursor-grab active:cursor-grabbing" : "pointer-events-none"
             }`}
             onPointerDown={(e) => handlePhotoPointerDown("photo1", e)}
