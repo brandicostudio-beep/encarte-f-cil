@@ -213,3 +213,99 @@ export function paginateEncarteSemanalProducts(
     totalPending: pendingProducts.length,
   };
 }
+
+/**
+ * Resolve os produtos de cada slot (0..totalSlots-1) de uma página específica,
+ * garantindo que cada página fique 100% isolada e nenhum produto seja duplicado
+ * em dois boxes quando outros itens forem editados ou movidos.
+ */
+export function resolveSemanalPageSlotProducts(
+  products: EncarteSemanalProduct[],
+  gridConfig: EncarteSemanalGridConfig,
+  pageNum: number,
+  pageItems: EncarteSemanalProduct[],
+  totalSlots: number
+): (EncarteSemanalProduct | null)[] {
+  const slots: (EncarteSemanalProduct | null)[] = Array.from({ length: totalSlots }, () => null);
+  const assignedIds = new Set<string>();
+  const pageOffset = getSemanalPageStartOffset(gridConfig, pageNum);
+  const baseItemsPerPage = gridConfig.itemsPerPage || 20;
+
+  // 1. Prioridade máxima: posição local exata na página (pageIndex + pageSlotIndex)
+  for (const p of products) {
+    if (
+      p.pageIndex === pageNum &&
+      p.pageSlotIndex !== undefined &&
+      p.pageSlotIndex >= 0 &&
+      p.pageSlotIndex < totalSlots &&
+      !slots[p.pageSlotIndex] &&
+      !assignedIds.has(p.id)
+    ) {
+      slots[p.pageSlotIndex] = p;
+      assignedIds.add(p.id);
+    }
+  }
+
+  // 2. Produtos salvos com pageIndex explícito + slotIndex legado (nunca vaza para outra página!)
+  const pageOwnedWithLegacySlot = products.filter(
+    (p) => p.pageIndex === pageNum && p.pageSlotIndex === undefined && !assignedIds.has(p.id)
+  );
+  if (pageOwnedWithLegacySlot.length > 0) {
+    const remainingLegacy: EncarteSemanalProduct[] = [];
+    for (const p of pageOwnedWithLegacySlot) {
+      const localIdx = p.slotIndex !== undefined ? p.slotIndex - pageOffset : -1;
+      if (localIdx >= 0 && localIdx < totalSlots && !slots[localIdx] && !assignedIds.has(p.id)) {
+        slots[localIdx] = p;
+        assignedIds.add(p.id);
+      } else {
+        remainingLegacy.push(p);
+      }
+    }
+    if (remainingLegacy.length > 0) {
+      const sortedRemaining = [...remainingLegacy].sort(
+        (a, b) => (a.slotIndex ?? 0) - (b.slotIndex ?? 0)
+      );
+      let cursor = 0;
+      for (const p of sortedRemaining) {
+        if (assignedIds.has(p.id)) continue;
+        while (cursor < totalSlots && slots[cursor] !== null) cursor++;
+        if (cursor >= totalSlots) break;
+        slots[cursor] = p;
+        assignedIds.add(p.id);
+      }
+    }
+  }
+
+  // 3. Produtos legados sem pageIndex, mas com slotIndex global explícito (restritos à sua página de origem)
+  for (const p of products) {
+    if (
+      p.pageIndex === undefined &&
+      p.slotIndex !== undefined &&
+      Math.floor(p.slotIndex / baseItemsPerPage) + 1 === pageNum &&
+      !assignedIds.has(p.id)
+    ) {
+      const localIdx = p.slotIndex - pageOffset;
+      if (localIdx >= 0 && localIdx < totalSlots && !slots[localIdx]) {
+        slots[localIdx] = p;
+        assignedIds.add(p.id);
+      }
+    }
+  }
+
+  // 4. Produtos importados via planilha sem pageIndex nem slotIndex (sequência da página)
+  for (let slotIdx = 0; slotIdx < totalSlots; slotIdx++) {
+    if (slots[slotIdx]) continue;
+    const unpinned = pageItems[slotIdx];
+    if (
+      unpinned &&
+      unpinned.pageIndex === undefined &&
+      unpinned.slotIndex === undefined &&
+      !assignedIds.has(unpinned.id)
+    ) {
+      slots[slotIdx] = unpinned;
+      assignedIds.add(unpinned.id);
+    }
+  }
+
+  return slots;
+}

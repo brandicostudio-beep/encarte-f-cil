@@ -998,4 +998,30 @@ describe("Encarte Semanal - Regras de Negócio e Testes Obrigatórios", () => {
     const page2Slot0 = prods.find((p) => p.pageIndex === 2 && p.pageSlotIndex === 0) || null;
     expect(page2Slot0?.code).toBe("200");
   });
+
+  it("Teste 31: resolveSemanalPageSlotProducts nunca duplica produto no box ao lado após editar/mover um slot legado", async () => {
+    const { resolveSemanalPageSlotProducts } = await import("./encarte-semanal-layout");
+    const gridConfig = {
+      ...DEFAULT_ENCARTE_SEMANAL_CONFIG.gridConfig,
+      itemsPerPage: 18,
+      pageConfigs: { "2": { itemsPerPage: 13 } },
+    };
+
+    // Simula Página 2 com produtos legados (pageIndex: 2, sem pageSlotIndex) onde o item 0 foi editado/movido para o slot 12
+    const prods: EncarteSemanalProduct[] = [
+      { id: "a0", code: "1", description: "MULTI-USO YPE", pageIndex: 2, pageSlotIndex: 12, slotIndex: 30 },
+      { id: "a1", code: "2", description: "AGUA SANITARIA", pageIndex: 2, slotIndex: 19 },
+      { id: "a7", code: "7", description: "ALCOOL LIQUIDO", pageIndex: 2, slotIndex: 25 },
+      { id: "a8", code: "8", description: "HIDRATANTE MONANGE", pageIndex: 2, slotIndex: 26 },
+      { id: "a9", code: "9", description: "HIDRATANTE PAIXAO", pageIndex: 2, slotIndex: 27 },
+    ];
+
+    const slots = resolveSemanalPageSlotProducts(prods, gridConfig, 2, [], 13);
+    const ids = slots.filter(Boolean).map((p) => p!.id);
+    // Nenhum ID pode se repetir em dois boxes diferentes
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(slots[8]?.id).toBe("a8");
+    expect(slots[9]?.id).toBe("a9");
+    expect(slots[12]?.id).toBe("a0");
+  });
 });
