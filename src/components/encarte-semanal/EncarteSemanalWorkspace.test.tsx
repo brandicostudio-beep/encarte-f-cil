@@ -38,6 +38,9 @@ describe("EncarteSemanalWorkspace: Navegação e Desbloqueio de Abas", () => {
     expect(html).toContain("Visualizar Encarte");
     expect(html).toContain("Lista de Produtos");
     expect(html).toContain("Pendências / Sem Foto");
+    expect(html).toContain("Novo");
+    expect(html).toContain("Recentes");
+    expect(html).toContain("Salvar como");
 
     // Deve conter o banner explicativo de edição direta estilo Canva/Figma
     expect(html).toContain("Edição Direta na Arte (Estilo Canva/Figma)");

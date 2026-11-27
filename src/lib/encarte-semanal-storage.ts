@@ -267,3 +267,121 @@ export function loadEncarteSemanalConfig(): EncarteSemanalConfig {
     exportScale: DEFAULT_ENCARTE_SEMANAL_CONFIG.exportScale,
   };
 }
+
+export interface RecentSemanalFlyer {
+  id: string;
+  name: string;
+  savedAt: string;
+  productCount: number;
+  products: EncarteSemanalProduct[];
+  templateImage: string;
+  footerText: string;
+  gridConfig: EncarteSemanalGridConfig;
+}
+
+const RECENT_DB_NAME = "encarte_semanal_recents_db";
+const RECENT_STORE_NAME = "recent_flyers";
+
+function openRecentFlyersDb(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === "undefined") return Promise.resolve(null);
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(RECENT_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(RECENT_STORE_NAME)) {
+          db.createObjectStore(RECENT_STORE_NAME, { keyPath: "id" });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+export async function listRecentSemanalFlyers(): Promise<RecentSemanalFlyer[]> {
+  const db = await openRecentFlyersDb();
+  if (!db) return [];
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(RECENT_STORE_NAME, "readonly");
+      const req = tx.objectStore(RECENT_STORE_NAME).getAll();
+      req.onsuccess = () => {
+        const items = ((req.result || []) as RecentSemanalFlyer[]).sort(
+          (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime()
+        );
+        resolve(items);
+      };
+      req.onerror = () => resolve([]);
+    } catch {
+      resolve([]);
+    }
+  });
+}
+
+export async function saveRecentSemanalFlyer(
+  flyer: Omit<RecentSemanalFlyer, "id" | "savedAt" | "productCount"> & { id?: string }
+): Promise<RecentSemanalFlyer[]> {
+  const db = await openRecentFlyersDb();
+  const cleanName = (flyer.name || "Encarte Semanal").trim();
+  const id = flyer.id || cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const entry: RecentSemanalFlyer = {
+    id,
+    name: cleanName,
+    savedAt: new Date().toISOString(),
+    productCount: flyer.products.length,
+    products: flyer.products,
+    templateImage: flyer.templateImage,
+    footerText: flyer.footerText,
+    gridConfig: flyer.gridConfig,
+  };
+  if (!db) return [entry];
+
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(RECENT_STORE_NAME, "readwrite");
+      tx.objectStore(RECENT_STORE_NAME).put(entry);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+
+  const all = await listRecentSemanalFlyers();
+  // Mantém no máximo os 10 encartes mais recentes
+  if (all.length > 10) {
+    const toDelete = all.slice(10);
+    await new Promise<void>((resolve) => {
+      try {
+        const tx = db.transaction(RECENT_STORE_NAME, "readwrite");
+        const store = tx.objectStore(RECENT_STORE_NAME);
+        for (const old of toDelete) store.delete(old.id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      } catch {
+        resolve();
+      }
+    });
+    return all.slice(0, 10);
+  }
+  return all;
+}
+
+export async function deleteRecentSemanalFlyer(id: string): Promise<RecentSemanalFlyer[]> {
+  const db = await openRecentFlyersDb();
+  if (!db) return [];
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(RECENT_STORE_NAME, "readwrite");
+      tx.objectStore(RECENT_STORE_NAME).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+  return listRecentSemanalFlyers();
+}

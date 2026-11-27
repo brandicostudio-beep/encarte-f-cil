@@ -21,6 +21,10 @@ import {
   saveStoredCatalog,
   loadFillMode,
   saveFillMode,
+  listRecentSemanalFlyers,
+  saveRecentSemanalFlyer,
+  deleteRecentSemanalFlyer,
+  type RecentSemanalFlyer,
 } from "@/lib/encarte-semanal-storage";
 import {
   calculateEncarteSemanalGridCells,
@@ -99,6 +103,7 @@ import {
   Undo2,
   Redo2,
   CheckCheck,
+  Plus,
   ArrowLeftRight,
   Tag,
   Cloud,
@@ -406,6 +411,33 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   const [currentFileName, setCurrentFileName] = useState<string | null>(null);
   const [fileHandle, setFileHandle] = useState<any>(null);
   const [isSavingFile, setIsSavingFile] = useState<boolean>(false);
+  const [recentFlyers, setRecentFlyers] = useState<RecentSemanalFlyer[]>([]);
+  const [recentMenuOpen, setRecentMenuOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    listRecentSemanalFlyers().then(setRecentFlyers);
+  }, []);
+
+  const handleNewEncarte = () => {
+    if (
+      products.length > 0 &&
+      !window.confirm("Deseja iniciar um Novo Encarte em branco? Os produtos atuais da tela serão limpos.")
+    ) {
+      return;
+    }
+    setProducts([]);
+    saveEncarteSemanalProducts([]);
+    setHistory([[]]);
+    setHistoryIndex(0);
+    setFileHandle(null);
+    setCurrentFileName(null);
+    setSelectedSlotIndex(null);
+    setInspectorOpen(false);
+    setCurrentPage(1);
+    setActiveTab("preview");
+    setExportMessage("✨ Novo encarte em branco pronto para edição.");
+    setTimeout(() => setExportMessage(null), 3500);
+  };
 
   const bgFileInputRef = useRef<HTMLInputElement>(null);
   const openProjectFileInputRef = useRef<HTMLInputElement>(null);
@@ -436,8 +468,29 @@ export const EncarteSemanalWorkspace: React.FC = () => {
     }
     setCurrentPage(1);
     setActiveTab("preview");
-    setExportMessage(`✓ Encarte aberto da pasta do computador: ${handle?.name || project.name}`);
+    setRecentMenuOpen(false);
+    void saveRecentSemanalFlyer({
+      name: handle?.name || project.name || "Encarte Semanal",
+      products: project.products || [],
+      templateImage: project.templateImage || templateImage,
+      footerText: typeof project.footerText === "string" ? project.footerText : footerText,
+      gridConfig: project.gridConfig || gridConfig,
+    }).then(setRecentFlyers);
+    setExportMessage(`✓ Encarte aberto: ${handle?.name || project.name}`);
     setTimeout(() => setExportMessage(null), 4000);
+  };
+
+  const handleOpenRecentFlyer = (recent: RecentSemanalFlyer) => {
+    applyLoadedProject({
+      version: 1,
+      type: "encarte-semanal",
+      name: recent.name,
+      savedAt: recent.savedAt,
+      products: recent.products,
+      templateImage: recent.templateImage,
+      footerText: recent.footerText,
+      gridConfig: recent.gridConfig,
+    });
   };
 
   // Salvar na pasta do computador (grava diretamente no mesmo arquivo se já tiver handle)
@@ -465,6 +518,13 @@ export const EncarteSemanalWorkspace: React.FC = () => {
         if (result.filename) {
           setCurrentFileName(result.filename);
         }
+        void saveRecentSemanalFlyer({
+          name: result.filename || currentFileName || "Encarte Semanal - Ofertas da Semana",
+          products,
+          templateImage,
+          footerText,
+          gridConfig,
+        }).then(setRecentFlyers);
         setExportMessage(`✓ Encarte salvo com sucesso na pasta do computador (${result.filename})`);
         setTimeout(() => setExportMessage(null), 4000);
       } else if (result.error && !result.error.includes("cancelado")) {
@@ -1132,8 +1192,21 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                 type="button"
                 size="sm"
                 variant="ghost"
+                onClick={handleNewEncarte}
+                className="text-amber-300 hover:text-white text-xs h-7 px-2"
+                title="Iniciar um novo encarte semanal em branco"
+                data-testid="btn-new-encarte"
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Novo
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
                 onClick={handleOpenFromComputer}
-                className="text-neutral-300 hover:text-white text-xs h-7 px-2.5"
+                className="text-neutral-300 hover:text-white text-xs h-7 px-2"
                 title="Abrir encarte salvo previamente na pasta do computador"
                 data-testid="btn-open-from-pc"
               >
@@ -1141,14 +1214,84 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                 Abrir do PC
               </Button>
 
+              <div className="relative">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setRecentMenuOpen((v) => !v)}
+                  className={`text-xs h-7 px-2 ${
+                    recentMenuOpen ? "bg-neutral-800 text-amber-300" : "text-neutral-300 hover:text-white"
+                  }`}
+                  title="Abrir encartes recentes salvos"
+                  data-testid="btn-open-recent"
+                >
+                  <CalendarClock className="h-3.5 w-3.5 mr-1 text-amber-400" />
+                  Recentes{recentFlyers.length > 0 ? ` (${recentFlyers.length})` : ""}
+                </Button>
+                {recentMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1 w-72 bg-[#161616] border border-neutral-700 rounded-xl shadow-2xl z-50 p-2 space-y-1">
+                    <div className="flex items-center justify-between px-2 py-1 border-b border-neutral-800 text-[10px] font-bold uppercase text-amber-300">
+                      <span>Encartes Recentes</span>
+                      <button
+                        type="button"
+                        onClick={() => setRecentMenuOpen(false)}
+                        className="text-neutral-400 hover:text-white cursor-pointer"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    {recentFlyers.length === 0 ? (
+                      <div className="text-[11px] text-neutral-400 px-2 py-3 text-center">
+                        Nenhum encarte recente salvo ainda.
+                      </div>
+                    ) : (
+                      <div className="max-h-64 overflow-y-auto divide-y divide-neutral-800/80">
+                        {recentFlyers.map((recent) => (
+                          <div
+                            key={recent.id}
+                            className="flex items-center justify-between gap-2 p-2 hover:bg-neutral-800/70 rounded-lg"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRecentFlyer(recent)}
+                              className="flex-1 text-left min-w-0 cursor-pointer"
+                            >
+                              <div className="text-xs font-bold text-white truncate">{recent.name}</div>
+                              <div className="text-[10px] text-neutral-400">
+                                {recent.productCount} produto(s) •{" "}
+                                {new Date(recent.savedAt).toLocaleString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void deleteRecentSemanalFlyer(recent.id).then(setRecentFlyers)}
+                              className="text-neutral-500 hover:text-red-400 p-1 cursor-pointer"
+                              title="Remover dos recentes"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
                 onClick={() => handleSaveToComputer(false)}
                 disabled={isSavingFile || products.length === 0}
-                className="text-emerald-400 hover:text-emerald-300 text-xs h-7 px-2.5 font-bold"
-                title="Salvar alterações no computador"
+                className="text-emerald-400 hover:text-emerald-300 text-xs h-7 px-2 font-bold"
+                title="Salvar alterações no arquivo atual"
                 data-testid="btn-save-to-pc"
               >
                 {isSavingFile ? (
@@ -1156,7 +1299,20 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                 ) : (
                   <Save className="h-3.5 w-3.5 mr-1" />
                 )}
-                Salvar no PC
+                Salvar
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => handleSaveToComputer(true)}
+                disabled={isSavingFile || products.length === 0}
+                className="text-emerald-300 hover:text-white text-xs h-7 px-2"
+                title="Salvar como um novo arquivo no computador"
+                data-testid="btn-save-as-pc"
+              >
+                Salvar como
               </Button>
             </div>
 
