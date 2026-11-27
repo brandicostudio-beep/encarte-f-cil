@@ -156,11 +156,28 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   // Estados de navegação e visualização
   const [activeTab, setActiveTab] = useState<"preview" | "tabela" | "pendencias">("preview");
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [previewZoom, setPreviewZoom] = useState<number>(0.38); // 38% para caber em telas 1080p
+  const [previewZoom, setPreviewZoom] = useState<number>(0.48);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState<boolean>(false);
+  const canvasViewportRef = useRef<HTMLDivElement>(null);
+
+  const handleFitToScreen = useCallback(() => {
+    const el = canvasViewportRef.current;
+    if (!el || el.clientHeight <= 0 || el.clientWidth <= 0) {
+      setPreviewZoom(0.48);
+      return;
+    }
+    const fitW = (el.clientWidth - 24) / 1080;
+    const fitH = (el.clientHeight - 24) / 1920;
+    const next = Math.max(0.35, Math.min(1.0, Number(Math.min(fitW, fitH).toFixed(2))));
+    setPreviewZoom(next);
+  }, []);
+
+  useEffect(() => {
+    handleFitToScreen();
+  }, [handleFitToScreen]);
   const [isEditingFooter, setIsEditingFooter] = useState<boolean>(false);
   const [localFolderStatus, setLocalFolderStatus] = useState<LocalFolderPhotoStatus>(() =>
     getLocalFolderStatus()
@@ -850,8 +867,8 @@ export const EncarteSemanalWorkspace: React.FC = () => {
   return (
     <div className="flex flex-col min-h-screen bg-[#0d0d0d] text-white">
       {/* 1. BARRA SUPERIOR FIXA: NAVEGAÇÃO GLOBAL & SAÍDA DO SISTEMA */}
-      <header className="border-b border-neutral-800 bg-[#121212] px-4 py-2.5 sticky top-0 z-50 shadow-xl">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <header className="border-b border-neutral-800 bg-[#121212] px-3 sm:px-5 py-1.5 sticky top-0 z-50 shadow-xl">
+        <div className="max-w-[1920px] mx-auto flex flex-wrap items-center justify-between gap-2">
           {/* Lado Esquerdo: BOTÃO VOLTAR DESTACADO & MENU GAVETA */}
           <div className="flex items-center gap-2">
             <Button
@@ -928,8 +945,8 @@ export const EncarteSemanalWorkspace: React.FC = () => {
       </header>
 
       {/* 2. BARRA OPERACIONAL DO ENCARTE: AÇÕES E ARQUIVO */}
-      <div className="bg-[#181818] border-b border-neutral-800 px-4 py-2.5">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-[#181818] border-b border-neutral-800 px-3 sm:px-5 py-1.5">
+        <div className="max-w-[1920px] mx-auto flex flex-wrap items-center justify-between gap-2">
           {/* Identidade do Encarte Semanal & Indicador de Arquivo */}
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-neutral-950 font-black text-xs shadow-md shrink-0">
@@ -1230,14 +1247,14 @@ export const EncarteSemanalWorkspace: React.FC = () => {
 
         {/* Notificação de Exportação */}
         {exportMessage && (
-          <div className="max-w-7xl mx-auto mt-2 p-2 bg-neutral-900/90 border border-emerald-500/40 rounded-lg text-xs text-emerald-300 flex items-center gap-2">
+          <div className="max-w-[1920px] mx-auto mt-2 p-2 bg-neutral-900/90 border border-emerald-500/40 rounded-lg text-xs text-emerald-300 flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-emerald-400" />
             <span>{exportMessage}</span>
           </div>
         )}
 
         {driveBarOpen && (
-          <div className="max-w-7xl mx-auto mt-2 p-2.5 bg-blue-950/70 border border-blue-800/80 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="max-w-[1920px] mx-auto mt-2 p-2.5 bg-blue-950/70 border border-blue-800/80 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-blue-200 flex items-center gap-1.5">
                 <Cloud className="h-3.5 w-3.5 text-blue-400" />
@@ -1286,8 +1303,8 @@ export const EncarteSemanalWorkspace: React.FC = () => {
       </div>
 
       {/* 3. BARRA DE ABAS & RODAPÉ EDITÁVEL DA OFERTA */}
-      <div className="bg-[#121212] border-b border-neutral-800/80 px-4 py-2">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-[#121212] border-b border-neutral-800/80 px-3 sm:px-5 py-1.5">
+        <div className="max-w-[1920px] mx-auto flex flex-wrap items-center justify-between gap-2">
           {/* Abas: Visualizar Encarte / Lista de Produtos / Pendências */}
           <div className="flex items-center gap-1 bg-black/60 p-1 rounded-lg border border-neutral-800">
             <button
@@ -1347,10 +1364,10 @@ export const EncarteSemanalWorkspace: React.FC = () => {
       </div>
 
       {/* 3. CONTEÚDO PRINCIPAL */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 space-y-4">
+      <main className="flex-1 max-w-[1920px] w-full mx-auto px-2 sm:px-4 py-2 space-y-2">
         {/* 3.1 ABA DE PRÉ-VISUALIZAÇÃO DO ENCARTE */}
         {activeTab === "preview" && (
-          <div className="bg-[#141414] border border-neutral-800 rounded-2xl p-4 space-y-3 shadow-md">
+          <div className="bg-[#141414] border border-neutral-800 rounded-xl p-2 sm:p-3 space-y-2 shadow-md">
             {/* Banner Orientador caso não haja produtos carregados */}
             {products.length === 0 && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
@@ -1450,8 +1467,15 @@ export const EncarteSemanalWorkspace: React.FC = () => {
                 >
                   <ZoomIn className="h-3.5 w-3.5" />
                 </Button>
+                <button
+                  type="button"
+                  onClick={handleFitToScreen}
+                  className="px-2 py-1 rounded text-[11px] font-bold transition-colors cursor-pointer bg-neutral-800 text-neutral-300 hover:bg-neutral-700"
+                  title="Ajustar zoom à altura da tela"
+                >
+                  Ajustar
+                </button>
                 {[
-                  { label: "Ajustar", val: 0.38 },
                   { label: "55%", val: 0.55 },
                   { label: "75%", val: 0.75 },
                   { label: "100%", val: 1.0 },
@@ -1472,11 +1496,12 @@ export const EncarteSemanalWorkspace: React.FC = () => {
               </div>
             </div>
 
-            {/* Layout Estúdio Profissional (Canvas Limpo à Esquerda + Painel Inspetor Fixo à Direita) */}
-            <div className="flex flex-col lg:flex-row gap-4 items-start">
+            {/* Layout Estúdio Profissional (Canvas Limpo em Tela Cheia + Painel Inspetor Sob Demanda) */}
+            <div className="flex flex-col lg:flex-row gap-3 items-start">
               {/* Área do Canvas 1080x1920 com Zoom suave e Ctrl+Scroll */}
               <div
-                className="flex-1 min-w-0 w-full flex justify-center overflow-auto p-4 bg-neutral-950/70 rounded-xl border border-neutral-800 max-h-[calc(100vh-220px)] min-h-[620px]"
+                ref={canvasViewportRef}
+                className="flex-1 min-w-0 w-full flex justify-center overflow-auto p-2 sm:p-3 bg-neutral-950/70 rounded-xl border border-neutral-800 h-[calc(100vh-185px)] min-h-[580px]"
                 onWheel={(e) => {
                   if (e.ctrlKey || e.metaKey) {
                     e.preventDefault();
